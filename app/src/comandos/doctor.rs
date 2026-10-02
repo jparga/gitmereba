@@ -1,0 +1,48 @@
+//! `gitmereba doctor`: comprobaciones de salud del sistema y de cada cuenta.
+
+use std::io::Write;
+
+use super::abrir_almacen;
+use gitmereba_core::config::Rutas;
+use gitmereba_core::cuentas::{self, Contexto, NivelComprobacion};
+use gitmereba_core::secretos::LlaveroDelSistema;
+
+use crate::salida;
+
+pub async fn ejecutar(rutas: &Rutas) -> u8 {
+    let llavero = match LlaveroDelSistema::nuevo() {
+        Ok(llavero) => llavero,
+        Err(error) => return fallo(&format!("no se pudo acceder al llavero: {error}")),
+    };
+    let almacen = match abrir_almacen(rutas) {
+        Ok(almacen) => almacen,
+        Err(error) => return fallo(&format!("no se pudo abrir el almacén: {error}")),
+    };
+    let contexto = Contexto::nuevo(rutas, &llavero, &almacen);
+
+    let informe = cuentas::doctor(&contexto).await;
+
+    let mut stdout = std::io::stdout().lock();
+    for comprobacion in &informe.comprobaciones {
+        let marca = match comprobacion.nivel {
+            NivelComprobacion::Ok => "[ok]  ",
+            NivelComprobacion::Aviso => "[aviso]",
+            NivelComprobacion::Fallo => "[fallo]",
+        };
+        salida::linea(
+            &mut stdout,
+            &format!("{marca} {}: {}", comprobacion.nombre, comprobacion.mensaje),
+        );
+        if let Some(consejo) = &comprobacion.consejo {
+            salida::linea(&mut stdout, &format!("        consejo: {consejo}"));
+        }
+    }
+
+    if informe.ok() { 0 } else { 1 }
+}
+
+fn fallo(mensaje: &str) -> u8 {
+    let mut stderr = std::io::stderr().lock();
+    let _ = writeln!(stderr, "error: {mensaje}");
+    1
+}

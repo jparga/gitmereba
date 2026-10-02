@@ -1,0 +1,28 @@
+name: Propuesta de mejora
+description: Sugiere una mejora o funcionalidad / Suggest a feature
+labels: ["mejora"]
+body:
+  - type: markdown
+    attributes:
+      value: Puedes escribir en español o en inglés / You may write in Spanish or English.
+  - type: textarea
+    id: problema
+    attributes:
+      label: Problema
+      description: ¿Qué necesitas y no puedes hacer hoy? / What problem are you trying to solve?
+    validations:
+      required: true
+  - type: textarea
+    id: propuesta
+    attributes:
+      label: Propuesta
+      description: Cómo te gustaría que funcionase / The solution you would like.
+    validations:
+      required: true
+  - type: textarea
+    id: alternativas
+    attributes:
+      label: Alternativas consideradas
+      description: Otras soluciones o rodeos que has valorado / Alternatives you have considered.
+    validations:
+      required: false

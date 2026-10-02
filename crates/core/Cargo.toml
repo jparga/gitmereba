@@ -1,0 +1,38 @@
+[package]
+name = "gitmereba-core"
+description = "Lógica de gitmereba: GitHub, Gitea, instancias, sincronización y contingencia"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+directories = "6.0.0"
+getrandom = "0.4.3"
+keyring = { version = "4.2.0", default-features = false, features = ["v1", "zbus-secret-service-keyring-store"] }
+notify-rust = { version = "4.18.0", default-features = false, features = ["z"] }
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "json", "query"] }
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+sha2 = "0.11.0"
+thiserror = "2.0.20"
+time = { version = "0.3.55", features = ["serde", "formatting", "parsing"] }
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "process", "time", "fs"] }
+toml = "1.1.6"
+tracing = "0.1.44"
+url = "2.5.8"
+zeroize = "1.9.0"
+
+[dev-dependencies]
+tempfile = "3.27.0"
+wiremock = "0.6.5"

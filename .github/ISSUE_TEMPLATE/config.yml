@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Vulnerabilidad de seguridad
+    url: https://github.com/jparga/gitmereba/security/advisories/new
+    about: Nunca informes de problemas de seguridad en issues públicas. Usa el aviso privado de seguridad / Never report security issues in public issues; use the private advisory.

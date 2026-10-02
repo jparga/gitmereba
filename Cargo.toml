@@ -1,0 +1,31 @@
+[workspace]
+resolver = "3"
+members = ["crates/core", "app"]
+
+[workspace.package]
+version = "0.6.0"
+edition = "2024"
+rust-version = "1.98"
+license = "GPL-3.0-or-later"
+publish = false
+authors = ["Jacinto Parga <jparga@mereba.com>"]
+repository = "https://github.com/jparga/gitmereba"
+homepage = "https://github.com/jparga/gitmereba"
+keywords = ["github", "gitea", "mirror", "backup", "git"]
+categories = ["development-tools", "command-line-utilities"]
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+unwrap_used = "warn"
+expect_used = "warn"
+dbg_macro = "warn"
+print_stdout = "warn"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
+panic = "abort"

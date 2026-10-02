@@ -1,0 +1,146 @@
+name: Publicar
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  publicar:
+    name: Verificar, empaquetar y publicar
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: write # crear la release
+      id-token: write # firmar la atestación (OIDC)
+      attestations: write # guardar la atestación de procedencia
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Instalar dependencias del sistema (Tauri 2)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            pkg-config \
+            libwebkit2gtk-4.1-dev \
+            libjavascriptcoregtk-4.1-dev \
+            libsoup-3.0-dev \
+            libgtk-3-dev \
+            librsvg2-dev \
+            libdbus-1-dev
+
+      - name: Instalar la toolchain fijada en rust-toolchain.toml
+        run: rustup show active-toolchain || rustup toolchain install
+
+      # Sin caché de compilación (Swatinem/rust-cache) a propósito: en una release
+      # importa más la reproducibilidad que la velocidad.
+
+      - name: Comprobar que la etiqueta coincide con la versión de Cargo.toml
+        env:
+          ETIQUETA: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="$(sed -n '/^\[workspace\.package\]/,/^\[/{s/^version = "\(.*\)"/\1/p}' Cargo.toml | head -1)"
+          if [ -z "$version" ]; then
+            echo "No se pudo leer la versión de [workspace.package] en Cargo.toml" >&2
+            exit 1
+          fi
+          if [ "$ETIQUETA" != "v$version" ]; then
+            echo "La etiqueta '$ETIQUETA' no coincide con la versión de Cargo.toml (v$version)" >&2
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Instalar cargo-nextest, cargo-deny y cargo-audit
+        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+        with:
+          tool: cargo-nextest,cargo-deny,cargo-audit
+
+      - name: Formato
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Pruebas
+        # GITMEREBA_TEST_GITEA queda sin definir: las pruebas con Gitea real se saltan.
+        run: cargo nextest run --workspace --no-tests=pass --no-fail-fast
+
+      - name: Licencias y fuentes (cargo deny)
+        run: cargo deny check
+
+      - name: Avisos de seguridad (cargo audit)
+        run: cargo audit
+
+      - name: Empaquetar (.deb y .tar.gz)
+        env:
+          MANTENEDOR: Jacinto Parga <jparga@mereba.com>
+        run: scripts/empaquetar.sh --tar
+
+      - name: Calcular sumas SHA-256
+        run: |
+          set -euo pipefail
+          cd target/paquetes
+          sha256sum "gitmereba_${VERSION}_amd64.deb" "gitmereba_${VERSION}_linux_amd64.tar.gz" > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Atestar la procedencia de los paquetes
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            target/paquetes/gitmereba_${{ env.VERSION }}_amd64.deb
+            target/paquetes/gitmereba_${{ env.VERSION }}_linux_amd64.tar.gz
+
+      - name: Preparar las notas de la release
+        run: |
+          set -euo pipefail
+          notas="$RUNNER_TEMP/notas.md"
+          awk -v cabecera="## [${VERSION}]" '
+            index($0, cabecera) == 1 { dentro = 1; next }
+            dentro && /^## \[/ { exit }
+            dentro && /^\[[^]]+\]: / { next }
+            dentro { print }
+          ' CHANGELOG.md > "$notas.cambios"
+          if ! grep -q '[^[:space:]]' "$notas.cambios"; then
+            echo "CHANGELOG.md no tiene una sección no vacía para la versión $VERSION" >&2
+            exit 1
+          fi
+          {
+            cat "$notas.cambios"
+            echo
+            echo "## Instalación"
+            echo
+            echo '```bash'
+            echo "sudo apt install ./gitmereba_${VERSION}_amd64.deb"
+            echo '```'
+            echo
+            echo "## Verificación"
+            echo
+            echo '```bash'
+            echo "sha256sum -c SHA256SUMS --ignore-missing"
+            echo "gh attestation verify gitmereba_${VERSION}_amd64.deb --repo jparga/gitmereba"
+            echo '```'
+          } > "$notas"
+          echo "NOTAS=$notas" >> "$GITHUB_ENV"
+
+      - name: Crear la release en GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "$GITHUB_REF_NAME" \
+            "target/paquetes/gitmereba_${VERSION}_amd64.deb" \
+            "target/paquetes/gitmereba_${VERSION}_linux_amd64.tar.gz" \
+            "target/paquetes/SHA256SUMS" \
+            --title "gitmereba $VERSION" \
+            --notes-file "$NOTAS" \
+            --verify-tag

@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "principal",
+  "description": "Lo mínimo para la ventana: escuchar eventos de progreso. Los comandos propios de la app no necesitan permiso; ningún plugin queda expuesto al JavaScript.",
+  "windows": ["principal"],
+  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten"]
+}

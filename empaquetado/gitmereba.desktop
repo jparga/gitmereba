@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=gitmereba
+GenericName=Clon local de GitHub
+Comment=Mantén un clon local y operativo de tus cuentas de GitHub
+Comment[en]=Keep a local, working clone of your GitHub accounts
+Exec=gitmereba
+Icon=gitmereba
+Terminal=false
+Categories=Development;RevisionControl;
+Keywords=git;github;gitea;clon;backup;copia;repositorio;mirror;
+StartupNotify=true
+StartupWMClass=gitmereba

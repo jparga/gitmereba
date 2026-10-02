@@ -1,0 +1,571 @@
+/* ============================================================================
+   mereba.css — sistema de estilos de marca MEREBA para las apps py4web de
+   RASP-MEREBA. AUTOCONTENIDO: sin CDN, sin frameworks, sin fuentes remotas.
+
+   Identidad "Wimbledon" (idéntica a mereba.com):
+     · verde Wimbledon  #00703C  (primario)
+     · verde botella    #0B3D2E  (barra de navegación / pie)
+     · morado           #52297B  (acento / enlaces / eyebrow)
+     · crema            #F5F3EC  (fondo)  ·  crema clara #FBFAF6 (tarjetas)
+     · tinta            #2B2B2B  (texto)  ·  línea sutil  #E3DFD3
+   Tipografía: cuerpo del sistema; titulares y wordmark con la fuente propia
+   "merebaFont" (Bank Gothic si está instalada en el sistema; no se distribuye).
+
+   - Tokens de diseño con variables CSS (:root) + modo oscuro de marca.
+   - Iconografía por SVG inline (sprite en layout.html, clase .ico).
+     Mobile-first, responsive, accesible (skip-link, foco visible).
+   - Los componentes propios de cada app van en su propia hoja (une.css);
+     esta es la base de marca común.
+   Versión: 2026-09-13.1 (rediseño: escala tipográfica, nav, pie, iconos SVG)
+   ========================================================================== */
+
+/* ---- Fuente de marca (local, sin CDN) ------------------------------------ */
+/* Bank Gothic es una fuente comercial (Bitstream) y no se redistribuye con gitmereba:
+   se usa si está instalada en el sistema y, si no, los titulares caen en la fuente del
+   sistema (--font). */
+@font-face {
+  font-family: "merebaFont";
+  src: local("BankGothic Md BT"), local("BankGothicBT-Medium"), local("Bank Gothic Medium");
+  font-weight: 400 700;
+  font-display: swap;
+}
+
+/* ---- Reset ligero -------------------------------------------------------- */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+img, svg, canvas { max-width: 100%; display: block; }
+button, input, select, textarea { font: inherit; color: inherit; }
+a { color: var(--accent-2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ---- Tokens (claro — crema Wimbledon) ------------------------------------ */
+:root {
+  --bg: #f5f3ec;            /* crema */
+  --surface: #fbfaf6;       /* crema clara — tarjetas */
+  --surface-2: #efeade;     /* crema honda — chips / thead */
+  --surface-hover: #f2eee3;
+  --border: #e3dfd3;        /* línea sutil */
+  --border-strong: #d2cbba;
+  --text: #2b2b2b;          /* tinta */
+  --text-dim: #5b5b55;
+  --text-faint: #8a857a;
+
+  --accent: #00703c;                 /* verde Wimbledon (primario) */
+  --accent-strong: #00582f;          /* hover */
+  --accent-2: #52297b;               /* morado (enlaces / acento) */
+  --accent-2-strong: #3c1e5c;
+  --accent-contrast: #ffffff;
+  --accent-weak: color-mix(in srgb, var(--accent) 12%, transparent);
+  --accent-2-weak: color-mix(in srgb, var(--accent-2) 12%, transparent);
+
+  /* Barra de navegación / pie: verde botella con texto crema */
+  --nav-bg: #0b3d2e;
+  --nav-fg: #f2efe6;
+  --nav-fg-dim: #cdd8d0;
+  --nav-active: #00703c;
+
+  --ok: #2f7d32;   --ok-weak: rgba(47,125,50,.14);
+  --warn: #a86b00; --warn-weak: rgba(168,107,0,.15);
+  --crit: #b3261e; --crit-weak: rgba(179,38,30,.14);
+  --info: #3a5fa0; --info-weak: rgba(58,95,160,.14);
+  --muted: #7a756a; --muted-weak: rgba(122,117,106,.16);
+
+  --r: 12px;
+  --r-sm: 9px;
+  --r-pill: 999px;
+  --shadow: 0 1px 2px rgba(11,61,46,.05), 0 4px 16px rgba(11,61,46,.06);
+  --shadow-lg: 0 10px 30px rgba(11,61,46,.14);
+  --ring: 0 0 0 3px var(--accent-weak);
+
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+          "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+  --font-brand: "merebaFont", var(--font);
+  --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", "Cascadia Code",
+          Menlo, Consolas, monospace;
+
+  --maxw: 1080px;
+  --measure: 62ch;          /* ancho máximo de un párrafo */
+
+  /* Escala tipográfica (razón 1.25 sobre 1rem) y de espaciado */
+  --fs-sm: .875rem;  --fs-xs: .8rem;
+  --fs-1: 1.125rem;  --fs-2: 1.35rem;  --fs-3: 1.7rem;
+  --fs-4: clamp(1.9rem, 1.3rem + 2.2vw, 2.6rem);
+  --sp-1: .5rem; --sp-2: .75rem; --sp-3: 1rem; --sp-4: 1.5rem;
+  --sp-5: 2.25rem; --sp-6: 3.5rem;
+  color-scheme: light dark;
+}
+
+/* ---- Tokens (oscuro — verde botella de marca) ---------------------------- */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b1a14;
+    --surface: #10271e;
+    --surface-2: #163527;
+    --surface-hover: #1a3d2d;
+    --border: #244635;
+    --border-strong: #315a45;
+    --text: #ecebe1;
+    --text-dim: #a9b3aa;
+    --text-faint: #74806f;
+
+    --accent: #35a56f;                 /* verde más luminoso sobre oscuro */
+    --accent-strong: #47b880;
+    --accent-2: #b79bd6;               /* morado claro */
+    --accent-2-strong: #cbb6e2;
+    --accent-contrast: #06251a;
+
+    --nav-bg: #071b14;
+    --nav-fg: #eef3ee;
+    --nav-fg-dim: #a9b8ad;
+    --nav-active: #14563a;
+
+    --ok: #55c07f;   --ok-weak: rgba(85,192,127,.16);
+    --warn: #e0a54a; --warn-weak: rgba(224,165,74,.16);
+    --crit: #e26d63; --crit-weak: rgba(226,109,99,.16);
+    --info: #7fa0d8; --info-weak: rgba(127,160,216,.16);
+    --muted: #8b9488; --muted-weak: rgba(139,148,136,.18);
+
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.4);
+    --shadow-lg: 0 12px 34px rgba(0,0,0,.55);
+  }
+}
+
+/* Acentos por app: la marca es verde en todas; el morado es el 2.º acento.
+   Cada app puede afinar su matiz sin salirse de la paleta MEREBA. */
+body.app-plcvis  { --accent: #00703c; }   /* servicio de temperaturas */
+body.app-py2ban  { --accent: #00703c; --accent-2: #52297b; }  /* seguridad */
+body.app-docsjac { --accent: #00703c; }   /* gestor documental */
+
+/* ---- Estructura de página ----------------------------------------------- */
+html, body { min-height: 100%; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.55;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main {
+  width: 100%;
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: clamp(1rem, 2.5vw, 2rem);
+  flex: 1 0 auto;
+}
+
+h1, h2, h3, h4 { font-family: var(--font-brand); line-height: 1.15; font-weight: 700;
+  letter-spacing: .005em; text-wrap: balance; margin: 0 0 var(--sp-2); }
+h1 { font-size: var(--fs-4); line-height: 1.08; }
+h2 { font-size: var(--fs-3); }
+h3 { font-size: var(--fs-1); }
+h4 { font-size: 1rem; }
+p { margin: 0 0 var(--sp-2); }
+p:last-child { margin-bottom: 0; }
+small { font-size: .82em; }
+.lead { font-size: var(--fs-1); color: var(--text-dim); line-height: 1.5; }
+.measure { max-width: var(--measure); }
+.small { font-size: var(--fs-sm); }
+
+/* Iconos SVG del sprite (layout.html): heredan el color del texto */
+.ico { width: 1.15em; height: 1.15em; flex: none; fill: none; stroke: currentColor;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vertical-align: -.2em; }
+.ico-sm { width: .9em; height: .9em; }
+.sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+/* Accesibilidad: salto al contenido y foco visible uniforme */
+.skip-link { position: absolute; left: 1rem; top: -3rem; z-index: 100; padding: .5rem .8rem;
+  background: var(--accent); color: var(--accent-contrast); border-radius: var(--r-sm);
+  font-weight: 600; transition: top .15s; }
+.skip-link:focus { top: .6rem; outline: none; box-shadow: var(--ring); text-decoration: none; }
+a:focus-visible, button:focus-visible, label:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-sm); }
+
+code, kbd { font-family: var(--mono); font-size: .88em;
+  background: var(--surface-2); padding: .12em .4em; border-radius: 6px; }
+
+/* Eyebrow de marca (mayúsculas, morado) */
+.eyebrow {
+  display: inline-block; text-transform: uppercase; letter-spacing: .12em;
+  font-size: .72rem; font-weight: 700; color: var(--accent-2); margin-bottom: .5rem;
+}
+
+/* ---- Barra de navegación (verde botella) --------------------------------- */
+.nav {
+  position: sticky; top: 0; z-index: 50;
+  background: var(--nav-bg);
+  border-bottom: 1px solid rgba(0,0,0,.18);
+  box-shadow: 0 1px 0 rgba(255,255,255,.04) inset;
+}
+.nav-inner {
+  max-width: var(--maxw); margin: 0 auto;
+  display: flex; align-items: center; gap: .5rem;
+  padding: .5rem clamp(1rem, 2.5vw, 2rem);
+}
+/* Marca: símbolo + wordmark con el nombre de la app debajo */
+.brand {
+  display: inline-flex; align-items: center; gap: .6rem;
+  color: var(--nav-fg); white-space: nowrap; min-width: 0;
+}
+.brand:hover { text-decoration: none; }
+.brand-mark {
+  width: 34px; height: 34px; flex: none; display: grid; place-items: center;
+  border-radius: 9px; background: var(--accent); color: #fff;
+}
+.brand-mark .ico { width: 20px; height: 20px; stroke-width: 2.2; }
+.brand-text { display: flex; flex-direction: column; line-height: 1.05; min-width: 0; }
+.brand .wordmark {
+  font-family: var(--font-brand); font-size: 1.2rem; font-weight: 700;
+  letter-spacing: .06em; color: var(--nav-fg);
+}
+.brand .app-name { font-size: .74rem; color: var(--nav-fg-dim); font-weight: 500;
+  letter-spacing: .01em; overflow: hidden; text-overflow: ellipsis; }
+
+.nav-links { display: flex; align-items: center; gap: .15rem; margin-left: 1rem; }
+.nav-links a, .nav-user > button {
+  display: inline-flex; align-items: center; gap: .4rem;
+  padding: .45rem .7rem; border-radius: var(--r-sm);
+  color: var(--nav-fg-dim); font-weight: 500; font-size: .92rem;
+  border: 0; background: transparent; cursor: pointer; white-space: nowrap;
+  min-height: 38px;
+}
+.nav-links a:hover, .nav-user > button:hover,
+.nav-user.open > button {
+  background: rgba(255,255,255,.1); color: var(--nav-fg); text-decoration: none;
+}
+.nav-links a[aria-current="page"] { color: #fff; background: var(--nav-active); }
+.nav-spacer { flex: 1; }
+
+.nav-user { position: relative; }
+.nav-user > button { color: var(--nav-fg); }
+.nav-user-name { max-width: 22ch; overflow: hidden; text-overflow: ellipsis; }
+.nav-user > button .ico-sm { transition: transform .15s; }
+.nav-user.open > button .ico-sm { transform: rotate(180deg); }
+.nav-menu {
+  position: absolute; right: 0; top: calc(100% + .35rem);
+  min-width: 200px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-sm); box-shadow: var(--shadow-lg); padding: .3rem;
+  display: none;
+}
+.nav-user.open .nav-menu, .nav-user:focus-within .nav-menu { display: block; }
+.nav-menu a { display: block; padding: .5rem .65rem; border-radius: 7px;
+  color: var(--text-dim); font-size: .9rem; }
+.nav-menu a:hover { background: var(--surface-2); color: var(--text); text-decoration: none; }
+
+/* Hamburguesa (móvil), sin JS: checkbox + label */
+.nav-toggle { display: none; }
+.nav-burger {
+  display: none; width: 40px; height: 40px; flex: none;
+  border-radius: var(--r-sm); background: transparent; border: 1px solid rgba(255,255,255,.2);
+  cursor: pointer; align-items: center; justify-content: center;
+  color: var(--nav-fg);
+}
+.nav-burger .ico { width: 20px; height: 20px; }
+@media (max-width: 760px) {
+  .nav-burger { display: inline-flex; }
+  .nav-user-name { max-width: 12ch; }
+  .nav-links {
+    position: absolute; left: 0; right: 0; top: 100%;
+    flex-direction: column; align-items: stretch; gap: .1rem;
+    background: var(--nav-bg); border-bottom: 1px solid rgba(0,0,0,.2);
+    padding: .5rem clamp(1rem, 2.5vw, 2rem); margin: 0;
+    box-shadow: var(--shadow); display: none;
+  }
+  .nav-toggle:checked ~ .nav-links { display: flex; }
+  .nav-links a { padding: .7rem .6rem; font-size: 1rem; }
+}
+@media (max-width: 480px) {
+  .brand .app-name { display: none; }
+  .nav-user-name { display: none; }
+}
+
+/* ---- Tarjetas / superficies --------------------------------------------- */
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); box-shadow: var(--shadow);
+}
+.card.pad { padding: clamp(1rem, 2.4vw, 1.4rem); }
+.card.accent-top { border-top: 4px solid var(--accent); }
+.section { margin-bottom: 1.2rem; }
+
+.grid { display: grid; gap: .8rem; }
+.grid.stats { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+.grid.cols-2 { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.grid.cols-3 { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+
+.stat {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); padding: .85rem 1rem; box-shadow: var(--shadow);
+}
+.stat .k { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--text-faint); font-weight: 600; margin-bottom: .3rem;
+  display: flex; align-items: center; gap: .35rem; }
+.stat .v { font-size: 1.7rem; font-weight: 750; line-height: 1.05; letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums; }
+.stat .v small { font-size: .78rem; font-weight: 500; color: var(--text-dim); }
+.stat.accent .v { color: var(--accent); }
+.stat .v.ok { color: var(--ok); } .stat .v.warn { color: var(--warn); }
+.stat .v.crit { color: var(--crit); } .stat .v.offline, .stat .v.muted { color: var(--muted); }
+
+/* ---- Botones ------------------------------------------------------------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: .4rem;
+  padding: .5rem .9rem; border-radius: var(--r-sm); border: 1px solid transparent;
+  font-weight: 600; font-size: .92rem; cursor: pointer; white-space: nowrap;
+  background: var(--accent); color: var(--accent-contrast);
+  transition: filter .15s, background .15s, transform .05s;
+  min-height: 40px;
+}
+.btn:hover { background: var(--accent-strong); text-decoration: none; }
+.btn:active { transform: translateY(1px); }
+.btn:focus-visible { outline: none; box-shadow: var(--ring); }
+.btn.ghost { background: transparent; color: var(--text); border-color: var(--border-strong); }
+.btn.ghost:hover { background: var(--surface-2); }
+.btn.accent { background: var(--accent-2); }
+.btn.accent:hover { background: var(--accent-2-strong); }
+.btn.danger { background: var(--crit); }
+.btn.ok { background: var(--ok); }
+.btn.sm { padding: .3rem .6rem; font-size: .82rem; min-height: 32px; }
+.btn[disabled] { opacity: .5; cursor: not-allowed; }
+
+/* ---- Insignias / píldoras ------------------------------------------------ */
+.badge {
+  display: inline-flex; align-items: center; gap: .3rem;
+  padding: .15rem .55rem; border-radius: var(--r-pill);
+  font-size: .76rem; font-weight: 700; line-height: 1.5;
+}
+.badge.ok, .badge.normal { background: var(--ok-weak); color: var(--ok); }
+.badge.warn, .badge.alerta, .badge.warning, .badge.aviso { background: var(--warn-weak); color: var(--warn); }
+.badge.crit, .badge.critico, .badge.critical { background: var(--crit-weak); color: var(--crit); }
+.badge.offline, .badge.muted { background: var(--muted-weak); color: var(--muted); }
+.badge.info { background: var(--info-weak); color: var(--info); }
+.badge.accent { background: var(--accent-weak); color: var(--accent); }
+.badge.purple { background: var(--accent-2-weak); color: var(--accent-2); }
+
+.dot { width: .55rem; height: .55rem; border-radius: 50%; background: var(--muted);
+  display: inline-block; flex: none; }
+.dot.live { background: var(--ok); animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+
+/* ---- Banner de alerta ---------------------------------------------------- */
+.banner {
+  display: none; align-items: center; gap: .7rem;
+  padding: .8rem 1rem; border-radius: var(--r); margin-bottom: 1.1rem;
+  font-weight: 600; border: 1px solid transparent;
+}
+.banner.show { display: flex; }
+.banner .ico { font-size: 1.35rem; line-height: 1; flex: none; }
+.banner.warn { background: var(--warn-weak); border-color: color-mix(in srgb, var(--warn) 45%, transparent); color: var(--warn); }
+.banner.crit { background: var(--crit-weak); border-color: color-mix(in srgb, var(--crit) 50%, transparent); color: var(--crit); }
+.banner.offline { background: var(--muted-weak); border-color: color-mix(in srgb, var(--muted) 45%, transparent); color: var(--muted); }
+
+/* ---- Formularios --------------------------------------------------------- */
+label { font-weight: 600; font-size: .88rem; color: var(--text-dim); display: block; margin-bottom: .3rem; }
+input[type=text], input[type=search], input[type=email], input[type=password],
+input[type=number], input:not([type]), select, textarea {
+  width: 100%; padding: .55rem .7rem; border-radius: var(--r-sm);
+  border: 1px solid var(--border-strong); background: var(--surface); color: var(--text);
+  min-height: 42px;
+}
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: var(--ring); }
+.field { margin-bottom: .9rem; }
+.inline-form { display: flex; gap: .5rem; flex-wrap: wrap; align-items: flex-end; }
+.inline-form .field { margin-bottom: 0; flex: 1 1 200px; }
+
+select {
+  appearance: none; -webkit-appearance: none; padding-right: 2rem;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%238a857a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>');
+  background-repeat: no-repeat; background-position: right .6rem center; background-size: 16px;
+}
+
+/* Segmented control (rangos) */
+.segmented { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--r-sm); padding: 3px; gap: 2px; }
+.segmented button {
+  border: 0; background: transparent; color: var(--text-dim); cursor: pointer;
+  padding: .35rem .7rem; border-radius: 7px; font-size: .85rem; font-weight: 600; min-height: 34px;
+}
+.segmented button.active { background: var(--surface); color: var(--accent); box-shadow: var(--shadow); }
+
+.toolbar { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; justify-content: space-between; }
+.toolbar .controls { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+
+/* ---- Tablas -------------------------------------------------------------- */
+.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--r); background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+thead th {
+  text-align: left; font-weight: 600; font-size: .76rem; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--text-faint); padding: .6rem .8rem;
+  border-bottom: 1px solid var(--border); background: var(--surface-2); white-space: nowrap;
+  position: sticky; top: 0;
+}
+tbody td { padding: .55rem .8rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr:hover { background: var(--surface-hover); }
+td.mono, .mono { font-family: var(--mono); font-size: .86rem; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ---- Utilidades ---------------------------------------------------------- */
+.muted { color: var(--text-dim); }
+.faint { color: var(--text-faint); }
+.center { text-align: center; }
+.row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+.between { justify-content: space-between; }
+.hint { font-size: .82rem; color: var(--text-faint); }
+.mt { margin-top: 1rem; } .mb { margin-bottom: 1rem; }
+.pre { font-family: var(--mono); font-size: .84rem; background: var(--surface-2);
+  border: 1px solid var(--border); border-radius: var(--r-sm); padding: .8rem 1rem;
+  overflow-x: auto; white-space: pre; color: var(--text); }
+
+details.disclosure { border: 1px solid var(--border); border-radius: var(--r);
+  background: var(--surface); padding: .3rem .2rem; }
+details.disclosure > summary { cursor: pointer; font-weight: 600; padding: .6rem .8rem; list-style: none; }
+details.disclosure > summary::-webkit-details-marker { display: none; }
+details.disclosure > summary::before { content: "▸"; color: var(--text-faint); margin-right: .5rem; display: inline-block; transition: transform .15s; }
+details.disclosure[open] > summary::before { transform: rotate(90deg); }
+details.disclosure > div { padding: 0 .8rem .6rem; }
+
+/* Flash de py4web (el contenedor vacío no se ve; se estilan los alerts inyectados) */
+flash-alerts { display: block; }
+flash-alerts:empty { display: none; }
+[role="alert"] {
+  position: relative;
+  background: var(--info-weak); color: var(--info); border: 1px solid color-mix(in srgb, var(--info) 40%, transparent);
+  padding: .7rem 2.2rem .7rem 1rem; border-radius: var(--r-sm); margin-bottom: 1rem; font-weight: 600;
+}
+[role="alert"].success { background: var(--ok-weak); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+[role="alert"].warning { background: var(--warn-weak); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+[role="alert"].error { background: var(--crit-weak); color: var(--crit); border-color: color-mix(in srgb, var(--crit) 40%, transparent); }
+[role="alert"] .close { position: absolute; top: .5rem; right: .6rem; cursor: pointer; opacity: .6; width: 1rem; height: 1rem; }
+[role="alert"] .close::before { content: "✕"; }
+
+/* ---- Pie (verde botella) ------------------------------------------------- */
+.foot {
+  border-top: 1px solid rgba(0,0,0,.15);
+  background: var(--nav-bg); color: var(--nav-fg-dim);
+  font-size: var(--fs-sm); padding: var(--sp-5) clamp(1rem, 2.5vw, 2rem);
+  flex-shrink: 0; margin-top: var(--sp-6);
+}
+.foot-inner {
+  max-width: var(--maxw); margin: 0 auto;
+  display: grid; gap: var(--sp-4) var(--sp-5);
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr);
+}
+.foot .wordmark { font-family: var(--font-brand); font-size: 1.2rem; letter-spacing: .06em;
+  color: var(--nav-fg); display: block; margin-bottom: .4rem; }
+.foot-brand p { max-width: 46ch; margin: 0; }
+.foot-links { display: flex; flex-direction: column; gap: .35rem; align-items: flex-start; }
+.foot a { color: var(--nav-fg); }
+/* Nota legal destacada: es la condición de uso de la herramienta */
+.foot-legal {
+  grid-column: 1 / -1; margin: 0; display: flex; gap: .7rem; align-items: flex-start;
+  padding: .9rem 1.1rem; border-radius: var(--r-sm);
+  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.22);
+  color: var(--nav-fg); font-size: 1rem; line-height: 1.5;
+}
+.foot-legal .ico { width: 1.4rem; height: 1.4rem; margin-top: .1em; color: #f0c35a; }
+.foot-legal strong { color: #fff; }
+.foot code { background: rgba(255,255,255,.12); color: var(--nav-fg); }
+@media (max-width: 720px) {
+  .foot-inner { grid-template-columns: 1fr 1fr; }
+  .foot-brand { grid-column: 1 / -1; }
+}
+@media (max-width: 480px) {
+  .foot-inner { grid-template-columns: 1fr; }
+}
+
+/* Respeta reduce-motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+}
+
+/* ---- py4web Grid (IconStyle base, sin Font Awesome) --------------------- */
+.grid-wrapper { display: flex; flex-direction: column; gap: .8rem; }
+.grid-header, .grid-footer { display: flex; flex-wrap: wrap; gap: .6rem;
+  align-items: center; justify-content: space-between; }
+.grid-header .grid-info, .grid-footer .grid-info { color: var(--text-dim); font-size: .85rem; }
+.grid-search input[type=text], .grid-search input[type=search] { min-height: 40px; max-width: 260px; }
+.grid-sorter-icon, [class^="icon-sort"], [class*=" icon-sort"] { font-size: .7em; opacity: .7; margin-left: .2rem; }
+.icon-sort-up::before { content: "▲"; }
+.icon-sort-down::before { content: "▼"; }
+.icon-add-button::before { content: "＋"; }
+.icon-details-button::before { content: "🔍"; }
+.icon-edit-button::before { content: "✏️"; }
+.icon-delete-button::before { content: "🗑️"; }
+.grid-cell a, .grid-controls a { color: var(--accent); }
+.grid-pagination, .web2py_paginator { display: flex; flex-wrap: wrap; gap: .25rem; align-items: center; }
+.grid-pagination a, .web2py_paginator a, .web2py_paginator span {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 34px; height: 34px; padding: 0 .5rem; border-radius: var(--r-sm);
+  border: 1px solid var(--border); color: var(--text-dim); background: var(--surface); }
+.grid-pagination a:hover { background: var(--surface-2); text-decoration: none; }
+.grid-pagination .current, .web2py_paginator .current {
+  background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
+
+/* ---- Formularios de acceso (auth de py4web, estilizado sin tocar su HTML) - */
+.auth-card { max-width: 440px; margin: 2rem auto; }
+.auth-card .eyebrow { margin-bottom: .25rem; }
+.auth-card .auth-title { margin: 0 0 .35rem; font-size: var(--fs-3); }
+.auth-card .auth-sub { margin: 0 0 1.2rem; font-size: .92rem; }
+/* py4web renderiza el <form> en el servidor (con CSRF _formkey); aquí solo se
+   estiliza el markup que genera: filas, etiquetas, campos, botón y enlaces. */
+.auth-card form > div { margin-bottom: .9rem; }
+.auth-card form label { margin-bottom: .35rem; }
+/* fila de errores globales vacía (primer div): ocúltala si no hay error */
+.auth-card form > div:first-child:has(> div:empty) { display: none; margin: 0; }
+/* mensajes de error por campo */
+.auth-card form p:empty { display: none; }
+.auth-card form p { color: var(--crit); font-size: .82rem; font-weight: 600; margin: .3rem 0 0; }
+/* último div del form = botón de envío + enlaces auxiliares */
+.auth-card form > div:last-of-type > div {
+  display: flex; flex-wrap: wrap; gap: .55rem .9rem;
+  align-items: center; justify-content: center; margin-top: .2rem;
+}
+.auth-card input[type="submit"] {
+  flex: 1 1 100%;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: .6rem 1rem; min-height: 44px; border-radius: var(--r-sm);
+  border: 1px solid transparent; background: var(--accent); color: var(--accent-contrast);
+  font-weight: 700; font-size: .95rem; cursor: pointer;
+  transition: background .15s, transform .05s;
+}
+.auth-card input[type="submit"]:hover { background: var(--accent-strong); }
+.auth-card input[type="submit"]:active { transform: translateY(1px); }
+.auth-card input[type="submit"]:focus-visible { outline: none; box-shadow: var(--ring); }
+/* Los enlaces auxiliares de py4web (solo salen en el GET) se ocultan: los
+   pinta la plantilla (.auth-links) en todas las respuestas. */
+.auth-card form a[role="button"], .auth-card form a.white { display: none; }
+.auth-links {
+  display: flex; flex-wrap: wrap; gap: .4rem 1rem; justify-content: center;
+  align-items: center; margin-top: .9rem; font-size: .9rem; color: var(--text-dim);
+}
+.auth-links a { color: var(--accent-2); font-weight: 600; }
+.auth-links a:hover { color: var(--accent-2-strong); }
+/* Orden visual: campos → widget ALTCHA → botón → enlaces, sin mover el DOM
+   (el widget debe quedar fuera del <form>: dentro, el v3 duplica su campo). */
+.auth-card { display: flex; flex-direction: column; }
+.auth-card > .kicker, .auth-card > .auth-title, .auth-card > .auth-sub { order: 0; }
+.auth-card form { display: contents; }
+.auth-card form > div { order: 1; }
+.auth-card .altcha-slot { order: 2; }
+.auth-card form > div:last-of-type { order: 3; }
+.auth-card .auth-links { order: 4; }
+/* Widget ALTCHA (anti-bot autoalojado). Se estiliza con las variables CSS que
+   expone el propio widget, mapeadas a la paleta MEREBA (light + dark). */
+.auth-card .altcha-slot { margin: .2rem 0 1.1rem; }
+.auth-card altcha-widget {
+  display: block;
+  --altcha-max-width: 100%;
+  --altcha-border-width: 1px;
+  --altcha-border-radius: var(--r-sm);
+  --altcha-color-base: var(--surface);
+  --altcha-color-border: var(--border);
+  --altcha-color-border-focus: var(--accent);
+  --altcha-color-text: var(--text);
+  --altcha-color-error-text: var(--crit);
+}
+

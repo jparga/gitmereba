@@ -1,0 +1,15 @@
+#!/bin/sh
+# Refresca cachés de iconos y de escritorio tras desinstalar gitmereba. No falla si las
+# herramientas no están. Nunca toca datos de usuario: eso vive fuera de este paquete.
+set -e
+
+if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
+    if command -v gtk-update-icon-cache >/dev/null 2>&1 && [ -d /usr/share/icons/hicolor ]; then
+        gtk-update-icon-cache -q /usr/share/icons/hicolor || true
+    fi
+    if command -v update-desktop-database >/dev/null 2>&1; then
+        update-desktop-database -q /usr/share/applications || true
+    fi
+fi
+
+exit 0

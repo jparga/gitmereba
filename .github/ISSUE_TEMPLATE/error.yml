@@ -1,0 +1,64 @@
+name: Error
+description: Informa de un fallo / Report a bug
+labels: ["error"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gracias por avisar. Si es un problema de **seguridad**, no uses este formulario: usa el aviso privado de seguridad.
+        Puedes escribir en español o en inglés / You may write in Spanish or English.
+  - type: input
+    id: version
+    attributes:
+      label: Versión de gitmereba
+      description: Salida de `gitmereba --version` (o la versión del paquete .deb) / Output of `gitmereba --version`.
+    validations:
+      required: true
+  - type: input
+    id: distro
+    attributes:
+      label: Distribución Linux
+      description: Nombre y versión, p. ej. Ubuntu 24.04 / Distro name and version.
+    validations:
+      required: true
+  - type: input
+    id: entorno
+    attributes:
+      label: Escritorio y llavero
+      description: Entorno de escritorio y llavero de secretos, p. ej. GNOME + gnome-keyring, KDE + KWallet / Desktop and keyring.
+    validations:
+      required: true
+  - type: textarea
+    id: pasos
+    attributes:
+      label: Pasos para reproducirlo
+      description: Describe el error y cómo reproducirlo / Describe the bug and the steps to reproduce it.
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: esperado
+    attributes:
+      label: Comportamiento esperado
+      description: Qué esperabas que ocurriera / What you expected to happen.
+    validations:
+      required: true
+  - type: textarea
+    id: real
+    attributes:
+      label: Comportamiento real
+      description: Qué ocurrió en realidad / What actually happened.
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Salida de `gitmereba doctor`
+      description: |
+        Pega la salida de `gitmereba doctor` / Paste the output of `gitmereba doctor`.
+        **ATENCIÓN:** antes de pegar, elimina tokens, contraseñas y nombres de máquina o hosts privados / Remove tokens, passwords and private hostnames first.
+      render: text
+    validations:
+      required: false

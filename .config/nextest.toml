@@ -1,0 +1,8 @@
+# Los tests que levantan un Gitea real eligen un puerto libre y lo ocupan un instante
+# después: en paralelo pueden elegir el mismo. Se ejecutan de uno en uno.
+[test-groups]
+gitea-real = { max-threads = 1 }
+
+[[profile.default.overrides]]
+filter = 'binary(/_gitea_real$/)'
+test-group = 'gitea-real'

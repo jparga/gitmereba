@@ -1,0 +1,87 @@
+/* ============================================================================
+   tema.css — conmutador de tema manual (claro/oscuro/automático).
+
+   mereba.css ya aplica el oscuro automáticamente vía `@media (prefers-color-scheme:
+   dark) { :root { ... } }`. No podemos editar mereba.css, así que este fichero
+   REPLICA LITERALMENTE esos mismos valores bajo selectores de atributo con mayor
+   especificidad (`:root[data-tema="oscuro"]` / `:root[data-tema="claro"]`), para que
+   ui/js/tema.js pueda forzar un modo con `documentElement.dataset.tema` aunque
+   contradiga las preferencias del sistema. Es el ÚNICO fichero de ui/css con colores
+   literales, y solo porque son una copia exacta de mereba.css.
+
+   Origen de los valores (mereba.css, versión 2026-09-13.1):
+     - claro  → bloque `:root { ... }`                     líneas 39–93
+     - oscuro → bloque `@media (prefers-color-scheme: dark) { :root { ... } }` líneas 96–128
+
+   Los tokens derivados con color-mix() (--accent-weak, --accent-2-weak, etc.) no se
+   repiten aquí: se recalculan solos a partir de --accent/--accent-2 vigentes, igual
+   que ya hace mereba.css para su propio modo automático.
+   ========================================================================== */
+
+:root[data-tema="claro"] {
+  --bg: #f5f3ec;
+  --surface: #fbfaf6;
+  --surface-2: #efeade;
+  --surface-hover: #f2eee3;
+  --border: #e3dfd3;
+  --border-strong: #d2cbba;
+  --text: #2b2b2b;
+  --text-dim: #5b5b55;
+  --text-faint: #8a857a;
+
+  --accent: #00703c;
+  --accent-strong: #00582f;
+  --accent-2: #52297b;
+  --accent-2-strong: #3c1e5c;
+  --accent-contrast: #ffffff;
+
+  --nav-bg: #0b3d2e;
+  --nav-fg: #f2efe6;
+  --nav-fg-dim: #cdd8d0;
+  --nav-active: #00703c;
+
+  --ok: #2f7d32;   --ok-weak: rgba(47,125,50,.14);
+  --warn: #a86b00; --warn-weak: rgba(168,107,0,.15);
+  --crit: #b3261e; --crit-weak: rgba(179,38,30,.14);
+  --info: #3a5fa0; --info-weak: rgba(58,95,160,.14);
+  --muted: #7a756a; --muted-weak: rgba(122,117,106,.16);
+
+  --shadow: 0 1px 2px rgba(11,61,46,.05), 0 4px 16px rgba(11,61,46,.06);
+  --shadow-lg: 0 10px 30px rgba(11,61,46,.14);
+
+  color-scheme: light;
+}
+
+:root[data-tema="oscuro"] {
+  --bg: #0b1a14;
+  --surface: #10271e;
+  --surface-2: #163527;
+  --surface-hover: #1a3d2d;
+  --border: #244635;
+  --border-strong: #315a45;
+  --text: #ecebe1;
+  --text-dim: #a9b3aa;
+  --text-faint: #74806f;
+
+  --accent: #35a56f;
+  --accent-strong: #47b880;
+  --accent-2: #b79bd6;
+  --accent-2-strong: #cbb6e2;
+  --accent-contrast: #06251a;
+
+  --nav-bg: #071b14;
+  --nav-fg: #eef3ee;
+  --nav-fg-dim: #a9b8ad;
+  --nav-active: #14563a;
+
+  --ok: #55c07f;   --ok-weak: rgba(85,192,127,.16);
+  --warn: #e0a54a; --warn-weak: rgba(224,165,74,.16);
+  --crit: #e26d63; --crit-weak: rgba(226,109,99,.16);
+  --info: #7fa0d8; --info-weak: rgba(127,160,216,.16);
+  --muted: #8b9488; --muted-weak: rgba(139,148,136,.18);
+
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.4);
+  --shadow-lg: 0 12px 34px rgba(0,0,0,.55);
+
+  color-scheme: dark;
+}

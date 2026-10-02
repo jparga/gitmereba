@@ -1,0 +1,289 @@
+/* ============================================================================
+   app.css — layout y componentes propios de gitmereba, encima de mereba.css.
+
+   REGLA DURA: ni un color literal (hex/rgb/hsl/nombre) en este fichero. Todo color
+   sale de var(--token) definido en mereba.css; los matices se derivan con
+   color-mix(in srgb, var(--x) N%, transparent). El tema oscuro no se toca aquí: sale
+   gratis de los tokens (ver ui/css/tema.css para el conmutador manual).
+   ========================================================================== */
+
+/* ---- Marca de la barra: letra "g" sobre el cuadrado de acento --------------- */
+.brand-mark-letra {
+  font-family: var(--font-brand);
+  font-weight: 700;
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+/* ---- Indicador de estado de GitHub en la barra ------------------------------ */
+.estado-github {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  color: var(--nav-fg-dim);
+  margin-right: .35rem;
+}
+.dot.warn { background: var(--warn); }
+.dot.crit { background: var(--crit); }
+
+/* ---- Avisos globales (aria-live) -------------------------------------------- */
+.avisos:empty { display: none; }
+.avisos { margin-bottom: 1rem; }
+.avisos .banner { margin-bottom: 0; }
+
+/* ---- Estado vacío ------------------------------------------------------------ */
+.vacio {
+  text-align: center;
+  padding: clamp(2rem, 6vw, 4rem) 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .6rem;
+}
+.vacio .vacio-icono {
+  width: 3rem;
+  height: 3rem;
+  border-radius: var(--r-pill);
+  background: var(--accent-weak);
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+  font-family: var(--font-brand);
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+.vacio h2 { margin: 0; }
+.vacio p { color: var(--text-dim); max-width: var(--measure); }
+
+/* ---- Tarjetas de cuenta (Resumen) -------------------------------------------- */
+.tarjeta-cuenta .cabecera {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .8rem;
+  margin-bottom: .9rem;
+}
+.tarjeta-cuenta .cabecera h3 { margin-bottom: .15rem; }
+.tarjeta-cuenta .carpeta {
+  font-family: var(--mono);
+  font-size: .82rem;
+  color: var(--text-faint);
+  word-break: break-all;
+}
+.tarjeta-cuenta .acciones { margin-top: 1rem; }
+
+/* ---- Tabla de repositorios: cabeceras ordenables ----------------------------- */
+.th-orden {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  padding: 0;
+  cursor: pointer;
+}
+.th-orden:hover { color: var(--text); }
+.th-orden .flecha { font-size: .7em; opacity: .8; }
+th[aria-sort] { background: var(--surface-hover); }
+
+td.acciones-fila {
+  display: flex;
+  gap: .35rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+input[type="checkbox"] { accent-color: var(--accent); width: 1.05rem; height: 1.05rem; }
+
+/* ---- Comando copiable (Contingencia) ------------------------------------------ */
+.copiable {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  flex-wrap: wrap;
+}
+.copiable .pre { flex: 1 1 320px; min-width: 0; margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+
+.commits-de-mas { display: flex; flex-wrap: wrap; gap: .4rem; margin: .5rem 0; }
+
+/* ---- Diálogos nativos --------------------------------------------------------- */
+dialog {
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-lg);
+  background: var(--surface);
+  color: var(--text);
+  padding: 0;
+  max-width: min(90vw, 520px);
+  width: 100%;
+}
+dialog::backdrop {
+  background: color-mix(in srgb, var(--text) 45%, transparent);
+}
+dialog .dialogo-cuerpo { padding: clamp(1.1rem, 3vw, 1.6rem); }
+dialog .dialogo-botones {
+  display: flex;
+  justify-content: flex-end;
+  gap: .5rem;
+  margin-top: 1.2rem;
+}
+dialog h2, dialog h3 { margin-bottom: .5rem; }
+dialog p.aviso-secreto {
+  font-size: .82rem;
+  color: var(--warn);
+  font-weight: 600;
+}
+
+/* ---- Pestañas (Actividad) ------------------------------------------------------ */
+.pestanas-panel { margin-top: 1rem; }
+.pestanas-panel[hidden] { display: none; }
+
+/* ---- Indicador de integridad de la auditoría ----------------------------------- */
+.integridad.ok { color: var(--ok); font-weight: 600; }
+.integridad.rota { color: var(--crit); font-weight: 600; }
+
+/* ---- Asistente de alta ---------------------------------------------------------- */
+.asistente-pasos {
+  display: flex;
+  gap: .5rem;
+  list-style: none;
+  margin: 0 0 1.4rem;
+  padding: 0;
+  flex-wrap: wrap;
+}
+.asistente-pasos li {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  font-size: .85rem;
+  color: var(--text-faint);
+  font-weight: 600;
+}
+.asistente-pasos .numero {
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: var(--r-pill);
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  font-size: .8rem;
+}
+.asistente-pasos li.activo { color: var(--text); }
+.asistente-pasos li.activo .numero { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); }
+.asistente-pasos li.hecho .numero { background: var(--accent-weak); border-color: var(--accent); color: var(--accent); }
+
+.pasos-progreso { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .5rem; }
+.pasos-progreso li {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  padding: .6rem .8rem;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.pasos-progreso li .estado-icono {
+  width: 1.3rem;
+  height: 1.3rem;
+  flex: none;
+  border-radius: var(--r-pill);
+  display: grid;
+  place-items: center;
+  font-size: .75rem;
+  font-weight: 700;
+  background: var(--surface-2);
+  color: var(--text-faint);
+}
+.pasos-progreso li.en-curso { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.pasos-progreso li.en-curso .estado-icono { background: var(--accent-weak); color: var(--accent); }
+.pasos-progreso li.ok .estado-icono { background: var(--ok-weak); color: var(--ok); }
+.pasos-progreso li.error { border-color: color-mix(in srgb, var(--crit) 45%, transparent); }
+.pasos-progreso li.error .estado-icono { background: var(--crit-weak); color: var(--crit); }
+
+/* ---- Ajustes: baja de cuenta -------------------------------------------------- */
+.zona-peligro {
+  border: 1px solid color-mix(in srgb, var(--crit) 35%, transparent);
+  border-radius: var(--r);
+  padding: 1rem 1.1rem;
+  background: var(--crit-weak);
+}
+.zona-peligro h3 { color: var(--crit); }
+
+/* ---- Listas de tarjetas (Contingencia) ----------------------------------------- */
+ul.section { list-style: none; padding: 0; }
+
+/* ---- Utilidades propias -------------------------------------------------------- */
+.tabular { font-variant-numeric: tabular-nums; }
+.gap-sm { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+
+/* ---- Ajustes tras la revisión visual ------------------------------------------ */
+/* El conmutador de tema vive sobre la barra verde botella: usa los tokens de la barra. */
+#nav-tema-slot .btn {
+  color: var(--nav-fg);
+  border-color: color-mix(in srgb, var(--nav-fg) 35%, transparent);
+  background: transparent;
+}
+#nav-tema-slot .btn:hover { background: color-mix(in srgb, var(--nav-fg) 12%, transparent); }
+
+/* Cuatro contadores siempre en una fila dentro de la tarjeta de cuenta. */
+.tarjeta-cuenta .grid.stats { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .5rem; }
+.tarjeta-cuenta .stat { padding: .65rem .7rem; }
+.tarjeta-cuenta .stat .k { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Acciones de la tabla en una sola línea y nombres de repo sin partir. */
+td.acciones-fila { display: table-cell; white-space: nowrap; text-align: right; }
+td.acciones-fila .btn + .btn { margin-left: .3rem; }
+.table-wrap td { white-space: nowrap; }
+td.acciones-fila .btn { padding: .3rem .55rem; font-size: var(--fs-xs); }
+td.repo-nombre, td .mono { white-space: nowrap; }
+
+/* Pie discreto: es una app de escritorio, no una web. */
+.foot { padding: .7rem 1.5rem; margin-top: 2.5rem; }
+.foot .foot-inner { display: block; padding: 0; }
+.foot .foot-brand { display: flex; align-items: baseline; gap: 1rem; max-width: none; }
+.foot .foot-brand p { margin: 0; font-size: var(--fs-xs); color: var(--nav-fg-dim); }
+
+/* La app es de escritorio: algo más de ancho útil que la web de Mereba. */
+:root { --maxw: 1200px; }
+.table-wrap th, .table-wrap td { padding-left: .6rem; padding-right: .6rem; }
+
+/* Formularios a una medida cómoda de lectura, no a todo el ancho. */
+#contenido form, #contenido .formulario { max-width: 34rem; }
+/* Paneles con comandos largos para copiar: algo más anchos que un formulario. */
+#contenido .panel-medio { max-width: 52rem; }
+.aviso-secreto { margin: .3rem 0 0; font-size: var(--fs-xs); color: var(--text-faint); }
+
+#contenido select { max-width: 22rem; }
+
+/* ---- Ayuda contextual ------------------------------------------------------------ */
+#contenido .ayuda { max-width: 52rem; margin: 0 0 1.2rem; background: var(--surface); }
+#contenido .ayuda > summary { color: var(--text-muted); font-size: var(--fs-sm); }
+#contenido .ayuda ul { margin: .4rem 0 .6rem; padding-left: 1.2rem; }
+#contenido .ayuda li { margin: .3rem 0; }
+
+/* ---- Carga y progreso ------------------------------------------------------------ */
+@keyframes girar { to { transform: rotate(360deg); } }
+@keyframes deslizar { 0% { left: -40%; } 100% { left: 100%; } }
+.spinner {
+  display: inline-block; width: .9em; height: .9em; margin-right: .45em; vertical-align: -.1em;
+  border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%;
+  animation: girar .8s linear infinite;
+}
+.progreso { margin-top: .8rem; }
+.progreso .etiqueta { display: flex; justify-content: space-between; font-size: var(--fs-xs); color: var(--text-muted); margin-bottom: .25rem; }
+.progreso .barra { position: relative; height: .5rem; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.progreso .barra > span { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: var(--accent); transition: width .4s ease; }
+.progreso.indeterminado .barra > span { width: 40%; animation: deslizar 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .spinner, .progreso.indeterminado .barra > span { animation-duration: 3s; }
+}
+.credencial { display: grid; grid-template-columns: auto 1fr auto; gap: .5rem .7rem; align-items: center; margin: .8rem 0; }
+.credencial code { overflow-wrap: anywhere; }
+
+/* Etiqueta junto al nombre de un repositorio (p. ej. «Archivado»). */
+.etiqueta-repo { margin-left: .5rem; }

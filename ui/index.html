@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src ipc: http://ipc.localhost; base-uri 'none'; form-action 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>gitmereba</title>
+<link rel="stylesheet" href="css/mereba.css">
+<link rel="stylesheet" href="css/tema.css">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<a class="skip-link" href="#contenido">Saltar al contenido</a>
+
+<header class="nav">
+  <div class="nav-inner">
+    <span class="brand">
+      <span class="brand-mark" aria-hidden="true"><span class="brand-mark-letra">g</span></span>
+      <span class="brand-text">
+        <span class="wordmark">gitmereba</span>
+        <span class="app-name">clon local de GitHub</span>
+      </span>
+    </span>
+
+    <nav class="nav-links" aria-label="Vistas de la aplicación">
+      <a href="#/resumen" data-ruta="resumen">Resumen</a>
+      <a href="#/repositorios" data-ruta="repositorios">Repositorios</a>
+      <a href="#/contingencia" data-ruta="contingencia">Contingencia</a>
+      <a href="#/actividad" data-ruta="actividad">Actividad</a>
+      <a href="#/ajustes" data-ruta="ajustes">Ajustes</a>
+    </nav>
+
+    <div class="nav-spacer"></div>
+
+    <div class="estado-github" role="status">
+      <span id="estado-github-punto" class="dot"></span>
+      <span id="estado-github-texto" class="small">Comprobando GitHub…</span>
+    </div>
+
+    <span id="nav-tema-slot"></span>
+  </div>
+</header>
+
+<main id="contenido">
+  <div id="avisos" class="avisos" role="status" aria-live="polite"></div>
+  <div id="vista"></div>
+</main>
+
+<footer class="foot">
+  <div class="foot-inner">
+    <div class="foot-brand">
+      <span class="wordmark">gitmereba</span>
+      <p>Todo ocurre en este equipo: nada sale a la red salvo hacia GitHub y tu Gitea local.</p>
+    </div>
+  </div>
+</footer>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
