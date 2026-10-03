@@ -1,7 +1,10 @@
 //! Idioma de la interfaz: resolución a partir de la preferencia y del entorno.
 
+mod en;
+mod es;
 mod preferencias;
 
+use crate::avisos::TextoAviso;
 use crate::config::Rutas;
 
 pub use preferencias::{LecturaPreferencia, Preferencia, guardar_preferencia, leer_preferencia};
@@ -60,6 +63,21 @@ pub fn origen(pref: Preferencia, entorno: &dyn Fn(&str) -> Option<String>) -> Or
     }
 }
 
+/// Un texto que se puede mostrar en cualquiera de los idiomas soportados.
+pub trait Localizable {
+    /// El texto en `idioma`.
+    fn localizar(&self, idioma: Idioma) -> String;
+}
+
+impl Localizable for TextoAviso {
+    fn localizar(&self, idioma: Idioma) -> String {
+        match idioma {
+            Idioma::Es => es::avisos::texto(self),
+            Idioma::En => en::avisos::texto(self),
+        }
+    }
+}
+
 /// Idioma actual de la app: preferencia guardada y entorno real del proceso.
 pub fn idioma_actual(rutas: &Rutas) -> Idioma {
     resolver(leer_preferencia(rutas).preferencia(), &|nombre| {
@@ -70,6 +88,7 @@ pub fn idioma_actual(rutas: &Rutas) -> Idioma {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::avisos::CambioAviso;
 
     fn env<'a>(pares: &'a [(&'a str, &'a str)]) -> impl Fn(&str) -> Option<String> + 'a {
         move |k| {
@@ -137,5 +156,163 @@ mod tests {
             origen(Preferencia::Auto, &env(&[("LANG", "")])),
             OrigenIdioma::PorDefecto
         );
+    }
+
+    fn s(t: &str) -> String {
+        t.to_string()
+    }
+
+    fn casos() -> Vec<(TextoAviso, &'static str, &'static str)> {
+        vec![
+            (
+                TextoAviso::TituloFalloSincronizacion,
+                "Fallo de sincronización",
+                "Sync failure",
+            ),
+            (
+                TextoAviso::TituloVariosFallos,
+                "Varios repositorios con fallos",
+                "Several repositories with failures",
+            ),
+            (
+                TextoAviso::TituloRepositorioRecuperado,
+                "Repositorio recuperado",
+                "Repository recovered",
+            ),
+            (
+                TextoAviso::TituloVariosRecuperados,
+                "Varios repositorios recuperados",
+                "Several repositories recovered",
+            ),
+            (
+                TextoAviso::TituloHuerfanos,
+                "Demasiados huérfanos",
+                "Too many orphans",
+            ),
+            (
+                TextoAviso::TituloHistoriaReescrita,
+                "Historia reescrita",
+                "History rewritten",
+            ),
+            (
+                TextoAviso::TituloGiteaParado,
+                "Gitea no responde",
+                "Gitea is not responding",
+            ),
+            (
+                TextoAviso::TituloTokenCaducado,
+                "Token de GitHub caducado",
+                "GitHub token expired",
+            ),
+            (
+                TextoAviso::TituloTokenCaducaPronto,
+                "Token de GitHub a punto de caducar",
+                "GitHub token about to expire",
+            ),
+            (
+                TextoAviso::FalloRepositorio {
+                    login: s("jparga"),
+                    repo: s("jparga/r1"),
+                    detalle: None,
+                },
+                "El repositorio «jparga/r1» tiene un fallo en «jparga».",
+                "Repository “jparga/r1” has a failure in “jparga”.",
+            ),
+            (
+                TextoAviso::FalloRepositorio {
+                    login: s("jparga"),
+                    repo: s("jparga/r1"),
+                    detalle: Some(s("sin red")),
+                },
+                "El repositorio «jparga/r1» tiene un fallo en «jparga». Detalle: sin red.",
+                "Repository “jparga/r1” has a failure in “jparga”. Detail: sin red.",
+            ),
+            (
+                TextoAviso::FallosAgregados {
+                    login: s("jparga"),
+                    n: 4,
+                },
+                "4 repositorios con fallos en «jparga».",
+                "4 repositories with failures in “jparga”.",
+            ),
+            (
+                TextoAviso::RepositorioRecuperado {
+                    login: s("jparga"),
+                    repo: s("jparga/r1"),
+                },
+                "El repositorio «jparga/r1» ha vuelto a estar bien en «jparga».",
+                "Repository “jparga/r1” is back to normal in “jparga”.",
+            ),
+            (
+                TextoAviso::RecuperadosAgregados {
+                    login: s("jparga"),
+                    n: 5,
+                },
+                "5 repositorios han vuelto a estar bien en «jparga».",
+                "5 repositories are back to normal in “jparga”.",
+            ),
+            (
+                TextoAviso::HuerfanosListaVacia { login: s("jparga") },
+                "GitHub devolvió una lista vacía de repositorios en «jparga»; no se ha \
+                 marcado ningún huérfano por precaución.",
+                "GitHub returned an empty list of repositories in “jparga”; no orphan \
+                 has been marked, as a precaution.",
+            ),
+            (
+                TextoAviso::HuerfanosCandidatos {
+                    login: s("jparga"),
+                    candidatos: 5,
+                    total_mirrors: 8,
+                },
+                "5 de 8 repositorios se marcarían huérfanos en «jparga»; no se ha \
+                 aplicado por precaución.",
+                "5 of 8 repositories would be marked as orphans in “jparga”; this has \
+                 not been applied, as a precaution.",
+            ),
+            (
+                TextoAviso::CambioDestructivo {
+                    login: s("jparga"),
+                    repo: s("jparga/r1"),
+                    cambios: vec![
+                        CambioAviso::HistoriaReescrita { rama: s("main") },
+                        CambioAviso::RamaBorrada { rama: s("dev") },
+                        CambioAviso::TagBorrado { tag: s("v1") },
+                        CambioAviso::TagMovido { tag: s("v2") },
+                    ],
+                },
+                "Historia reescrita (rama main); Rama dev borrada; Tag v1 borrado; Tag v2 \
+                 movido en «jparga/r1» (jparga). La copia anterior está protegida en los \
+                 snapshots.",
+                "History rewritten (branch main); Branch dev deleted; Tag v1 deleted; Tag v2 \
+                 moved in “jparga/r1” (jparga). The previous copy is protected in the \
+                 snapshots.",
+            ),
+            (
+                TextoAviso::GiteaParado { login: s("jparga") },
+                "El Gitea de «jparga» no responde; revisa «gitmereba doctor».",
+                "The Gitea of “jparga” is not responding; check “gitmereba doctor”.",
+            ),
+            (
+                TextoAviso::TokenCaducado { login: s("jparga") },
+                "El token de GitHub de «jparga» ha caducado; genera uno nuevo.",
+                "The GitHub token of “jparga” has expired; generate a new one.",
+            ),
+            (
+                TextoAviso::TokenCaducaPronto {
+                    login: s("jparga"),
+                    dias: 3,
+                },
+                "El token de GitHub de «jparga» caduca en 3 día(s).",
+                "The GitHub token of “jparga” expires in 3 day(s).",
+            ),
+        ]
+    }
+
+    #[test]
+    fn cada_frase_de_avisos_se_renderiza_en_espanol_y_en_ingles() {
+        for (texto, es, en) in casos() {
+            assert_eq!(texto.localizar(Idioma::Es), es, "{texto:?}");
+            assert_eq!(texto.localizar(Idioma::En), en, "{texto:?}");
+        }
     }
 }

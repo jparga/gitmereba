@@ -6,6 +6,7 @@ use super::abrir_almacen;
 use gitmereba_core::avisos::{self, EntradaAvisos, Notificador, NotificadorEscritorio};
 use gitmereba_core::config::{self, Rutas};
 use gitmereba_core::cuentas::{self, Contexto, ErrorCuentas};
+use gitmereba_core::idioma::idioma_actual;
 use gitmereba_core::modelo::{IdRepo, Nombre};
 use gitmereba_core::secretos::LlaveroDelSistema;
 use gitmereba_core::sync::OpcionesSync;
@@ -131,7 +132,9 @@ async fn procesar_avisos(rutas: &Rutas, entrada: &EntradaAvisos, sin_avisos: boo
         return;
     }
 
+    let idioma = idioma_actual(rutas);
     for notificacion in notificaciones {
+        let notificacion = notificacion.localizar(idioma);
         // `Notificador::enviar` es síncrona y bloqueante (D-Bus vía `notify-rust`/`zbus`,
         // ver `gitmereba_core::avisos`): se manda a un hilo aparte para no bloquear el
         // runtime de `tokio` mientras dura la conversación con el bus de sesión.
