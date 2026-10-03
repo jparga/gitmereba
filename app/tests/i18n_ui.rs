@@ -67,24 +67,49 @@ fn todos_los_js() -> Vec<(String, PathBuf)> {
 
 // ---------- Diccionarios ----------
 
-/// Claves de un diccionario: líneas que empiezan por `'clave':` (formato documentado en
-/// la cabecera de `ui/i18n/es.js`).
-fn claves_de(texto: &str) -> Vec<String> {
-    texto
-        .lines()
-        .filter_map(|linea| {
-            let resto = linea.trim_start().strip_prefix('\'')?;
-            let (clave, despues) = resto.split_once('\'')?;
-            despues
-                .trim_start()
-                .starts_with(':')
-                .then(|| clave.to_string())
-        })
-        .collect()
+/// Claves de un diccionario (formato documentado en la cabecera de `ui/i18n/es.js`).
+/// Dentro de `export default { … }` toda línea debe ser vacía, comentario, cierre o una
+/// entrada `'clave': 'valor',`; cualquier otra devuelve error con su número de línea.
+fn claves_de(texto: &str) -> Result<Vec<String>, String> {
+    let mut claves = Vec::new();
+    let mut dentro = false;
+    for (n, linea) in texto.lines().enumerate() {
+        let t = linea.trim();
+        if !dentro {
+            dentro = t.starts_with("export default {");
+            continue;
+        }
+        if t.is_empty() || t.starts_with("//") || t == "}" || t == "};" {
+            continue;
+        }
+        let entrada = t
+            .strip_prefix('\'')
+            .and_then(|resto| resto.split_once("': '"));
+        match entrada {
+            Some((clave, valor))
+                if !clave.is_empty()
+                    && !clave.contains(['\\', '\'', '"'])
+                    && valor.ends_with("',") =>
+            {
+                claves.push(clave.to_string());
+            }
+            _ => {
+                return Err(format!(
+                    "línea {}: no cumple el formato `'clave': 'valor',`: {t}",
+                    n + 1
+                ));
+            }
+        }
+    }
+    if !dentro {
+        return Err("falta `export default {`".to_string());
+    }
+    Ok(claves)
 }
 
 fn diccionario(idioma: &str) -> Vec<String> {
-    claves_de(&leer(&ui().join(format!("i18n/{idioma}.js"))))
+    let ruta = ui().join(format!("i18n/{idioma}.js"));
+    claves_de(&leer(&ruta)).unwrap_or_else(|e| panic!("{}: {e}", ruta.display()))
 }
 
 #[test]
@@ -350,30 +375,52 @@ fn cadenas_sueltas(fuente: &str) -> Vec<String> {
         }
     }
 
-    // `h('etiqueta', attrs, 'texto', …)`: los hijos que son un literal con letras.
-    for (i, ch) in c.iter().enumerate() {
-        if *ch != 'h'
-            || c.get(i + 1) != Some(&'(')
-            || (i > 0 && (es_identificador(c[i - 1]) || c[i - 1] == '.'))
-        {
-            continue;
-        }
-        for lit in hijos_literales_de_h(&c, &literales, i + 2) {
-            if tiene_letras(&lit.texto) {
-                marcar(&mut sueltas, lit, "hijo de h()");
+    // Llamadas cuyo argumento literal es texto visible:
+    //   `h('etiqueta', attrs, 'texto', …)`: hijos (índice 2 o más);
+    //   `avisar('texto', …)`: primer argumento;
+    //   `x.setAttribute('title'|'aria-label'|'placeholder', 'texto')`: segundo argumento.
+    for i in 0..c.len() {
+        let antes_ok = i == 0 || !(es_identificador(c[i - 1]) || c[i - 1] == '.');
+        let empieza = |nombre: &str| {
+            c[i..].starts_with(&nombre.chars().collect::<Vec<_>>())
+                && c.get(i + nombre.chars().count()) == Some(&'(')
+        };
+        if antes_ok && empieza("h") {
+            for (indice, lit) in argumentos_literales(&c, &literales, i + 2) {
+                if indice >= 2 && tiene_letras(&lit.texto) {
+                    marcar(&mut sueltas, lit, "hijo de h()");
+                }
+            }
+        } else if antes_ok && empieza("avisar") {
+            for (indice, lit) in argumentos_literales(&c, &literales, i + 7) {
+                if indice == 0 && tiene_letras(&lit.texto) {
+                    marcar(&mut sueltas, lit, "texto de avisar()");
+                }
+            }
+        } else if empieza("setAttribute") && i > 0 && c[i - 1] == '.' {
+            let args = argumentos_literales(&c, &literales, i + 13);
+            let atributo_visible = args.iter().any(|(indice, lit)| {
+                *indice == 0 && ["title", "aria-label", "placeholder"].contains(&lit.texto.as_str())
+            });
+            if atributo_visible {
+                for (indice, lit) in args {
+                    if indice == 1 && tiene_letras(&lit.texto) {
+                        marcar(&mut sueltas, lit, "atributo visible de setAttribute()");
+                    }
+                }
             }
         }
     }
     sueltas.into_iter().map(|(_, texto)| texto).collect()
 }
 
-/// Argumentos de una llamada a `h(` (desde `inicio`, tras el paréntesis) con posición
-/// 2 o mayor que son exactamente un literal.
-fn hijos_literales_de_h<'a>(
+/// Argumentos de una llamada (desde `inicio`, tras el paréntesis) que son exactamente un
+/// literal, con su posición en la lista de argumentos.
+fn argumentos_literales<'a>(
     c: &[char],
     literales: &'a [Literal],
     inicio: usize,
-) -> Vec<&'a Literal> {
+) -> Vec<(usize, &'a Literal)> {
     let mut resultado = Vec::new();
     let mut profundidad = 0;
     let mut indice = 0;
@@ -398,12 +445,12 @@ fn hijos_literales_de_h<'a>(
             _ => false,
         };
         if cierra_arg {
-            if indice >= 2 {
+            {
                 let primero = (inicio_arg..i).find(|&k| !c[k].is_whitespace());
                 if let Some(lit) = primero.and_then(|p| literales.iter().find(|l| l.inicio == p)) {
                     let resto_vacio = c[lit.fin..i].iter().all(|ch| ch.is_whitespace());
                     if resto_vacio {
-                        resultado.push(lit);
+                        resultado.push((indice, lit));
                     }
                 }
             }
@@ -429,6 +476,11 @@ fn el_detector_de_cadenas_sueltas_funciona() {
         "{:?}",
         cadenas_sueltas(buena)
     );
+    assert!(cadenas_sueltas("avisar('Hecho', 'success');").len() == 1);
+    assert!(cadenas_sueltas("avisar(t('a.b'), 'success');").is_empty());
+    assert!(cadenas_sueltas("el.setAttribute('aria-label', 'Cerrar');").len() == 1);
+    assert!(cadenas_sueltas("el.setAttribute('aria-busy', 'true');").is_empty());
+    assert!(cadenas_sueltas("el.setAttribute('title', t('a.b'));").is_empty());
     assert_eq!(
         claves_usadas_en_js("x(t('a.b'), at('no'), o.t('no'), t(clave))").len(),
         1
@@ -469,5 +521,22 @@ fn la_lista_de_pendientes_solo_nombra_ficheros_que_existen() {
             ui().join("js").join(nombre).is_file(),
             "no existe ui/js/{nombre}"
         );
+    }
+}
+
+#[test]
+fn el_analizador_de_diccionarios_rechaza_lo_que_no_cumple_el_formato() {
+    let bien = "// c\nexport default {\n  'a.b': 'x',\n  'a.c': 'it\\'s',\n};\n";
+    assert_eq!(claves_de(bien).unwrap(), ["a.b", "a.c"]);
+    for mala in [
+        "\"x\": 'y',",
+        "'x': \"y\",",
+        "'a'b': 'y',",
+        "'x': 'y'",
+        "otra cosa",
+    ] {
+        let texto = format!("export default {{\n  'ok.k': 'v',\n  {mala}\n}};\n");
+        let error = claves_de(&texto).expect_err(mala);
+        assert!(error.starts_with("línea 3"), "{error}");
     }
 }
