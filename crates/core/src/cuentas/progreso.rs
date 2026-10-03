@@ -16,19 +16,10 @@ pub enum PasoAlta {
 }
 
 impl PasoAlta {
-    /// Descripción breve en español, para mostrar junto al estado.
+    /// Descripción breve en español, para mostrar junto al estado. Para mostrarla al
+    /// usuario en su idioma, [`Localizable::localizar`].
     pub fn descripcion(&self) -> &'static str {
-        match self {
-            PasoAlta::Validar => "Validando los datos de la cuenta",
-            PasoAlta::GuardarToken => "Guardando el token en el llavero",
-            PasoAlta::CrearCarpeta => "Creando la carpeta de la cuenta",
-            PasoAlta::EscribirConfiguracion => "Escribiendo la configuración",
-            PasoAlta::AsegurarBinario => "Comprobando el binario de Gitea",
-            PasoAlta::Provisionar => "Provisionando Gitea",
-            PasoAlta::ArrancarGitea => "Arrancando Gitea",
-            PasoAlta::PrimeraSincronizacion => "Sincronizando por primera vez",
-            PasoAlta::RegistrarEnAlmacen => "Registrando la auditoría",
-        }
+        crate::idioma::descripcion_paso_es(*self)
     }
 }
 
@@ -57,6 +48,33 @@ mod tests {
             PasoAlta::RegistrarEnAlmacen,
         ] {
             assert!(!paso.descripcion().is_empty());
+        }
+    }
+
+    #[test]
+    fn la_descripcion_sale_en_el_idioma_pedido() {
+        use crate::idioma::{Idioma, Localizable};
+        assert_eq!(
+            PasoAlta::GuardarToken.localizar(Idioma::Es),
+            "Guardando el token en el llavero"
+        );
+        assert_eq!(
+            PasoAlta::GuardarToken.localizar(Idioma::En),
+            "Saving the token in the keyring"
+        );
+        for paso in [
+            PasoAlta::Validar,
+            PasoAlta::GuardarToken,
+            PasoAlta::CrearCarpeta,
+            PasoAlta::EscribirConfiguracion,
+            PasoAlta::AsegurarBinario,
+            PasoAlta::Provisionar,
+            PasoAlta::ArrancarGitea,
+            PasoAlta::PrimeraSincronizacion,
+            PasoAlta::RegistrarEnAlmacen,
+        ] {
+            assert_eq!(paso.localizar(Idioma::Es), paso.descripcion());
+            assert_ne!(paso.localizar(Idioma::En), paso.localizar(Idioma::Es));
         }
     }
 }

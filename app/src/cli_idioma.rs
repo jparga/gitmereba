@@ -130,6 +130,23 @@ const CATALOGO_EN: &[(&str, &str)] = &[
     ),
 ];
 
+/// Nombre del valor (`--repo <DUEÑO/NOMBRE>`) en inglés, por ruta de argumento. Los
+/// nombres iguales en los dos idiomas (`DIR`, `ORG`...) no necesitan entrada.
+const VALORES_EN: &[(&str, &str)] = &[
+    ("cuenta.add.carpeta", "FOLDER"),
+    ("cuenta.add.intervalo", "INTERVAL"),
+    ("cuenta.usuario.crear", "NAME"),
+    ("cuenta.usuario.eliminar", "NAME"),
+    ("sync.repo", "OWNER/NAME"),
+];
+
+fn valor_en(ruta: &str) -> Option<&'static str> {
+    VALORES_EN
+        .iter()
+        .find(|(clave, _)| *clave == ruta)
+        .map(|(_, texto)| *texto)
+}
+
 fn ingles(ruta: &str) -> Option<&'static str> {
     CATALOGO_EN
         .iter()
@@ -173,6 +190,9 @@ fn localizar_en(mut cmd: Command, ruta: &str) -> Command {
         }
         if let Some(texto) = ingles(&format!("{clave}.long")) {
             cmd = cmd.mut_arg(id.as_str(), |arg| arg.long_help(texto));
+        }
+        if let Some(nombre) = valor_en(&clave) {
+            cmd = cmd.mut_arg(id.as_str(), |arg| arg.value_name(nombre));
         }
     }
 
@@ -252,6 +272,83 @@ mod tests {
             .filter(|clave| !existentes.contains(*clave))
             .collect();
         assert!(sobran.is_empty(), "entradas sin destino: {sobran:?}");
+    }
+
+    /// Nombre del valor tal como lo pinta clap: `value_name` o, si no hay, el id en mayúsculas.
+    fn nombre_de_valor(arg: &clap::Arg) -> String {
+        match arg.get_value_names() {
+            Some(nombres) => nombres
+                .iter()
+                .map(|n| n.as_str().to_string())
+                .collect::<Vec<_>>()
+                .join(" "),
+            None => arg.get_id().as_str().to_uppercase(),
+        }
+    }
+
+    fn argumentos_con_valor(cmd: &Command, ruta: &str, salida: &mut Vec<(String, String)>) {
+        for arg in cmd.get_arguments() {
+            if arg.get_action().takes_values() {
+                salida.push((unir(ruta, arg.get_id().as_str()), nombre_de_valor(arg)));
+            }
+        }
+        for sub in cmd.get_subcommands() {
+            argumentos_con_valor(sub, &unir(ruta, sub.get_name()), salida);
+        }
+    }
+
+    /// Nombres de valor iguales en español y en inglés.
+    const VALORES_NEUTROS: &[&str] = &["DIR", "ORG", "HOST", "LOGIN"];
+
+    #[test]
+    fn cada_nombre_de_valor_esta_traducido_o_es_neutro() {
+        let mut valores = Vec::new();
+        argumentos_con_valor(&Cli::command(), "", &mut valores);
+        let sin_decidir: Vec<&(String, String)> = valores
+            .iter()
+            .filter(|(ruta, nombre)| {
+                valor_en(ruta).is_none() && !VALORES_NEUTROS.contains(&nombre.as_str())
+            })
+            .collect();
+        assert!(
+            sin_decidir.is_empty(),
+            "nombres de valor sin decidir: {sin_decidir:?}"
+        );
+    }
+
+    #[test]
+    fn el_catalogo_de_valores_no_apunta_a_argumentos_inexistentes() {
+        let mut valores = Vec::new();
+        argumentos_con_valor(&Cli::command(), "", &mut valores);
+        let sobran: Vec<&str> = VALORES_EN
+            .iter()
+            .map(|(ruta, _)| *ruta)
+            .filter(|ruta| !valores.iter().any(|(r, _)| r == ruta))
+            .collect();
+        assert!(sobran.is_empty(), "entradas sin destino: {sobran:?}");
+    }
+
+    #[test]
+    fn el_nombre_de_valor_ingles_sale_en_la_ayuda_y_en_el_uso() {
+        let mut cmd = localizar(Cli::command(), Idioma::En);
+        let sync = cmd.find_subcommand_mut("sync").expect("sync existe");
+        let ayuda = sync.render_help().to_string();
+        assert!(ayuda.contains("--repo <OWNER/NAME>"), "{ayuda}");
+        assert!(!ayuda.contains("DUEÑO"), "{ayuda}");
+        let mut es = localizar(Cli::command(), Idioma::Es);
+        let ayuda_es = es
+            .find_subcommand_mut("sync")
+            .expect("sync existe")
+            .render_help()
+            .to_string();
+        assert!(ayuda_es.contains("--repo <DUEÑO/NOMBRE>"), "{ayuda_es}");
+        let add = cmd
+            .find_subcommand_mut("cuenta")
+            .and_then(|c| c.find_subcommand_mut("add"))
+            .expect("cuenta add existe")
+            .render_help()
+            .to_string();
+        assert!(add.contains("--carpeta <FOLDER>") && add.contains("--intervalo <INTERVAL>"));
     }
 
     #[test]

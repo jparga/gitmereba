@@ -66,7 +66,7 @@ pub async fn ejecutar(args: SyncArgs, rutas: &Rutas) -> u8 {
         {
             Ok(resultado) => {
                 let mut stdout = std::io::stdout().lock();
-                salida::linea(&mut stdout, &resultado.sync.resumen());
+                salida::linea(&mut stdout, &resultado.sync.localizar(idioma));
                 if resultado.sync.hay_fallos() {
                     hubo_fallos = true;
                 }
