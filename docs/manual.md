@@ -1,5 +1,7 @@
 # Manual de gitmereba
 
+**Español** · [English](manual.en.md)
+
 gitmereba mantiene en tu equipo una copia viva de tus cuentas de GitHub. Si GitHub cae,
 sigues trabajando contra tu copia y, cuando vuelve, devuelves los cambios.
 
@@ -203,3 +205,20 @@ gitmereba doctor                  # comprueba el sistema y cada cuenta
 Toda la cuenta está en su carpeta: copiarla entera (con la cuenta parada) es una copia de
 seguridad completa. Para dejar de usar una cuenta, **Ajustes → Dar de baja**; la carpeta se
 queda donde está hasta que la borres tú.
+
+## 12. Idioma
+
+gitmereba está disponible en español e inglés: la ventana, la ayuda integrada, la ayuda y los
+mensajes de la línea de órdenes y las notificaciones.
+
+- **De dónde sale el idioma.** Por defecto sigue al sistema, con la primera de `LC_ALL`,
+  `LC_MESSAGES` y `LANG` que esté definida. Si no hay ninguna, o su valor es `C` o `POSIX`,
+  gitmereba usa inglés.
+- **Elegirlo tú.** En **Ajustes → Idioma de la interfaz** elige *Automático (sistema)*,
+  *Español* o *English*. La elección se guarda en `$XDG_CONFIG_HOME/gitmereba/preferencias.toml`
+  (por defecto `~/.config/gitmereba/preferencias.toml`) y manda sobre el sistema.
+- **Comprobarlo.** `gitmereba doctor` muestra el idioma en uso y de dónde sale (el fichero de
+  preferencias, una variable de entorno o el valor por defecto).
+- **Qué sigue en español.** Los subcomandos y las opciones de la línea de órdenes
+  (`gitmereba cuenta add`, `--activar`). El histórico de sincronización, el registro de
+  auditoría y los logs también se guardan en español, sea cual sea el idioma de la ventana.
