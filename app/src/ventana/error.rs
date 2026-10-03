@@ -1,5 +1,6 @@
 //! Error común de los comandos de la ventana: `{ codigo, mensaje }` (contrato con la interfaz).
 
+use gitmereba_core::idioma::{Idioma, Localizable};
 use serde::Serialize;
 
 /// Forma con la que se rechaza cualquier comando. `codigo` es estable y apto para la
@@ -20,40 +21,68 @@ impl ErrorUi {
     }
 
     /// Deriva `codigo` del nombre de la variante del error (`TokenInvalido` →
-    /// `token_invalido`), tomado de su `Debug`, y `mensaje` de su `Display`.
+    /// `token_invalido`), tomado de su `Debug`, y `mensaje` de su texto en `idioma`.
     ///
     /// Solo se usa con errores de `core`, cuyos `Debug` no contienen secretos (el tipo
     /// `Secreto` se enmascara y los clientes sanean sus detalles).
-    pub fn de<E: std::fmt::Debug + std::fmt::Display>(error: &E) -> Self {
+    pub fn de<E: std::fmt::Debug + Localizable>(error: &E, idioma: Idioma) -> Self {
         Self {
             codigo: codigo_de_variante(&format!("{error:?}")),
-            mensaje: error.to_string(),
+            mensaje: error.localizar(idioma),
         }
     }
 
-    pub fn cuenta_no_encontrada(login: &str) -> Self {
+    /// Error de una librería ajena a `core` (io, ejecutor): no puede ser `Localizable`,
+    /// así que conserva su `Display` tal cual, anteponiendo un prefijo ya localizado.
+    pub fn externo(codigo: &str, prefijo: Option<&str>, error: &impl std::fmt::Display) -> Self {
+        match prefijo {
+            Some(prefijo) => Self::nuevo(codigo, format!("{prefijo}: {error}")),
+            None => Self::nuevo(codigo, error.to_string()),
+        }
+    }
+
+    pub fn cuenta_no_encontrada(login: &str, idioma: Idioma) -> Self {
         Self::nuevo(
             "cuenta_no_encontrada",
-            format!("no hay ninguna cuenta «{login}»"),
+            match idioma {
+                Idioma::Es => format!("no hay ninguna cuenta «{login}»"),
+                Idioma::En => format!("there is no account «{login}»"),
+            },
         )
     }
 
     // Provisional: sin uso hasta los comandos de escritura.
     #[allow(dead_code)]
-    pub fn repo_no_encontrado(dueno: &str, nombre: &str) -> Self {
+    pub fn repo_no_encontrado(dueno: &str, nombre: &str, idioma: Idioma) -> Self {
         Self::nuevo(
             "repo_no_encontrado",
-            format!("no existe el repositorio «{dueno}/{nombre}» en esta cuenta"),
+            match idioma {
+                Idioma::Es => format!("no existe el repositorio «{dueno}/{nombre}» en esta cuenta"),
+                Idioma::En => {
+                    format!("the repository «{dueno}/{nombre}» does not exist in this account")
+                }
+            },
         )
     }
 
     #[allow(dead_code)]
-    pub fn token_vacio() -> Self {
-        Self::nuevo("token_vacio", "falta el token")
+    pub fn token_vacio(idioma: Idioma) -> Self {
+        Self::nuevo(
+            "token_vacio",
+            texto(idioma, "falta el token", "the token is missing"),
+        )
     }
 
     pub fn interno(mensaje: impl Into<String>) -> Self {
         Self::nuevo("interno", mensaje)
+    }
+}
+
+/// Texto propio de `app` (no de `core`) en el idioma pedido.
+pub fn texto(idioma: Idioma, es: &str, en: &str) -> String {
+    match idioma {
+        Idioma::Es => es.to_string(),
+        Idioma::En => en.to_string(),
     }
 }
 
@@ -153,8 +182,20 @@ mod tests {
     }
 
     #[test]
+    fn el_mensaje_sale_en_el_idioma_pedido_y_el_codigo_no_cambia() {
+        let error = gitmereba_core::github::ErrorGithub::TokenInvalido;
+        let es = ErrorUi::de(&error, Idioma::Es);
+        let en = ErrorUi::de(&error, Idioma::En);
+        assert_eq!(es.codigo, en.codigo);
+        assert_eq!(es.codigo, "token_invalido");
+        assert_eq!(es.mensaje, error.localizar(Idioma::Es));
+        assert_eq!(en.mensaje, error.localizar(Idioma::En));
+        assert_ne!(es.mensaje, en.mensaje);
+    }
+
+    #[test]
     fn se_serializa_con_codigo_y_mensaje() {
-        let json = serde_json::to_value(ErrorUi::token_vacio()).unwrap();
+        let json = serde_json::to_value(ErrorUi::token_vacio(Idioma::Es)).unwrap();
         assert_eq!(json["codigo"], "token_vacio");
         assert_eq!(json["mensaje"], "falta el token");
     }

@@ -4,12 +4,13 @@
 
 use gitmereba_core::cuentas::{self, ErrorCuentas, InformeLan, LanzadorSystemd};
 use gitmereba_core::gitea::ClienteGitea;
+use gitmereba_core::idioma::{Idioma, Localizable};
 use gitmereba_core::modelo::{Cuenta, Nombre, NombreHostInterno, host_lan_por_defecto};
 use gitmereba_core::secretos::{ClaveSecreto, Llavero};
 use serde::Serialize;
 use tauri::State;
 
-use super::error::ErrorUi;
+use super::error::{ErrorUi, texto};
 use super::estado::{EstadoApp, Recursos, en_hilo};
 
 /// Forma JSON de [`InformeLan`] con el acceso activo (contrato con la interfaz). Nada de esto
@@ -54,8 +55,8 @@ fn informe_dto(informe: InformeLan) -> Option<InformeLanDto> {
     })
 }
 
-fn login_valido(login: &str) -> Result<Nombre, ErrorUi> {
-    Nombre::nuevo(login).map_err(|_| ErrorUi::cuenta_no_encontrada(login))
+fn login_valido(login: &str, idioma: Idioma) -> Result<Nombre, ErrorUi> {
+    Nombre::nuevo(login).map_err(|_| ErrorUi::cuenta_no_encontrada(login, idioma))
 }
 
 #[tauri::command]
@@ -65,11 +66,12 @@ pub async fn lan_estado(
 ) -> Result<EstadoLanDto, ErrorUi> {
     tracing::debug!(comando = "lan_estado");
     let rutas = estado.rutas.clone();
-    en_hilo(move || async move {
+    let idioma = estado.idioma();
+    en_hilo(idioma, move || async move {
         let recursos = Recursos::abrir(&rutas)?;
         let (cuenta, _) = recursos.cuenta(&login)?;
         let informe = cuentas::estado_lan(&recursos.contexto(), &cuenta.login)
-            .map_err(|error| ErrorUi::de(&error))?;
+            .map_err(|error| ErrorUi::de(&error, idioma))?;
         let informe = informe_dto(informe);
         Ok(EstadoLanDto {
             activo: informe.is_some(),
@@ -88,18 +90,25 @@ pub async fn lan_activar(
 ) -> Result<InformeLanDto, ErrorUi> {
     tracing::debug!(comando = "lan_activar");
     let rutas = estado.rutas.clone();
-    en_hilo(move || async move {
-        let login = login_valido(&login)?;
+    let idioma = estado.idioma();
+    en_hilo(idioma, move || async move {
+        let login = login_valido(&login, idioma)?;
         let host = host
             .map(|texto| NombreHostInterno::nuevo(texto.trim()))
             .transpose()
-            .map_err(|error| ErrorUi::nuevo("host_invalido", error.to_string()))?;
+            .map_err(|error| ErrorUi::nuevo("host_invalido", error.localizar(idioma)))?;
         let recursos = Recursos::abrir(&rutas)?;
         recursos.cuenta(login.as_str())?;
         let informe = cuentas::exponer_lan(&recursos.contexto(), &LanzadorSystemd, &login, host)
             .await
-            .map_err(|error| ErrorUi::de(&error))?;
-        informe_dto(informe).ok_or_else(|| ErrorUi::interno("el acceso LAN no quedó activo"))
+            .map_err(|error| ErrorUi::de(&error, idioma))?;
+        informe_dto(informe).ok_or_else(|| {
+            ErrorUi::interno(texto(
+                idioma,
+                "el acceso LAN no quedó activo",
+                "LAN access did not become active",
+            ))
+        })
     })
     .await
 }
@@ -111,13 +120,14 @@ pub async fn lan_desactivar(
 ) -> Result<serde_json::Value, ErrorUi> {
     tracing::debug!(comando = "lan_desactivar");
     let rutas = estado.rutas.clone();
-    en_hilo(move || async move {
-        let login = login_valido(&login)?;
+    let idioma = estado.idioma();
+    en_hilo(idioma, move || async move {
+        let login = login_valido(&login, idioma)?;
         let recursos = Recursos::abrir(&rutas)?;
         recursos.cuenta(login.as_str())?;
         cuentas::ocultar_lan(&recursos.contexto(), &LanzadorSystemd, &login)
             .await
-            .map_err(|error| ErrorUi::de(&error))?;
+            .map_err(|error| ErrorUi::de(&error, idioma))?;
         Ok(serde_json::json!({ "ok": true }))
     })
     .await
@@ -139,35 +149,40 @@ pub struct UsuarioLanCreadoDto {
 
 /// Los errores propios de los usuarios de la LAN llevan el código del contrato; el resto
 /// sigue la regla general de [`ErrorUi::de`].
-fn error_de_usuarios(error: &ErrorCuentas) -> ErrorUi {
+fn error_de_usuarios(error: &ErrorCuentas, idioma: Idioma) -> ErrorUi {
     match error {
         ErrorCuentas::UsuarioLanYaExiste(_) => {
-            ErrorUi::nuevo("usuario_ya_existe", error.to_string())
+            ErrorUi::nuevo("usuario_ya_existe", error.localizar(idioma))
         }
         ErrorCuentas::UsuarioLanNoValido(_) => {
-            ErrorUi::nuevo("usuario_no_valido", error.to_string())
+            ErrorUi::nuevo("usuario_no_valido", error.localizar(idioma))
         }
         ErrorCuentas::UsuarioLanNoExiste(_) => {
-            ErrorUi::nuevo("usuario_no_existe", error.to_string())
+            ErrorUi::nuevo("usuario_no_existe", error.localizar(idioma))
         }
-        otro => ErrorUi::de(otro),
+        otro => ErrorUi::de(otro, idioma),
     }
 }
 
-fn usuario_valido(nombre: &str) -> Result<Nombre, ErrorUi> {
+fn usuario_valido(nombre: &str, idioma: Idioma) -> Result<Nombre, ErrorUi> {
     Nombre::nuevo(nombre.trim())
-        .map_err(|error| ErrorUi::nuevo("usuario_no_valido", error.to_string()))
+        .map_err(|error| ErrorUi::nuevo("usuario_no_valido", error.localizar(idioma)))
 }
 
 fn cliente_gitea(recursos: &Recursos, cuenta: &Cuenta) -> Result<ClienteGitea, ErrorUi> {
     let token = recursos
         .llavero
         .leer(&cuenta.login, ClaveSecreto::TokenGitea)
-        .map_err(|error| ErrorUi::de(&error))?
+        .map_err(|error| ErrorUi::de(&error, recursos.idioma))?
         .ok_or_else(|| {
-            ErrorUi::interno("no hay token de administración de Gitea para esta cuenta")
+            ErrorUi::interno(texto(
+                recursos.idioma,
+                "no hay token de administración de Gitea para esta cuenta",
+                "there is no Gitea administration token for this account",
+            ))
         })?;
-    cuentas::cliente_gitea_de_cuenta(cuenta, token).map_err(|error| ErrorUi::de(&error))
+    cuentas::cliente_gitea_de_cuenta(cuenta, token)
+        .map_err(|error| ErrorUi::de(&error, recursos.idioma))
 }
 
 #[tauri::command]
@@ -177,12 +192,13 @@ pub async fn lan_usuarios_listar(
 ) -> Result<Vec<UsuarioLanDto>, ErrorUi> {
     tracing::debug!(comando = "lan_usuarios_listar");
     let rutas = estado.rutas.clone();
-    en_hilo(move || async move {
+    let idioma = estado.idioma();
+    en_hilo(idioma, move || async move {
         let recursos = Recursos::abrir(&rutas)?;
         let (cuenta, _) = recursos.cuenta(&login)?;
         let usuarios = cuentas::listar_usuarios_lan(&recursos.contexto(), &cuenta.login)
             .await
-            .map_err(|error| error_de_usuarios(&error))?;
+            .map_err(|error| error_de_usuarios(&error, idioma))?;
         Ok(usuarios
             .into_iter()
             .map(|usuario| UsuarioLanDto {
@@ -201,15 +217,16 @@ pub async fn lan_usuario_crear(
 ) -> Result<UsuarioLanCreadoDto, ErrorUi> {
     tracing::debug!(comando = "lan_usuario_crear");
     let rutas = estado.rutas.clone();
-    en_hilo(move || async move {
-        let nombre = usuario_valido(&nombre)?;
+    let idioma = estado.idioma();
+    en_hilo(idioma, move || async move {
+        let nombre = usuario_valido(&nombre, idioma)?;
         let recursos = Recursos::abrir(&rutas)?;
         let (cuenta, _) = recursos.cuenta(&login)?;
         let gitea = cliente_gitea(&recursos, &cuenta)?;
         let creado =
             cuentas::crear_usuario_lan(&recursos.contexto(), &gitea, &cuenta.login, &nombre)
                 .await
-                .map_err(|error| error_de_usuarios(&error))?;
+                .map_err(|error| error_de_usuarios(&error, idioma))?;
         Ok(UsuarioLanCreadoDto {
             nombre: creado.nombre.to_string(),
             password: creado.password.exponer().to_string(),
@@ -226,14 +243,15 @@ pub async fn lan_usuario_eliminar(
 ) -> Result<serde_json::Value, ErrorUi> {
     tracing::debug!(comando = "lan_usuario_eliminar");
     let rutas = estado.rutas.clone();
-    en_hilo(move || async move {
-        let nombre = usuario_valido(&nombre)?;
+    let idioma = estado.idioma();
+    en_hilo(idioma, move || async move {
+        let nombre = usuario_valido(&nombre, idioma)?;
         let recursos = Recursos::abrir(&rutas)?;
         let (cuenta, _) = recursos.cuenta(&login)?;
         let gitea = cliente_gitea(&recursos, &cuenta)?;
         cuentas::eliminar_usuario_lan(&recursos.contexto(), &gitea, &cuenta.login, &nombre)
             .await
-            .map_err(|error| error_de_usuarios(&error))?;
+            .map_err(|error| error_de_usuarios(&error, idioma))?;
         Ok(serde_json::Value::Null)
     })
     .await
@@ -259,12 +277,14 @@ mod tests {
     #[test]
     fn los_errores_de_usuarios_llevan_el_codigo_del_contrato() {
         let ana = Nombre::nuevo("ana").expect("nombre válido");
-        let ya = error_de_usuarios(&ErrorCuentas::UsuarioLanYaExiste(ana.clone()));
+        let ya = error_de_usuarios(&ErrorCuentas::UsuarioLanYaExiste(ana.clone()), Idioma::Es);
         assert_eq!(ya.codigo, "usuario_ya_existe");
-        let no = error_de_usuarios(&ErrorCuentas::UsuarioLanNoValido(ana));
+        let no = error_de_usuarios(&ErrorCuentas::UsuarioLanNoValido(ana), Idioma::Es);
         assert_eq!(no.codigo, "usuario_no_valido");
         assert_eq!(
-            usuario_valido("con espacio").expect_err("inválido").codigo,
+            usuario_valido("con espacio", Idioma::Es)
+                .expect_err("inválido")
+                .codigo,
             "usuario_no_valido"
         );
     }
