@@ -5,7 +5,7 @@ use crate::sync::InformeSync;
 pub(crate) fn resumen(informe: &InformeSync) -> String {
     let c = informe.cifras();
     let mut resumen = format!(
-        "Sync of \"{}\": {} creation(s), {} paused, {} resumed, \
+        "Sync of “{}”: {} creation(s), {} paused, {} resumed, \
          {} interval change(s), {} skipped",
         c.login, c.altas, c.pausados, c.reanudados, c.ajustados, c.omitidos
     );

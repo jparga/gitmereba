@@ -63,7 +63,8 @@ pub(crate) fn texto(t: &TextoAviso) -> String {
             format!("The GitHub token of “{login}” has expired; generate a new one.")
         }
         TextoAviso::TokenCaducaPronto { login, dias } => {
-            format!("The GitHub token of “{login}” expires in {dias} day(s).")
+            let unidad = if *dias == 1 { "day" } else { "days" };
+            format!("The GitHub token of “{login}” expires in {dias} {unidad}.")
         }
     }
 }

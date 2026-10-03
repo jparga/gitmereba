@@ -226,14 +226,14 @@ fn en(t: &TextoCli) -> String {
             "check that the token has not expired and has read permission".to_string()
         }
         T::ConsejoGiteaParado => {
-            "start it with \"systemctl --user start\" or check \"gitmereba doctor\"".to_string()
+            "start it with “systemctl --user start” or check “gitmereba doctor”".to_string()
         }
         T::ConsejoCuentaNoExiste => {
-            "list the accounts that have been added with \"gitmereba cuenta list\"".to_string()
+            "list the accounts that have been added with “gitmereba cuenta list”".to_string()
         }
         T::ConsejoCarpetaNoVacia => "choose an empty or nonexistent folder".to_string(),
         T::ConsejoLoginDuplicado => {
-            "an account with that login already exists; use \"gitmereba cuenta list\"".to_string()
+            "an account with that login already exists; use “gitmereba cuenta list”".to_string()
         }
         T::ConsejoRecursoDuplicado => {
             "that folder or port is already used by another account".to_string()
@@ -274,18 +274,16 @@ fn en(t: &TextoCli) -> String {
         T::GiteaPrimerPlano => {
             "Gitea started in the foreground. Press Ctrl-C to stop it.".to_string()
         }
-        T::ConfirmarBaja(login) => format!("Type \"{login}\" to confirm the removal: "),
+        T::ConfirmarBaja(login) => format!("Type “{login}” to confirm the removal: "),
         T::BajaCancelada => "Removal cancelled.".to_string(),
-        T::CuentaBaja(login) => format!("Account \"{login}\" removed."),
+        T::CuentaBaja(login) => format!("Account “{login}” removed."),
         T::IdentidadConfirmada(login) => format!("Identity confirmed: {login}"),
         T::TokenCaduca(fecha) => format!("The token expires: {fecha}"),
         T::TokenSinCaducidad => "The token does not report an expiry date.".to_string(),
         T::OrganizacionesDisponibles(lista) => format!("Available organizations: {lista}"),
         T::TotalRepos(repos, kb) => format!("Total: {repos} repo(s), {kb} KB"),
-        T::HostSoloConActivar => {
-            "\"--host\" only makes sense together with \"--activar\"".to_string()
-        }
-        T::AccesoLanActivo(login) => format!("LAN access is on for \"{login}\"."),
+        T::HostSoloConActivar => "“--host” only makes sense together with “--activar”".to_string(),
+        T::AccesoLanActivo(login) => format!("LAN access is on for “{login}”."),
         T::UrlPublica(url) => format!("Public URL: {url}"),
         T::HuellaCertificado(huella) => format!("Certificate SHA-256 fingerprint: {huella}"),
         T::Certificado(ruta) => format!("Certificate: {ruta}"),
@@ -296,7 +294,7 @@ fn en(t: &TextoCli) -> String {
         T::GitConfiaEnCertificado => "To make git trust the certificate:".to_string(),
         T::ReglaCortafuegos => "Suggested firewall rule:".to_string(),
         T::AccesoLanInactivo(login) => {
-            format!("LAN access is off for \"{login}\": Gitea only listens on 127.0.0.1.")
+            format!("LAN access is off for “{login}”: Gitea only listens on 127.0.0.1.")
         }
         T::UrlLocal(url) => format!("Local URL: {url}"),
         T::CertificadoConservado(huella) => format!(
@@ -306,20 +304,20 @@ fn en(t: &TextoCli) -> String {
             "There are no LAN users: only the administrator can sign in.".to_string()
         }
         T::SinTokenAdmin => "there is no Gitea administration token for this account".to_string(),
-        T::UsuarioCreado(nombre) => format!("User \"{nombre}\" created."),
+        T::UsuarioCreado(nombre) => format!("User “{nombre}” created."),
         T::EtiquetaContrasena => "Password:".to_string(),
         T::NoSeVolveraMostrar => "It will not be shown again. The user can read the mirrors and \
-                                  write to \"contingencia-*\"; the password can be changed from \
+                                  write to “contingencia-*”; the password can be changed from \
                                   the Gitea web interface."
             .to_string(),
-        T::UsuarioEliminado(nombre) => format!("User \"{nombre}\" deleted."),
+        T::UsuarioEliminado(nombre) => format!("User “{nombre}” deleted."),
         T::IndicaLoginOTodas => "give a login or use --todas".to_string(),
         T::LoginYTodas => "give a login or --todas, not both".to_string(),
         T::RepoForma => "--repo must have the form owner/name".to_string(),
-        T::CuentaNoExiste(login) => format!("account \"{login}\" does not exist"),
-        T::RepoSincronizacionPedida(id) => format!("\"{id}\": sync requested."),
+        T::CuentaNoExiste(login) => format!("account “{login}” does not exist"),
+        T::RepoSincronizacionPedida(id) => format!("“{id}”: sync requested."),
         T::RepoReclonar(id) => {
-            format!("\"{id}\": the initial clone had failed; cloning it again.")
+            format!("“{id}”: the initial clone had failed; cloning it again.")
         }
     }
 }

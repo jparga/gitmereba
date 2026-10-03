@@ -233,7 +233,7 @@ mod tests {
         assert_eq!(informe.localizar(Idioma::Es), informe.resumen());
         assert_eq!(
             informe.localizar(Idioma::En),
-            "Sync of \"jparga\": 1 creation(s), 0 paused, 0 resumed, 0 interval change(s), \
+            "Sync of “jparga”: 1 creation(s), 0 paused, 0 resumed, 0 interval change(s), \
              0 skipped, 1 failure(s), 1 failed listing(s), \
              alert: too many orphans, none have been marked."
         );

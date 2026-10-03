@@ -4,7 +4,7 @@ use gitmereba_core::idioma::{Idioma, Localizable};
 use serde::Serialize;
 
 /// Forma con la que se rechaza cualquier comando. `codigo` es estable y apto para la
-/// lógica de la interfaz; `mensaje` es el texto en español del error de `core`, que por
+/// lógica de la interfaz; `mensaje` es el texto del error de `core` en el idioma elegido, que por
 /// construcción no contiene secretos.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ErrorUi {
@@ -46,7 +46,7 @@ impl ErrorUi {
             "cuenta_no_encontrada",
             match idioma {
                 Idioma::Es => format!("no hay ninguna cuenta «{login}»"),
-                Idioma::En => format!("there is no account «{login}»"),
+                Idioma::En => format!("there is no account “{login}”"),
             },
         )
     }
@@ -59,7 +59,7 @@ impl ErrorUi {
             match idioma {
                 Idioma::Es => format!("no existe el repositorio «{dueno}/{nombre}» en esta cuenta"),
                 Idioma::En => {
-                    format!("the repository «{dueno}/{nombre}» does not exist in this account")
+                    format!("the repository “{dueno}/{nombre}” does not exist in this account")
                 }
             },
         )
