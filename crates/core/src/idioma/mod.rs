@@ -1,6 +1,7 @@
 //! Idioma de la interfaz: resolución a partir de la preferencia y del entorno.
 
 mod en;
+mod errores;
 mod es;
 mod preferencias;
 
