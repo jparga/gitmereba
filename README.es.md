@@ -135,14 +135,16 @@ gitmereba cuenta rm <usuario>          # no borra los repositorios
 
 ## Documentación
 
-- [`docs/manual.md`](docs/manual.md): manual de usuario
+- [`docs/manual.md`](docs/manual.md): manual de usuario (español); [`docs/manual.en.md`](docs/manual.en.md) es la versión en inglés
 - [`docs/compilar.md`](docs/compilar.md): compilar, empaquetar e instalar desde el código
 - [`CHANGELOG.md`](CHANGELOG.md): cambios de cada versión
 
 ## Idioma
 
-La interfaz, la CLI y el manual están por ahora **solo en español**. Está prevista una
-interfaz en inglés. Se agradecen contribuciones, también traducciones.
+La ventana, la ayuda integrada, la ayuda y los mensajes de la CLI y el manual están en
+**español e inglés**. El idioma sigue al sistema (`LC_ALL`, `LC_MESSAGES`, `LANG`; inglés si
+no hay ninguno) y se cambia en Ajustes. Los subcomandos y las opciones de la CLI están en
+español. Se agradecen contribuciones, también traducciones.
 
 ## Estado
 
