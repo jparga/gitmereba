@@ -12,6 +12,7 @@ use crate::config::Rutas;
 use crate::contingencia::InformeReconciliacion;
 use crate::cuentas::{NombreComprobacion, PasoAlta, TextoDoctor};
 use crate::sync::InformeSync;
+use crate::verificacion::Aviso;
 
 pub use preferencias::{LecturaPreferencia, Preferencia, guardar_preferencia, leer_preferencia};
 
@@ -137,6 +138,15 @@ impl Localizable for TextoAviso {
         match idioma {
             Idioma::Es => es::avisos::texto(self),
             Idioma::En => en::avisos::texto(self),
+        }
+    }
+}
+
+impl Localizable for Aviso {
+    fn localizar(&self, idioma: Idioma) -> String {
+        match idioma {
+            Idioma::Es => es::verificacion::aviso(self),
+            Idioma::En => en::verificacion::aviso(self),
         }
     }
 }

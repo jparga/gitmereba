@@ -7,3 +7,4 @@ pub(super) mod errores;
 pub(super) mod progreso;
 pub(super) mod reconciliacion;
 pub(super) mod sync;
+pub(super) mod verificacion;
