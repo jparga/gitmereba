@@ -1,5 +1,6 @@
 //! `gitmereba doctor`: comprobaciones de salud del sistema y de cada cuenta.
 
+use std::collections::HashMap;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
@@ -11,7 +12,9 @@ use crate::config::RutasCuenta;
 use crate::git;
 use crate::gitea::ApiGitea;
 use crate::idioma::{self, LecturaPreferencia};
-use crate::instancia::{SHA256_GITEA_1_27_3_LINUX_AMD64, VERSION_GITEA, nombre_servicio_sync};
+use crate::instancia::{
+    SHA256_GITEA_1_27_3_LINUX_AMD64, VERSION_GITEA, entorno_gestor_systemd, nombre_servicio_sync,
+};
 use crate::modelo::{Cuenta, Nombre};
 use crate::secretos::{ClaveSecreto, Llavero, Secreto};
 use crate::snapshots;
@@ -118,6 +121,15 @@ pub async fn doctor<L: Llavero>(contexto: &Contexto<'_, L>) -> InformeDoctor {
         &|nombre| std::env::var(nombre).ok(),
     ));
 
+    let entorno_systemd = entorno_gestor_systemd().await.map(|s| parsear_entorno(&s));
+    if let Some(c) = comprobar_idioma_temporizador(
+        idioma::leer_preferencia(contexto.rutas),
+        &|nombre| std::env::var(nombre).ok(),
+        entorno_systemd.as_ref(),
+    ) {
+        comprobaciones.push(c);
+    }
+
     let directorio_bin = contexto.rutas.directorio_bin();
     match listar(contexto) {
         Ok(cuentas) => {
@@ -189,6 +201,65 @@ pub fn comprobar_idioma(
             TextoDoctor::ConsejoFijarIdioma,
         ),
     }
+}
+
+/// Interpreta la salida de `systemctl --user show-environment` (líneas `CLAVE=valor`).
+pub fn parsear_entorno(salida: &str) -> HashMap<String, String> {
+    salida
+        .lines()
+        .filter_map(|linea| linea.split_once('='))
+        .filter(|(clave, _)| !clave.is_empty())
+        .map(|(clave, valor)| (clave.to_string(), valor.to_string()))
+        .collect()
+}
+
+/// Idioma que verá el temporizador (que hereda el entorno de `systemd --user`, no el de
+/// la sesión). Solo aplica con preferencia `auto`; con idioma fijado no devuelve nada.
+/// Aviso si ese entorno no define `LC_ALL`/`LC_MESSAGES`/`LANG` o da un idioma distinto
+/// del de la sesión; informativa si no se pudo consultar (`entorno_systemd` a `None`).
+pub fn comprobar_idioma_temporizador(
+    lectura: LecturaPreferencia,
+    entorno_sesion: &dyn Fn(&str) -> Option<String>,
+    entorno_systemd: Option<&HashMap<String, String>>,
+) -> Option<Comprobacion> {
+    if lectura.preferencia() != idioma::Preferencia::Auto {
+        return None;
+    }
+    let nombre = NombreComprobacion::IdiomaTemporizador;
+    let Some(entorno_systemd) = entorno_systemd else {
+        return Some(Comprobacion::ok(
+            nombre,
+            TextoDoctor::TemporizadorIdiomaNoDisponible,
+        ));
+    };
+    let del_gestor = |clave: &str| entorno_systemd.get(clave).cloned();
+    if matches!(
+        idioma::origen(idioma::Preferencia::Auto, &del_gestor),
+        idioma::OrigenIdioma::PorDefecto
+    ) {
+        return Some(Comprobacion::aviso(
+            nombre,
+            TextoDoctor::TemporizadorIdiomaSinVariables,
+            TextoDoctor::ConsejoFijarIdioma,
+        ));
+    }
+    let temporizador = idioma::resolver(idioma::Preferencia::Auto, &del_gestor);
+    let sesion = idioma::resolver(idioma::Preferencia::Auto, entorno_sesion);
+    Some(if temporizador == sesion {
+        Comprobacion::ok(
+            nombre,
+            TextoDoctor::TemporizadorIdiomaCoincide { idioma: sesion },
+        )
+    } else {
+        Comprobacion::aviso(
+            nombre,
+            TextoDoctor::TemporizadorIdiomaDistinto {
+                temporizador,
+                sesion,
+            },
+            TextoDoctor::ConsejoFijarIdioma,
+        )
+    })
 }
 
 async fn comprobar_git() -> Comprobacion {
@@ -1226,5 +1297,90 @@ mod tests {
             }
         );
         assert_eq!(c.consejo, Some(TextoDoctor::ConsejoCorregirPreferencias));
+    }
+
+    fn systemd(pares: &[(&str, &str)]) -> HashMap<String, String> {
+        pares
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn temporizador_sin_variables_avisa() {
+        let c = comprobar_idioma_temporizador(
+            LecturaPreferencia::Ausente,
+            &entorno(&[("LANG", "es_ES.UTF-8")]),
+            Some(&systemd(&[("PATH", "/usr/bin")])),
+        )
+        .expect("comprobación");
+        assert_eq!(c.nivel, NivelComprobacion::Aviso);
+        assert_eq!(c.mensaje, TextoDoctor::TemporizadorIdiomaSinVariables);
+        assert_eq!(c.consejo, Some(TextoDoctor::ConsejoFijarIdioma));
+    }
+
+    #[test]
+    fn temporizador_con_el_mismo_idioma_es_ok() {
+        let c = comprobar_idioma_temporizador(
+            LecturaPreferencia::Ausente,
+            &entorno(&[("LANG", "es_ES.UTF-8")]),
+            Some(&systemd(&[("LANG", "es_ES.UTF-8")])),
+        )
+        .expect("comprobación");
+        assert_eq!(c.nivel, NivelComprobacion::Ok);
+        assert_eq!(
+            c.mensaje,
+            TextoDoctor::TemporizadorIdiomaCoincide { idioma: Idioma::Es }
+        );
+    }
+
+    #[test]
+    fn temporizador_con_otro_idioma_avisa() {
+        let c = comprobar_idioma_temporizador(
+            LecturaPreferencia::Ausente,
+            &entorno(&[("LANG", "es_ES.UTF-8")]),
+            Some(&systemd(&[("LANG", "en_US.UTF-8")])),
+        )
+        .expect("comprobación");
+        assert_eq!(c.nivel, NivelComprobacion::Aviso);
+        assert_eq!(
+            c.mensaje,
+            TextoDoctor::TemporizadorIdiomaDistinto {
+                temporizador: Idioma::En,
+                sesion: Idioma::Es
+            }
+        );
+        assert_eq!(c.consejo, Some(TextoDoctor::ConsejoFijarIdioma));
+    }
+
+    #[test]
+    fn temporizador_no_disponible_es_informativa() {
+        let c = comprobar_idioma_temporizador(
+            LecturaPreferencia::Ausente,
+            &entorno(&[("LANG", "es_ES.UTF-8")]),
+            None,
+        )
+        .expect("comprobación");
+        assert_eq!(c.nivel, NivelComprobacion::Ok);
+        assert_eq!(c.mensaje, TextoDoctor::TemporizadorIdiomaNoDisponible);
+    }
+
+    #[test]
+    fn temporizador_con_idioma_fijado_no_se_comprueba() {
+        assert!(
+            comprobar_idioma_temporizador(
+                LecturaPreferencia::Valida(Preferencia::En),
+                &entorno(&[]),
+                None
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn parsear_entorno_lee_clave_valor() {
+        let e = parsear_entorno("LANG=es_ES.UTF-8\nPATH=/usr/bin\nbasura\n");
+        assert_eq!(e.get("LANG").map(String::as_str), Some("es_ES.UTF-8"));
+        assert_eq!(e.len(), 2);
     }
 }

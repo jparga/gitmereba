@@ -13,6 +13,7 @@ pub(crate) fn nombre(n: &NombreComprobacion) -> String {
         NombreComprobacion::Cortafuegos => "cortafuegos".to_string(),
         NombreComprobacion::Cuentas => "cuentas".to_string(),
         NombreComprobacion::Idioma => "idioma".to_string(),
+        NombreComprobacion::IdiomaTemporizador => "idioma-temporizador".to_string(),
         NombreComprobacion::Cuenta { login, parte } => {
             let parte = match parte {
                 ParteCuenta::Carpeta => "carpeta",
@@ -258,6 +259,28 @@ pub(crate) fn texto(t: &TextoDoctor) -> String {
             ruta.display(),
             idioma.codigo()
         ),
+        TextoDoctor::TemporizadorIdiomaSinVariables => "el temporizador no tiene LC_ALL, \
+             LC_MESSAGES ni LANG: sus avisos saldrán en inglés"
+            .to_string(),
+        TextoDoctor::TemporizadorIdiomaDistinto {
+            temporizador,
+            sesion,
+        } => format!(
+            "el temporizador usa el idioma {} y esta sesión {}",
+            temporizador.codigo(),
+            sesion.codigo()
+        ),
+        TextoDoctor::TemporizadorIdiomaCoincide { idioma } => {
+            format!(
+                "el temporizador usa el mismo idioma que la sesión ({})",
+                idioma.codigo()
+            )
+        }
+        TextoDoctor::TemporizadorIdiomaNoDisponible => {
+            "no se pudo consultar el entorno del temporizador (systemctl no disponible o \
+             sin sesión de usuario)"
+                .to_string()
+        }
         TextoDoctor::ConsejoCorregirPreferencias => {
             "corrige o borra el fichero, o fija el idioma en Ajustes".to_string()
         }

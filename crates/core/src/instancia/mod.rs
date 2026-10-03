@@ -30,8 +30,8 @@ pub use servicio::{
     nombre_unidad, parar,
 };
 pub use temporizador::{
-    ParametrosTemporizador, borrar_unidades, deshabilitar_temporizador, generar_servicio_sync,
-    generar_timer_sync, habilitar_temporizador, instalar_temporizador, nombre_servicio_sync,
-    nombre_timer_sync, reiniciar_temporizador,
+    ParametrosTemporizador, borrar_unidades, deshabilitar_temporizador, entorno_gestor_systemd,
+    generar_servicio_sync, generar_timer_sync, habilitar_temporizador, instalar_temporizador,
+    nombre_servicio_sync, nombre_timer_sync, reiniciar_temporizador,
 };
 pub use usuarios::{UsuarioGitea, borrar_usuario, crear_usuario, listar_usuarios};
