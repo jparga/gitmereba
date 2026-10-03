@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::RutasCuenta;
 use crate::git::{self, Credencial, ErrorGit, Opciones, validar_ref};
+use crate::idioma::{Idioma, Localizable};
 use crate::modelo::IdRepo;
 use crate::secretos::Secreto;
 
@@ -89,93 +90,77 @@ pub struct InformeReconciliacion {
 }
 
 impl InformeReconciliacion {
-    /// Resumen en español, apto para mostrar en la interfaz.
+    /// Resumen en español: es el texto que se guarda en la auditoría; para mostrarlo al
+    /// usuario, [`Localizable::localizar`].
     pub fn resumen(&self) -> String {
-        let enviadas = self
-            .ramas
-            .iter()
-            .filter(|r| {
-                matches!(
-                    r,
-                    ResultadoRama::Enviada { .. } | ResultadoRama::Creada { .. }
-                )
-            })
-            .count();
-        let divergentes: Vec<&str> = self
-            .ramas
-            .iter()
-            .filter_map(|r| match r {
-                ResultadoRama::Divergente { rama, .. } => Some(rama.as_str()),
-                _ => None,
-            })
-            .collect();
-        let fallidas: Vec<&str> = self
-            .ramas
-            .iter()
-            .filter_map(|r| match r {
-                ResultadoRama::Fallida { rama, .. } => Some(rama.as_str()),
-                _ => None,
-            })
-            .collect();
-        let borradas: Vec<&str> = self
-            .ramas
-            .iter()
-            .filter_map(|r| match r {
-                ResultadoRama::BorradaLocalmente { rama } => Some(rama.as_str()),
-                _ => None,
-            })
-            .collect();
-        let tags_enviados = self
-            .tags
-            .iter()
-            .filter(|t| matches!(t, ResultadoTag::Enviado { .. }))
-            .count();
-        let tags_conflicto: Vec<&str> = self
-            .tags
-            .iter()
-            .filter_map(|t| match t {
-                ResultadoTag::ConflictoNoTocado { tag } => Some(tag.as_str()),
-                _ => None,
-            })
-            .collect();
-
-        let mut partes = vec![format!("{enviadas} rama(s) enviada(s)")];
-        if !divergentes.is_empty() {
-            partes.push(format!(
-                "{} rama(s) divergente(s) ({})",
-                divergentes.len(),
-                divergentes.join(", ")
-            ));
-        }
-        if !fallidas.is_empty() {
-            partes.push(format!(
-                "{} rama(s) con fallo ({})",
-                fallidas.len(),
-                fallidas.join(", ")
-            ));
-        }
-        if !borradas.is_empty() {
-            partes.push(format!(
-                "{} rama(s) borrada(s) en local, conservada(s) en el remoto ({})",
-                borradas.len(),
-                borradas.join(", ")
-            ));
-        }
-        partes.push(format!("{tags_enviados} tag(s) enviado(s)"));
-        if !tags_conflicto.is_empty() {
-            partes.push(format!(
-                "{} tag(s) en conflicto, no tocado(s) ({})",
-                tags_conflicto.len(),
-                tags_conflicto.join(", ")
-            ));
-        }
-        let estado = if self.completa {
-            "reconciliación completa"
-        } else {
-            "reconciliación incompleta"
-        };
-        format!("{estado}: {}", partes.join("; "))
+        self.localizar(Idioma::Es)
     }
+
+    /// Las cifras y nombres de la reconciliación, que los catálogos de idioma convierten
+    /// en texto.
+    pub(crate) fn cifras(&self) -> CifrasReconciliacion<'_> {
+        CifrasReconciliacion {
+            enviadas: self
+                .ramas
+                .iter()
+                .filter(|r| {
+                    matches!(
+                        r,
+                        ResultadoRama::Enviada { .. } | ResultadoRama::Creada { .. }
+                    )
+                })
+                .count(),
+            divergentes: self
+                .ramas
+                .iter()
+                .filter_map(|r| match r {
+                    ResultadoRama::Divergente { rama, .. } => Some(rama.as_str()),
+                    _ => None,
+                })
+                .collect(),
+            fallidas: self
+                .ramas
+                .iter()
+                .filter_map(|r| match r {
+                    ResultadoRama::Fallida { rama, .. } => Some(rama.as_str()),
+                    _ => None,
+                })
+                .collect(),
+            borradas: self
+                .ramas
+                .iter()
+                .filter_map(|r| match r {
+                    ResultadoRama::BorradaLocalmente { rama } => Some(rama.as_str()),
+                    _ => None,
+                })
+                .collect(),
+            tags_enviados: self
+                .tags
+                .iter()
+                .filter(|t| matches!(t, ResultadoTag::Enviado { .. }))
+                .count(),
+            tags_conflicto: self
+                .tags
+                .iter()
+                .filter_map(|t| match t {
+                    ResultadoTag::ConflictoNoTocado { tag } => Some(tag.as_str()),
+                    _ => None,
+                })
+                .collect(),
+            completa: self.completa,
+        }
+    }
+}
+
+/// Cifras y nombres de un [`InformeReconciliacion`] para redactar su resumen.
+pub(crate) struct CifrasReconciliacion<'a> {
+    pub enviadas: usize,
+    pub divergentes: Vec<&'a str>,
+    pub fallidas: Vec<&'a str>,
+    pub borradas: Vec<&'a str>,
+    pub tags_enviados: usize,
+    pub tags_conflicto: Vec<&'a str>,
+    pub completa: bool,
 }
 
 /// Envía a GitHub (o, en pruebas, a `origen`) los commits de más del repo de
@@ -449,6 +434,46 @@ mod tests {
         assert!(resumen.contains("dev"));
         assert!(resumen.contains("1 rama(s) enviada(s)"));
         assert!(resumen.contains("1 tag(s) enviado(s)"));
+    }
+
+    #[test]
+    fn el_resumen_sale_en_el_idioma_pedido() {
+        use crate::idioma::{Idioma, Localizable};
+        let informe = InformeReconciliacion {
+            ramas: vec![
+                ResultadoRama::Enviada {
+                    rama: "main".to_string(),
+                },
+                ResultadoRama::Divergente {
+                    rama: "dev".to_string(),
+                    locales: 1,
+                    remotos: 2,
+                },
+                ResultadoRama::Fallida {
+                    rama: "x".to_string(),
+                    motivo: "m".to_string(),
+                },
+                ResultadoRama::BorradaLocalmente {
+                    rama: "vieja".to_string(),
+                },
+            ],
+            tags: vec![
+                ResultadoTag::Enviado {
+                    tag: "v1".to_string(),
+                },
+                ResultadoTag::ConflictoNoTocado {
+                    tag: "v2".to_string(),
+                },
+            ],
+            completa: false,
+        };
+        assert_eq!(informe.localizar(Idioma::Es), informe.resumen());
+        assert_eq!(
+            informe.localizar(Idioma::En),
+            "incomplete reconciliation: 1 branch(es) sent; 1 diverged branch(es) (dev); \
+             1 failed branch(es) (x); 1 branch(es) deleted locally, kept on the remote (vieja); \
+             1 tag(s) sent; 1 conflicting tag(s), left untouched (v2)"
+        );
     }
 
     #[test]
