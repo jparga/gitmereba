@@ -143,7 +143,7 @@ Spanish. Contributions, including translations, are welcome.
 
 ## Status
 
-Pre-1.0 (version 0.6.0), used daily by the author. Expect changes. See
+Pre-1.0 (version 0.7.0), used daily by the author. Expect changes. See
 [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Contributing, security, conduct

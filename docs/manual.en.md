@@ -31,7 +31,7 @@ Open gitmereba (`gitmereba` with no arguments) and press **Add account**:
 3. Press **Create account**. gitmereba downloads and verifies Gitea, configures it and creates
    the copies.
 
-If something fails halfway, repeat the sign-up: it carries on where it left off. You can add as
+If something fails halfway, repeat the account setup: it carries on where it left off. You can add as
 many accounts as you like; each one is independent.
 
 From then on the account syncs by itself every 30 minutes, **even with the window closed**, and

@@ -67,7 +67,7 @@ export default {
       '“Read token (PAT)”: create it on GitHub → Settings → Developer settings → Fine-grained tokens, with read-only access to “Contents” and “Metadata”. It is stored in the system keyring.',
       '“Destination folder”: it must be empty or not exist. Everything for the account will live there (repositories, Gitea and backups); you can move or back it up as a whole.',
       'Before anything is created you will see which repositories are going to be cloned and how much space they take; untick the ones you do not want.',
-      'If something fails halfway, repeat the sign-up: it carries on where it left off.',
+      'If something fails halfway, repeat the account setup: it carries on where it left off.',
     ],
   },
 };
