@@ -298,4 +298,6 @@ export default {
   'ajustes.vacio.boton': 'Añadir cuenta',
   'ajustes.cuenta': 'Cuenta',
   'ajustes.titulo': 'Ajustes',
+  'ayuda.titulo': '¿Cómo funciona esta pantalla?',
+  'ayuda.pie': 'Pulsa F1 para abrir o cerrar esta ayuda. El manual completo está en docs/manual.md.',
 };
