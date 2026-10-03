@@ -422,8 +422,16 @@ mod tests {
                     login: s("jparga"),
                     dias: 3,
                 },
-                "El token de GitHub de «jparga» caduca en 3 día(s).",
-                "The GitHub token of “jparga” expires in 3 day(s).",
+                "El token de GitHub de «jparga» caduca en 3 días.",
+                "The GitHub token of “jparga” expires in 3 days.",
+            ),
+            (
+                TextoAviso::TokenCaducaPronto {
+                    login: s("jparga"),
+                    dias: 1,
+                },
+                "El token de GitHub de «jparga» caduca en 1 día.",
+                "The GitHub token of “jparga” expires in 1 day.",
             ),
         ]
     }

@@ -388,7 +388,7 @@ pub async fn reconciliar(
                     "no_activada",
                     match idioma {
                         Idioma::Es => format!("la contingencia de «{id}» no está activada"),
-                        Idioma::En => format!("contingency for «{id}» is not activated"),
+                        Idioma::En => format!("contingency for “{id}” is not activated"),
                     },
                 )
             })?;
@@ -707,7 +707,7 @@ fn parsear_id_repo(valor: &str, idioma: Idioma) -> Result<IdRepo, ErrorUi> {
             "datos_invalidos",
             match idioma {
                 Idioma::Es => format!("«{valor}» no tiene la forma «dueño/nombre»"),
-                Idioma::En => format!("«{valor}» does not have the form «owner/name»"),
+                Idioma::En => format!("“{valor}” does not have the form “owner/name”"),
             },
         )
     })?;
@@ -721,7 +721,7 @@ fn parsear_id_repo(valor: &str, idioma: Idioma) -> Result<IdRepo, ErrorUi> {
 fn resumen_repo_forzado(id: &IdRepo, login: &str, idioma: Idioma) -> String {
     match idioma {
         Idioma::Es => format!("Sincronización forzada de «{id}» en «{login}»."),
-        Idioma::En => format!("Forced sync of «{id}» in «{login}»."),
+        Idioma::En => format!("Forced sync of “{id}” in “{login}”."),
     }
 }
 
@@ -729,7 +729,7 @@ fn resumen_repo_forzado(id: &IdRepo, login: &str, idioma: Idioma) -> String {
 fn resumen_repo_reclonado(id: &IdRepo, idioma: Idioma) -> String {
     match idioma {
         Idioma::Es => format!("El clonado inicial de «{id}» había fallado: se vuelve a clonar."),
-        Idioma::En => format!("The initial clone of «{id}» had failed: cloning it again."),
+        Idioma::En => format!("The initial clone of “{id}” had failed: cloning it again."),
     }
 }
 
@@ -774,11 +774,11 @@ mod tests {
         );
         assert_eq!(
             resumen_repo_forzado(&repo, "ana", Idioma::En),
-            "Forced sync of «ana/web» in «ana»."
+            "Forced sync of “ana/web” in “ana”."
         );
         assert_eq!(
             resumen_repo_reclonado(&repo, Idioma::En),
-            "The initial clone of «ana/web» had failed: cloning it again."
+            "The initial clone of “ana/web” had failed: cloning it again."
         );
     }
 
