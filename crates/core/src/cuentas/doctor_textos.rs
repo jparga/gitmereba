@@ -31,6 +31,7 @@ pub enum NombreComprobacion {
     Cortafuegos,
     Cuentas,
     Idioma,
+    IdiomaTemporizador,
     Cuenta { login: String, parte: ParteCuenta },
 }
 
@@ -227,4 +228,14 @@ pub enum TextoDoctor {
         ruta: PathBuf,
     },
     ConsejoCorregirPreferencias,
+    // --- idioma del temporizador ---
+    TemporizadorIdiomaSinVariables,
+    TemporizadorIdiomaDistinto {
+        temporizador: Idioma,
+        sesion: Idioma,
+    },
+    TemporizadorIdiomaCoincide {
+        idioma: Idioma,
+    },
+    TemporizadorIdiomaNoDisponible,
 }

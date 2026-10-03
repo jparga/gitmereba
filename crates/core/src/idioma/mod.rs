@@ -882,6 +882,29 @@ mod tests {
                 "set the language in Settings",
             ),
             caso_doctor(
+                T::TemporizadorIdiomaSinVariables,
+                "el temporizador no tiene LC_ALL, LC_MESSAGES ni LANG: sus avisos saldrán en inglés",
+                "the timer has no LC_ALL, LC_MESSAGES or LANG: its notices will be in English",
+            ),
+            caso_doctor(
+                T::TemporizadorIdiomaDistinto {
+                    temporizador: Idioma::En,
+                    sesion: Idioma::Es,
+                },
+                "el temporizador usa el idioma en y esta sesión es",
+                "the timer uses language en and this session es",
+            ),
+            caso_doctor(
+                T::TemporizadorIdiomaCoincide { idioma: Idioma::Es },
+                "el temporizador usa el mismo idioma que la sesión (es)",
+                "the timer uses the same language as the session (es)",
+            ),
+            caso_doctor(
+                T::TemporizadorIdiomaNoDisponible,
+                "no se pudo consultar el entorno del temporizador (systemctl no disponible o sin sesión de usuario)",
+                "could not query the timer environment (systemctl not available or no user session)",
+            ),
+            caso_doctor(
                 T::IdiomaPreferenciaNoValida {
                     idioma: Idioma::En,
                     ruta: ruta("/c/p.toml"),

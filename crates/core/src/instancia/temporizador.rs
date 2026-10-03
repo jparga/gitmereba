@@ -229,6 +229,14 @@ pub fn borrar_unidades(rutas: &Rutas, login: &Nombre) -> Result<(), ErrorInstanc
     Ok(())
 }
 
+/// Entorno del gestor `systemd --user` (`systemctl --user show-environment`): el que
+/// heredan los servicios del temporizador. `None` si `systemctl` no está o falla.
+pub async fn entorno_gestor_systemd() -> Option<String> {
+    ejecutar_systemctl(&["--user", "show-environment"])
+        .await
+        .ok()
+}
+
 /// Copia deliberada de `servicio::comando_systemctl` (privada en su módulo): mismo
 /// entorno mínimo (`PATH`, `HOME`, `USER`, `XDG_RUNTIME_DIR`,
 /// `DBUS_SESSION_BUS_ADDRESS`).

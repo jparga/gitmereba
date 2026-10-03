@@ -13,6 +13,7 @@ pub(crate) fn nombre(n: &NombreComprobacion) -> String {
         NombreComprobacion::Cortafuegos => "firewall".to_string(),
         NombreComprobacion::Cuentas => "accounts".to_string(),
         NombreComprobacion::Idioma => "language".to_string(),
+        NombreComprobacion::IdiomaTemporizador => "timer-language".to_string(),
         NombreComprobacion::Cuenta { login, parte } => {
             let parte = match parte {
                 ParteCuenta::Carpeta => "folder",
@@ -256,6 +257,28 @@ pub(crate) fn texto(t: &TextoDoctor) -> String {
             ruta.display(),
             idioma.codigo()
         ),
+        TextoDoctor::TemporizadorIdiomaSinVariables => "the timer has no LC_ALL, \
+             LC_MESSAGES or LANG: its notices will be in English"
+            .to_string(),
+        TextoDoctor::TemporizadorIdiomaDistinto {
+            temporizador,
+            sesion,
+        } => format!(
+            "the timer uses language {} and this session {}",
+            temporizador.codigo(),
+            sesion.codigo()
+        ),
+        TextoDoctor::TemporizadorIdiomaCoincide { idioma } => {
+            format!(
+                "the timer uses the same language as the session ({})",
+                idioma.codigo()
+            )
+        }
+        TextoDoctor::TemporizadorIdiomaNoDisponible => {
+            "could not query the timer environment (systemctl not available or no user \
+             session)"
+                .to_string()
+        }
         TextoDoctor::ConsejoCorregirPreferencias => {
             "fix or delete the file, or set the language in Settings".to_string()
         }
