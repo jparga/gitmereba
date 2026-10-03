@@ -38,6 +38,7 @@ export default {
   'ajustes.idioma.auto': 'Automatic (system)',
   'ajustes.idioma.es': 'Español',
   'ajustes.idioma.en': 'English',
+  'ajustes.idioma.cambios_sin_guardar': 'Save or discard your changes before changing the language.',
   'ajustes.idioma.error': 'Could not change the language: {mensaje}',
   'resumen.titulo': 'Summary',
   'resumen.anadir_cuenta': 'Add account',

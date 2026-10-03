@@ -17,10 +17,7 @@ Todos los cambios relevantes de gitmereba. Formato basado en
   `doctor` muestra qué idioma se usa y de dónde sale.
 - Manual de usuario en inglés (`docs/manual.en.md`) y capturas en inglés en el README.
 - La entrada de escritorio tiene nombre y descripción en inglés y en español.
-
-### Cambiado
-
-- Los subcomandos y opciones de la CLI siguen en español en los dos idiomas. El histórico de
+- Nota: los subcomandos y opciones de la CLI siguen en español en los dos idiomas. El histórico de
   sincronización, el registro de auditoría y los logs se guardan en español.
 
 ## [0.6.0] - 2026-10-02
