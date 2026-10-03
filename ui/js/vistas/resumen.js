@@ -1,6 +1,7 @@
 import { api, suscribirProgresoSync } from '../api.js';
 import { h, pintar, badgeEstado, fechaRelativa, tamanoLegible, diasHasta, avisar, ocupar, barraProgreso } from '../dom.js';
 import { navegar } from '../router.js';
+import { t } from '../i18n.js';
 import { dialogoCredenciales } from './credenciales.js';
 
 // Cada cuántos milisegundos se vuelve a mirar el clonado mientras quede algo pendiente.
@@ -10,7 +11,7 @@ function botonAnadirCuenta() {
   return h(
     'button',
     { clase: 'btn accent', onClick: () => navegar('alta') },
-    'Añadir cuenta',
+    t('resumen.anadir_cuenta'),
   );
 }
 
@@ -18,13 +19,12 @@ function vistaVacia() {
   return h(
     'div',
     { clase: 'card pad vacio' },
-    h('span', { clase: 'vacio-icono' }, 'g'),
-    h('h2', null, 'Todavía no hay ninguna cuenta clonada'),
+    h('span', { clase: 'vacio-icono' }, t('resumen.vacio.icono')),
+    h('h2', null, t('resumen.vacio.titulo')),
     h(
       'p',
       null,
-      'gitmereba mantiene un clon local y operativo de tus cuentas de GitHub sobre un ',
-      'Gitea propio. Añade una cuenta con un token de solo lectura para empezar.',
+      t('resumen.vacio.texto'),
     ),
     botonAnadirCuenta(),
   );
@@ -35,8 +35,8 @@ function filaAviso(cuenta, resumen) {
   if (dias === null || dias > 14) return null;
   const texto =
     dias <= 0
-      ? `El token de «${cuenta.login}» ha caducado.`
-      : `El token de «${cuenta.login}» caduca en ${dias} día(s).`;
+      ? t('resumen.token.caducado', { login: cuenta.login })
+      : t('resumen.token.caduca', { login: cuenta.login, n: dias });
   return h('div', { clase: 'banner show warn' }, h('span', null, texto));
 }
 
@@ -59,16 +59,16 @@ function contarClonado(repos) {
  * `sincronizar`, según el último evento `sync://progreso` recibido para esta cuenta
  * (`null` si aún no ha llegado ninguno: la fase «listando» inicial). */
 function textoProgresoSync(progresoSync) {
-  if (!progresoSync) return { texto: 'Sincronizando con GitHub…' };
+  if (!progresoSync) return { texto: t('resumen.progreso.sincronizando') };
   const { fase, hechos, total } = progresoSync;
-  if (fase === 'listando') return { texto: 'Consultando GitHub…' };
+  if (fase === 'listando') return { texto: t('resumen.progreso.consultando') };
   if (fase === 'aplicando' && total > 0) {
-    return { texto: `Aplicando cambios: ${hechos} de ${total}`, hechos, total };
+    return { texto: t('resumen.progreso.aplicando', { hechos, total }), hechos, total };
   }
-  if (fase === 'verificando') return { texto: 'Verificando la copia…' };
+  if (fase === 'verificando') return { texto: t('resumen.progreso.verificando') };
   // «aplicando» sin ninguna acción que aplicar (plan vacío): sigue sin saberse cuánto va
   // a tardar el resto de la pasada.
-  return { texto: 'Sincronizando con GitHub…' };
+  return { texto: t('resumen.progreso.sincronizando') };
 }
 
 function tarjetaCuenta(cuenta, resumen, contenedor, vigilancia) {
@@ -88,7 +88,7 @@ function tarjetaCuenta(cuenta, resumen, contenedor, vigilancia) {
     }
     const pendiente = clonado.clonados < clonado.total;
     if (pendiente) {
-      pintar(zonaProgreso, barraProgreso(`Clonando repositorios: ${clonado.clonados} de ${clonado.total}`, clonado.clonados, clonado.total));
+      pintar(zonaProgreso, barraProgreso(t('resumen.progreso.clonando', { clonados: clonado.clonados, total: clonado.total }), clonado.clonados, clonado.total));
     } else if (sincronizando) {
       const { texto, hechos, total } = textoProgresoSync(progresoSync);
       pintar(zonaProgreso, barraProgreso(texto, hechos, total));
@@ -101,10 +101,10 @@ function tarjetaCuenta(cuenta, resumen, contenedor, vigilancia) {
   vigilancia.push(async () => (await pintarProgreso()) || sincronizando);
 
   const sincronizar = async (boton) => {
-    const liberar = ocupar(boton, 'Sincronizando…');
+    const liberar = ocupar(boton, t('resumen.sincronizando'));
     sincronizando = true;
     progresoSync = null;
-    pintar(zonaProgreso, barraProgreso('Sincronizando con GitHub…'));
+    pintar(zonaProgreso, barraProgreso(t('resumen.progreso.sincronizando')));
     // Una tarjeta por cuenta: se filtra por `login` para no pintar el avance de otra.
     const desuscribir = await suscribirProgresoSync((evento) => {
       if (evento.login !== cuenta.login || !sincronizando) return;
@@ -114,11 +114,11 @@ function tarjetaCuenta(cuenta, resumen, contenedor, vigilancia) {
     });
     try {
       await api.sincronizar(cuenta.login);
-      avisar(`Sincronización de «${cuenta.login}» completada.`, 'success');
+      avisar(t('resumen.sync.completada', { login: cuenta.login }), 'success');
       sincronizando = false;
       await pintarTarjetas(contenedor, vigilancia.reiniciar);
     } catch (error) {
-      avisar(`No se pudo sincronizar «${cuenta.login}»: ${error?.mensaje ?? error}`, 'error');
+      avisar(t('resumen.sync.error', { login: cuenta.login, mensaje: error?.mensaje ?? error }), 'error');
     } finally {
       sincronizando = false;
       progresoSync = null;
@@ -146,23 +146,24 @@ function tarjetaCuenta(cuenta, resumen, contenedor, vigilancia) {
     h(
       'div',
       { clase: 'grid stats' },
-      stat('Mirrors', c.total),
-      stat('Obsoletos', c.obsoleto, c.obsoleto > 0 ? 'warn' : ''),
-      stat('Fallos', c.fallo, c.fallo > 0 ? 'crit' : ''),
-      stat('Huérfanos', c.huerfano, c.huerfano > 0 ? 'muted' : ''),
+      stat(t('resumen.stat.mirrors'), c.total),
+      stat(t('resumen.stat.obsoletos'), c.obsoleto, c.obsoleto > 0 ? 'warn' : ''),
+      stat(t('resumen.stat.fallos'), c.fallo, c.fallo > 0 ? 'crit' : ''),
+      stat(t('resumen.stat.huerfanos'), c.huerfano, c.huerfano > 0 ? 'muted' : ''),
     ),
     h(
       'p',
       { clase: 'hint mt' },
-      `${tamanoLegible(resumen.espacio_disco_kb)} en disco · última sincronización ${
-        resumen.ultima_sincronizacion ? fechaRelativa(resumen.ultima_sincronizacion) : 'sin datos'
-      }`,
+      t('resumen.disco', {
+        tamano: tamanoLegible(resumen.espacio_disco_kb),
+        cuando: resumen.ultima_sincronizacion ? fechaRelativa(resumen.ultima_sincronizacion) : t('resumen.sin_datos'),
+      }),
     ),
     zonaProgreso,
     h(
       'div',
       { clase: 'row acciones' },
-      h('button', { clase: 'btn', onClick: (evento) => sincronizar(evento.currentTarget) }, 'Sincronizar ahora'),
+      h('button', { clase: 'btn', onClick: (evento) => sincronizar(evento.currentTarget) }, t('resumen.sincronizar')),
       h(
         'button',
         {
@@ -171,13 +172,13 @@ function tarjetaCuenta(cuenta, resumen, contenedor, vigilancia) {
             try {
               await api.abrirGitea(cuenta.login);
             } catch (error) {
-              avisar(`No se pudo abrir Gitea: ${error?.mensaje ?? error}`, 'error');
+              avisar(t('resumen.abrir_gitea.error', { mensaje: error?.mensaje ?? error }), 'error');
             }
           },
         },
-        'Abrir Gitea',
+        t('resumen.abrir_gitea'),
       ),
-      h('button', { clase: 'btn ghost', onClick: () => dialogoCredenciales(cuenta.login) }, 'Usuario y contraseña'),
+      h('button', { clase: 'btn ghost', onClick: () => dialogoCredenciales(cuenta.login) }, t('resumen.credenciales')),
     ),
   );
   return tarjeta;
@@ -197,7 +198,7 @@ async function pintarTarjetas(contenedor, reiniciarVigilancia) {
     h(
       'div',
       { clase: 'toolbar mb' },
-      h('h1', null, 'Resumen'),
+      h('h1', null, t('resumen.titulo')),
       botonAnadirCuenta(),
     ),
     h('div', { clase: 'grid cols-2' }, tarjetas),
