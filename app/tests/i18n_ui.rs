@@ -17,7 +17,6 @@ const PENDIENTES: &[&str] = &[
     "vistas/contingencia.js",
     "vistas/credenciales.js",
     "vistas/lan.js",
-    "vistas/repositorios.js",
 ];
 
 /// Nunca se revisan: `mock.js` son datos de ejemplo para previsualizar en un navegador y

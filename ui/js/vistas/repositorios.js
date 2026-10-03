@@ -1,13 +1,15 @@
 import { api } from '../api.js';
+import { t } from '../i18n.js';
 import { h, pintar, badgeEstado, textoEstado, fechaRelativa, tamanoLegible, ORDEN_ESTADOS, avisar, ocupar } from '../dom.js';
 
+// Claves de texto y no textos: el idioma se fija al arrancar, después de cargar este módulo.
 const COLUMNAS = [
-  { clave: 'estado', etiqueta: 'Estado' },
-  { clave: 'repo', etiqueta: 'Repositorio' },
-  { clave: 'visibilidad', etiqueta: 'En GitHub', titulo: 'Visibilidad del repositorio en GitHub. La copia local es siempre privada.' },
-  { clave: 'fork', etiqueta: 'Fork' },
-  { clave: 'ultima_sync', etiqueta: 'Última sync' },
-  { clave: 'tamano', etiqueta: 'Tamaño', num: true },
+  { clave: 'estado', etiqueta: 'repos.col.estado' },
+  { clave: 'repo', etiqueta: 'repos.col.repo' },
+  { clave: 'visibilidad', etiqueta: 'repos.col.visibilidad', titulo: 'repos.col.visibilidad.ayuda' },
+  { clave: 'fork', etiqueta: 'repos.col.fork' },
+  { clave: 'ultima_sync', etiqueta: 'repos.col.ultima_sync' },
+  { clave: 'tamano', etiqueta: 'repos.col.tamano', num: true },
 ];
 
 function valorOrden(repo, clave) {
@@ -43,22 +45,22 @@ function ordenar(repos, clave, direccion) {
 async function copiarUrl(url) {
   try {
     await navigator.clipboard.writeText(url);
-    avisar(`URL de clonado copiada: ${url}`, 'success');
+    avisar(t('repos.url.copiada', { url }), 'success');
   } catch {
-    avisar(`No se pudo copiar automáticamente. URL: ${url}`, 'warning');
+    avisar(t('repos.url.no_copiada', { url }), 'warning');
   }
 }
 
-const AVISO_FORK = 'Es un fork y la cuenta no incluye forks: activa «Incluir forks» en Ajustes.';
+const avisoFork = () => t('repos.aviso_fork');
 
 function celdaUltimaSync(repo) {
   if (repo.omitido) {
-    return h('span', { clase: 'muted', title: repo.omitido === 'fork' ? AVISO_FORK : null }, 'no se clona');
+    return h('span', { clase: 'muted', title: repo.omitido === 'fork' ? avisoFork() : null }, t('repos.no_se_clona'));
   }
   if (repo.clonado === false) {
-    return h('span', null, h('span', { clase: 'spinner', 'aria-hidden': 'true' }), 'clonando…');
+    return h('span', null, h('span', { clase: 'spinner', 'aria-hidden': 'true' }), t('repos.clonando'));
   }
-  return repo.ultima_sync ? fechaRelativa(repo.ultima_sync) : 'sin datos';
+  return repo.ultima_sync ? fechaRelativa(repo.ultima_sync) : t('repos.sin_datos');
 }
 
 function celdaAcciones(login, repo, onCambio) {
@@ -71,19 +73,19 @@ function celdaAcciones(login, repo, onCambio) {
         clase: 'btn ghost sm',
         onClick: async (evento) => {
           // `currentTarget` deja de existir tras el primer `await`: se guarda antes.
-          const liberar = ocupar(evento.currentTarget, 'Sincronizando…');
+          const liberar = ocupar(evento.currentTarget, t('repos.sincronizando'));
           try {
             await api.sincronizar(login, repo.id);
-            avisar(`Repositorio ${repo.id.dueno}/${repo.id.nombre} sincronizado.`, 'success');
+            avisar(t('repos.sync.hecha', { repo: `${repo.id.dueno}/${repo.id.nombre}` }), 'success');
             await onCambio();
           } catch (error) {
-            avisar(`Fallo al sincronizar: ${error?.mensaje ?? error}`, 'error');
+            avisar(t('repos.sync.error', { mensaje: error?.mensaje ?? error }), 'error');
           } finally {
             liberar();
           }
         },
       },
-      'Sincronizar',
+      t('repos.sincronizar'),
     ),
     h(
       'button',
@@ -93,13 +95,13 @@ function celdaAcciones(login, repo, onCambio) {
           try {
             await api.abrirGitea(login);
           } catch (error) {
-            avisar(`No se pudo abrir Gitea: ${error?.mensaje ?? error}`, 'error');
+            avisar(t('repos.abrir.error', { mensaje: error?.mensaje ?? error }), 'error');
           }
         },
       },
-      'Abrir',
+      t('repos.abrir'),
     ),
-    h('button', { clase: 'btn ghost sm', onClick: () => copiarUrl(repo.url_clon_local) }, 'Copiar URL'),
+    h('button', { clase: 'btn ghost sm', onClick: () => copiarUrl(repo.url_clon_local) }, t('repos.copiar_url')),
   );
 }
 
@@ -110,8 +112,8 @@ function filaRepo(login, repo, onCambio) {
     type: 'checkbox',
     checked: repo.incluido,
     disabled: repo.omitido === 'fork',
-    title: repo.omitido === 'fork' ? AVISO_FORK : null,
-    'aria-label': `Incluir ${repo.id.dueno}/${repo.id.nombre} en la sincronización`,
+    title: repo.omitido === 'fork' ? avisoFork() : null,
+    'aria-label': t('repos.incluir.etiqueta', { repo: `${repo.id.dueno}/${repo.id.nombre}` }),
     onChange: async (evento) => {
       // `currentTarget` deja de existir tras el primer `await`: se guarda antes.
       const casilla = evento.currentTarget;
@@ -120,11 +122,11 @@ function filaRepo(login, repo, onCambio) {
       try {
         await api.excluirRepo(login, repo.id, !incluir);
         if (sinCopia && incluir) {
-          avisar(`${repo.id.dueno}/${repo.id.nombre} se clonará en la próxima sincronización.`, 'success');
+          avisar(t('repos.incluir.clonara', { repo: `${repo.id.dueno}/${repo.id.nombre}` }), 'success');
         }
         await onCambio();
       } catch (error) {
-        avisar(`No se pudo cambiar la inclusión: ${error?.mensaje ?? error}`, 'error');
+        avisar(t('repos.incluir.error', { mensaje: error?.mensaje ?? error }), 'error');
         casilla.checked = !incluir;
         casilla.disabled = false;
       }
@@ -140,14 +142,14 @@ function filaRepo(login, repo, onCambio) {
       'td',
       { clase: 'mono' },
       `${repo.id.dueno}/${repo.id.nombre}`,
-      repo.archivado ? h('span', { clase: 'badge muted etiqueta-repo' }, 'Archivado') : null,
+      repo.archivado ? h('span', { clase: 'badge muted etiqueta-repo' }, t('repos.archivado')) : null,
     ),
-    h('td', null, repo.privado ? 'Privado' : 'Público'),
-    h('td', null, repo.es_fork ? 'Sí' : 'No'),
+    h('td', null, repo.privado ? t('repos.privado') : t('repos.publico')),
+    h('td', null, repo.es_fork ? t('repos.si') : t('repos.no')),
     h('td', null, celdaUltimaSync(repo)),
     h('td', { clase: 'num' }, sinCopia ? '—' : tamanoLegible(repo.tamano_kb)),
     sinCopia
-      ? h('td', { clase: 'muted' }, repo.omitido === 'fork' ? 'Fork no incluido' : 'Excluido')
+      ? h('td', { clase: 'muted' }, repo.omitido === 'fork' ? t('repos.fork_no_incluido') : t('repos.excluido'))
       : celdaAcciones(login, repo, onCambio),
   );
 }
@@ -160,8 +162,8 @@ export async function render(contenedor) {
       h(
         'div',
         { clase: 'card pad vacio' },
-        h('h2', null, 'No hay cuentas todavía'),
-        h('p', null, 'Añade una cuenta desde Resumen para ver aquí sus repositorios.'),
+        h('h2', null, t('repos.vacio.titulo')),
+        h('p', null, t('repos.vacio.texto')),
       ),
     );
     return;
@@ -201,7 +203,7 @@ export async function render(contenedor) {
         'button',
         {
           clase: 'th-orden',
-          title: columna.titulo ?? null,
+          title: columna.titulo ? t(columna.titulo) : null,
           onClick: () => {
             if (estado.orden === columna.clave) {
               estado.direccion = estado.direccion === 'asc' ? 'desc' : 'asc';
@@ -212,7 +214,7 @@ export async function render(contenedor) {
             pintarTabla();
           },
         },
-        columna.etiqueta,
+        t(columna.etiqueta),
         flecha ? h('span', { clase: 'flecha' }, flecha) : null,
       ),
     );
@@ -224,7 +226,7 @@ export async function render(contenedor) {
   function pintarTabla() {
     const filas = repite();
     if (filas.length === 0) {
-      pintar(cuerpoTabla, h('tr', null, h('td', { colspan: '8', clase: 'center muted' }, 'Ningún repositorio coincide con el filtro.')));
+      pintar(cuerpoTabla, h('tr', null, h('td', { colspan: '8', clase: 'center muted' }, t('repos.sin_coincidencias'))));
       return;
     }
     pintar(cuerpoTabla, ...filas.map((repo) => filaRepo(estado.login, repo, cargarRepos)));
@@ -233,9 +235,9 @@ export async function render(contenedor) {
   function refrescarCabecera() {
     pintar(
       contenedorTabla.querySelector('thead tr'),
-      h('th', { scope: 'col' }, 'Incluido'),
+      h('th', { scope: 'col' }, t('repos.col.incluido')),
       ...COLUMNAS.map(th),
-      h('th', { scope: 'col' }, 'Acciones'),
+      h('th', { scope: 'col' }, t('repos.col.acciones')),
     );
   }
 
@@ -254,7 +256,7 @@ export async function render(contenedor) {
   const filtroTexto = h('input', {
     id: 'sel-filtro-texto',
     type: 'search',
-    placeholder: 'Filtrar por dueño/nombre…',
+    placeholder: t('repos.filtro.placeholder'),
     onInput: (evento) => {
       estado.texto = evento.currentTarget.value;
       pintarTabla();
@@ -270,7 +272,7 @@ export async function render(contenedor) {
         pintarTabla();
       },
     },
-    h('option', { value: '' }, 'Todos los estados'),
+    h('option', { value: '' }, t('repos.filtro.todos')),
     ORDEN_ESTADOS.map((e) => h('option', { value: e }, textoEstado(e))),
   );
 
@@ -283,16 +285,16 @@ export async function render(contenedor) {
 
   pintar(
     contenedor,
-    h('h1', null, 'Repositorios'),
+    h('h1', null, t('repos.titulo')),
     h(
       'div',
       { clase: 'toolbar mb' },
       h(
         'div',
         { clase: 'controls' },
-        h('div', { clase: 'field' }, h('label', { for: 'sel-cuenta' }, 'Cuenta'), selectorCuenta),
-        h('div', { clase: 'field' }, h('label', { for: 'sel-filtro-texto' }, 'Buscar'), filtroTexto),
-        h('div', { clase: 'field' }, h('label', { for: 'sel-filtro-estado' }, 'Estado'), filtroEstado),
+        h('div', { clase: 'field' }, h('label', { for: 'sel-cuenta' }, t('repos.campo.cuenta')), selectorCuenta),
+        h('div', { clase: 'field' }, h('label', { for: 'sel-filtro-texto' }, t('repos.campo.buscar')), filtroTexto),
+        h('div', { clase: 'field' }, h('label', { for: 'sel-filtro-estado' }, t('repos.campo.estado')), filtroEstado),
       ),
     ),
     contenedorTabla,
