@@ -5,6 +5,7 @@ use std::io::Write;
 use super::abrir_almacen;
 use gitmereba_core::config::Rutas;
 use gitmereba_core::cuentas::{self, Contexto, NivelComprobacion};
+use gitmereba_core::idioma::{Localizable, idioma_actual};
 use gitmereba_core::secretos::LlaveroDelSistema;
 
 use crate::salida;
@@ -21,6 +22,7 @@ pub async fn ejecutar(rutas: &Rutas) -> u8 {
     let contexto = Contexto::nuevo(rutas, &llavero, &almacen);
 
     let informe = cuentas::doctor(&contexto).await;
+    let idioma = idioma_actual(rutas);
 
     let mut stdout = std::io::stdout().lock();
     for comprobacion in &informe.comprobaciones {
@@ -31,10 +33,17 @@ pub async fn ejecutar(rutas: &Rutas) -> u8 {
         };
         salida::linea(
             &mut stdout,
-            &format!("{marca} {}: {}", comprobacion.nombre, comprobacion.mensaje),
+            &format!(
+                "{marca} {}: {}",
+                comprobacion.nombre.localizar(idioma),
+                comprobacion.mensaje.localizar(idioma)
+            ),
         );
         if let Some(consejo) = &comprobacion.consejo {
-            salida::linea(&mut stdout, &format!("        consejo: {consejo}"));
+            salida::linea(
+                &mut stdout,
+                &format!("        consejo: {}", consejo.localizar(idioma)),
+            );
         }
     }
 
