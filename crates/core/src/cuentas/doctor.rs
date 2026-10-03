@@ -10,26 +10,21 @@ use crate::almacen::VerificacionAuditoria;
 use crate::config::RutasCuenta;
 use crate::git;
 use crate::gitea::ApiGitea;
+use crate::idioma::{self, LecturaPreferencia};
 use crate::instancia::{SHA256_GITEA_1_27_3_LINUX_AMD64, VERSION_GITEA, nombre_servicio_sync};
 use crate::modelo::{Cuenta, Nombre};
 use crate::secretos::{ClaveSecreto, Llavero, Secreto};
 use crate::snapshots;
 
 use super::contexto::Contexto;
+use super::doctor_textos::{MotivoAppIni, NombreComprobacion, ParteCuenta, TextoDoctor};
 use super::listar::listar;
 
 const RUTA_GPGV: &str = "/usr/bin/gpgv";
 /// Fichero de AppArmor que, a `1`, indica que los servicios `systemd --user` no pueden
-/// aislar el sistema de ficheros (comprobación
-/// «aislamiento-systemd»).
+/// aislar el sistema de ficheros (comprobación «aislamiento-systemd»).
 const RUTA_APPARMOR_RESTRICT_USERNS: &str =
     "/proc/sys/kernel/apparmor_restrict_unprivileged_userns";
-/// Texto exacto del aviso cuando AppArmor restringe los espacios de nombres de usuario
-/// sin privilegios: `systemd --user` no puede montar nada aislado, así que
-/// `ProtectSystem`/`ProtectHome`/`ReadWritePaths`/`PrivateTmp` se ignoran en silencio.
-const AVISO_AISLAMIENTO_SYSTEMD: &str = "Este sistema impide a los servicios de usuario aislar \
-     el sistema de ficheros: las protecciones de montaje de las unidades no se aplican. \
-     Siguen activas las de llamadas al sistema y red.";
 
 /// Resultado de una comprobación de [`doctor`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -39,41 +34,49 @@ pub enum NivelComprobacion {
     Fallo,
 }
 
-/// Una comprobación de `doctor`, con un consejo en español cuando no está todo bien.
+/// Una comprobación de `doctor`, con un consejo cuando no está todo bien. Los textos son
+/// tipados: quien los muestra los traduce con [`crate::idioma::Localizable`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Comprobacion {
-    pub nombre: String,
+    pub nombre: NombreComprobacion,
     pub nivel: NivelComprobacion,
-    pub mensaje: String,
-    pub consejo: Option<String>,
+    pub mensaje: TextoDoctor,
+    pub consejo: Option<TextoDoctor>,
 }
 
 impl Comprobacion {
-    fn ok(nombre: &str, mensaje: impl Into<String>) -> Self {
+    fn ok(nombre: NombreComprobacion, mensaje: TextoDoctor) -> Self {
         Self {
-            nombre: nombre.to_string(),
+            nombre,
             nivel: NivelComprobacion::Ok,
-            mensaje: mensaje.into(),
+            mensaje,
             consejo: None,
         }
     }
 
-    fn aviso(nombre: &str, mensaje: impl Into<String>, consejo: impl Into<String>) -> Self {
+    fn aviso(nombre: NombreComprobacion, mensaje: TextoDoctor, consejo: TextoDoctor) -> Self {
         Self {
-            nombre: nombre.to_string(),
+            nombre,
             nivel: NivelComprobacion::Aviso,
-            mensaje: mensaje.into(),
-            consejo: Some(consejo.into()),
+            mensaje,
+            consejo: Some(consejo),
         }
     }
 
-    fn fallo(nombre: &str, mensaje: impl Into<String>, consejo: impl Into<String>) -> Self {
+    fn fallo(nombre: NombreComprobacion, mensaje: TextoDoctor, consejo: TextoDoctor) -> Self {
         Self {
-            nombre: nombre.to_string(),
+            nombre,
             nivel: NivelComprobacion::Fallo,
-            mensaje: mensaje.into(),
-            consejo: Some(consejo.into()),
+            mensaje,
+            consejo: Some(consejo),
         }
+    }
+}
+
+fn nombre_cuenta(login: &Nombre, parte: ParteCuenta) -> NombreComprobacion {
+    NombreComprobacion::Cuenta {
+        login: login.to_string(),
+        parte,
     }
 }
 
@@ -107,6 +110,11 @@ pub async fn doctor<L: Llavero>(contexto: &Contexto<'_, L>) -> InformeDoctor {
     comprobaciones.push(comprobar_auditoria(contexto.almacen));
     comprobaciones.push(comprobar_aislamiento_systemd(leer_apparmor_restrict_userns));
     comprobaciones.push(comprobar_cortafuegos(existe_ufw));
+    comprobaciones.push(comprobar_idioma(
+        idioma::leer_preferencia(contexto.rutas),
+        &contexto.rutas.fichero_preferencias(),
+        &|nombre| std::env::var(nombre).ok(),
+    ));
 
     let directorio_bin = contexto.rutas.directorio_bin();
     match listar(contexto) {
@@ -121,46 +129,108 @@ pub async fn doctor<L: Llavero>(contexto: &Contexto<'_, L>) -> InformeDoctor {
             }
         }
         Err(error) => comprobaciones.push(Comprobacion::fallo(
-            "cuentas",
-            format!("no se pudo leer el índice de cuentas: {error}"),
-            "revisa los permisos de ~/.local/share/gitmereba/cuentas.toml",
+            NombreComprobacion::Cuentas,
+            TextoDoctor::CuentasIndiceIlegible {
+                error: error.to_string(),
+            },
+            TextoDoctor::ConsejoPermisosIndice,
         )),
     }
 
     InformeDoctor { comprobaciones }
 }
 
+/// Idioma en uso y de dónde sale. Informativa, salvo dos avisos: `preferencias.toml`
+/// existe pero no se pudo interpretar, o la preferencia es `auto` y el entorno no define
+/// `LC_ALL`, `LC_MESSAGES` ni `LANG` (se usa inglés). `entorno` es un parámetro para poder
+/// probarla sin el entorno real del proceso.
+pub fn comprobar_idioma(
+    lectura: LecturaPreferencia,
+    ruta_preferencias: &Path,
+    entorno: &dyn Fn(&str) -> Option<String>,
+) -> Comprobacion {
+    let nombre = NombreComprobacion::Idioma;
+    let preferencia = lectura.preferencia();
+    let idioma = idioma::resolver(preferencia, entorno);
+    if lectura == LecturaPreferencia::NoValida {
+        return Comprobacion::aviso(
+            nombre,
+            TextoDoctor::IdiomaPreferenciaNoValida {
+                idioma,
+                ruta: ruta_preferencias.to_path_buf(),
+            },
+            TextoDoctor::ConsejoCorregirPreferencias,
+        );
+    }
+    match idioma::origen(preferencia, entorno) {
+        idioma::OrigenIdioma::Preferencia => Comprobacion::ok(
+            nombre,
+            TextoDoctor::IdiomaPreferencia {
+                idioma,
+                ruta: ruta_preferencias.to_path_buf(),
+            },
+        ),
+        idioma::OrigenIdioma::Variable {
+            nombre: variable,
+            valor,
+        } => Comprobacion::ok(
+            nombre,
+            TextoDoctor::IdiomaVariable {
+                idioma,
+                variable: variable.to_string(),
+                valor,
+            },
+        ),
+        idioma::OrigenIdioma::PorDefecto => Comprobacion::aviso(
+            nombre,
+            TextoDoctor::IdiomaPorDefecto { idioma },
+            TextoDoctor::ConsejoFijarIdioma,
+        ),
+    }
+}
+
 async fn comprobar_git() -> Comprobacion {
     match git::version().await {
-        Ok(version) => Comprobacion::ok("git", version),
+        Ok(version) => {
+            Comprobacion::ok(NombreComprobacion::Git, TextoDoctor::GitVersion { version })
+        }
         Err(error) => Comprobacion::fallo(
-            "git",
-            format!("git no está disponible: {error}"),
-            "instala git y asegúrate de que está en el PATH",
+            NombreComprobacion::Git,
+            TextoDoctor::GitNoDisponible {
+                error: error.to_string(),
+            },
+            TextoDoctor::ConsejoInstalarGit,
         ),
     }
 }
 
 fn comprobar_gpgv() -> Comprobacion {
-    if Path::new(RUTA_GPGV).exists() {
-        Comprobacion::ok("gpgv", format!("disponible en {RUTA_GPGV}"))
+    let ruta = Path::new(RUTA_GPGV).to_path_buf();
+    if ruta.exists() {
+        Comprobacion::ok(
+            NombreComprobacion::Gpgv,
+            TextoDoctor::GpgvDisponible { ruta },
+        )
     } else {
         Comprobacion::fallo(
-            "gpgv",
-            format!("no se encuentra {RUTA_GPGV}"),
-            "instala el paquete gnupg (necesario para verificar el binario de Gitea)",
+            NombreComprobacion::Gpgv,
+            TextoDoctor::GpgvNoEncontrado { ruta },
+            TextoDoctor::ConsejoInstalarGnupg,
         )
     }
 }
 
 fn comprobar_llavero<L: Llavero>(llavero: &L) -> Comprobacion {
+    let nombre = NombreComprobacion::Llavero;
     let sonda = match Nombre::nuevo("gitmereba-doctor-sonda") {
-        Ok(nombre) => nombre,
+        Ok(nombre_sonda) => nombre_sonda,
         Err(error) => {
             return Comprobacion::fallo(
-                "llavero",
-                format!("error interno al comprobar el llavero: {error}"),
-                "repite la comprobación; si persiste, informa del error",
+                nombre,
+                TextoDoctor::LlaveroErrorInterno {
+                    error: error.to_string(),
+                },
+                TextoDoctor::ConsejoRepetirComprobacion,
             );
         }
     };
@@ -168,34 +238,41 @@ fn comprobar_llavero<L: Llavero>(llavero: &L) -> Comprobacion {
         .guardar(&sonda, ClaveSecreto::TokenGithub, &Secreto::nuevo("sonda"))
         .and_then(|()| llavero.borrar(&sonda, ClaveSecreto::TokenGithub));
     match resultado {
-        Ok(()) => Comprobacion::ok("llavero", "accesible"),
+        Ok(()) => Comprobacion::ok(nombre, TextoDoctor::LlaveroAccesible),
         Err(error) => Comprobacion::fallo(
-            "llavero",
-            format!("el llavero no está accesible: {error}"),
-            "comprueba que hay un Secret Service en marcha (GNOME Keyring, KWallet)",
+            nombre,
+            TextoDoctor::LlaveroNoAccesible {
+                error: error.to_string(),
+            },
+            TextoDoctor::ConsejoSecretService,
         ),
     }
 }
 
 fn comprobar_directorio_datos(directorio: &Path) -> Comprobacion {
+    let nombre = NombreComprobacion::DirectorioDatos;
     if !directorio.exists() {
         return Comprobacion::aviso(
-            "directorio-datos",
-            "todavía no existe (no se ha dado de alta ninguna cuenta)",
-            "se creará automáticamente con «gitmereba cuenta add»",
+            nombre,
+            TextoDoctor::DirectorioDatosNoExiste,
+            TextoDoctor::ConsejoSeCreaConCuentaAdd,
         );
     }
     match permisos_de(directorio) {
-        Ok(0o700) => Comprobacion::ok("directorio-datos", "permisos 0700"),
+        Ok(0o700) => Comprobacion::ok(nombre, TextoDoctor::PermisosCorrectos0700),
         Ok(modo) => Comprobacion::fallo(
-            "directorio-datos",
-            format!("permisos {modo:o}, deberían ser 0700"),
-            format!("ejecuta: chmod 700 {}", directorio.display()),
+            nombre,
+            TextoDoctor::PermisosIncorrectos0700 { modo },
+            TextoDoctor::ConsejoChmod700 {
+                ruta: directorio.to_path_buf(),
+            },
         ),
         Err(error) => Comprobacion::fallo(
-            "directorio-datos",
-            format!("no se pudo leer sus permisos: {error}"),
-            "comprueba que el directorio existe y es accesible",
+            nombre,
+            TextoDoctor::PermisosNoLegibles {
+                error: error.to_string(),
+            },
+            TextoDoctor::ConsejoDirectorioAccesible,
         ),
     }
 }
@@ -211,19 +288,14 @@ fn leer_apparmor_restrict_userns() -> Option<String> {
 /// AppArmor a través de `leer`, un parámetro para poder probar los tres casos (vale `1`,
 /// vale `0`, no existe) sin depender de la máquina que ejecuta los tests.
 fn comprobar_aislamiento_systemd(leer: impl Fn() -> Option<String>) -> Comprobacion {
-    let nombre = "aislamiento-systemd";
+    let nombre = NombreComprobacion::AislamientoSystemd;
     match leer().as_deref().map(str::trim) {
         Some("1") => Comprobacion::aviso(
             nombre,
-            AVISO_AISLAMIENTO_SYSTEMD,
-            "las protecciones de montaje (ProtectSystem, ProtectHome, ReadWritePaths, \
-             PrivateTmp) de las unidades de usuario no se aplican en este sistema; las de \
-             llamadas al sistema (seccomp) y red siguen activas",
+            TextoDoctor::AislamientoAviso,
+            TextoDoctor::ConsejoAislamiento,
         ),
-        _ => Comprobacion::ok(
-            nombre,
-            "las protecciones de montaje de las unidades de usuario se aplican",
-        ),
+        _ => Comprobacion::ok(nombre, TextoDoctor::AislamientoOk),
     }
 }
 
@@ -240,36 +312,39 @@ fn existe_ufw() -> bool {
 /// esté activo (`ufw status` normalmente exige root), así que basta con detectar el
 /// binario y dar la sugerencia (nunca es un `Fallo`: es solo un recordatorio).
 fn comprobar_cortafuegos(existe: impl Fn() -> bool) -> Comprobacion {
-    let nombre = "cortafuegos";
+    let nombre = NombreComprobacion::Cortafuegos;
     if existe() {
         Comprobacion::aviso(
             nombre,
-            "ufw está instalado: revisa que esté activo antes de exponer alguna cuenta a la LAN",
-            "actívalo con «sudo ufw enable» y, para cada cuenta expuesta, limita el acceso con \
-             «sudo ufw allow from <red>/<prefijo> to any port <puerto> proto tcp»",
+            TextoDoctor::UfwInstalado,
+            TextoDoctor::ConsejoActivarUfw,
         )
     } else {
         Comprobacion::aviso(
             nombre,
-            "no se encontró «ufw» en este sistema",
-            "instala ufw (u otro cortafuegos) antes de exponer alguna cuenta a la LAN con \
-             «gitmereba cuenta lan --activar», y limita el acceso a tu red de confianza",
+            TextoDoctor::UfwNoEncontrado,
+            TextoDoctor::ConsejoInstalarUfw,
         )
     }
 }
 
 fn comprobar_auditoria(almacen: &crate::almacen::Almacen) -> Comprobacion {
+    let nombre = NombreComprobacion::Auditoria;
     match almacen.verificar_auditoria() {
-        Ok(VerificacionAuditoria::Integra) => Comprobacion::ok("auditoria", "cadena íntegra"),
+        Ok(VerificacionAuditoria::Integra) => {
+            Comprobacion::ok(nombre, TextoDoctor::AuditoriaIntegra)
+        }
         Ok(VerificacionAuditoria::Rota { id }) => Comprobacion::fallo(
-            "auditoria",
-            format!("la cadena de auditoría está rota a partir de la entrada {id}"),
-            "investiga si el fichero de la base de datos se ha manipulado a mano",
+            nombre,
+            TextoDoctor::AuditoriaRota { id },
+            TextoDoctor::ConsejoAuditoriaManipulada,
         ),
         Err(error) => Comprobacion::fallo(
-            "auditoria",
-            format!("no se pudo verificar: {error}"),
-            "comprueba el acceso al almacén (~/.local/share/gitmereba/gitmereba.db)",
+            nombre,
+            TextoDoctor::AuditoriaNoVerificable {
+                error: error.to_string(),
+            },
+            TextoDoctor::ConsejoAccesoAlmacen,
         ),
     }
 }
@@ -279,16 +354,18 @@ async fn comprobar_cuenta<L: Llavero>(
     llavero: &L,
     cuenta: &Cuenta,
 ) -> Vec<Comprobacion> {
-    let prefijo = format!("cuenta:{}", cuenta.login);
     let rutas_cuenta = RutasCuenta::nueva(&cuenta.carpeta);
     let mut comprobaciones = Vec::new();
 
-    comprobaciones.push(comprobar_carpeta_cuenta(&prefijo, rutas_cuenta.carpeta()));
-    comprobaciones.push(comprobar_app_ini(&prefijo, cuenta, &rutas_cuenta));
-    comprobaciones.push(comprobar_binario_en(&prefijo, directorio_bin).await);
-    comprobaciones.push(comprobar_gitea_responde(&prefijo, cuenta, llavero).await);
-    comprobaciones.push(comprobar_secretos(&prefijo, llavero, &cuenta.login));
-    comprobaciones.push(comprobar_snapshots(&prefijo, &rutas_cuenta));
+    comprobaciones.push(comprobar_carpeta_cuenta(
+        &cuenta.login,
+        rutas_cuenta.carpeta(),
+    ));
+    comprobaciones.push(comprobar_app_ini(cuenta, &rutas_cuenta));
+    comprobaciones.push(comprobar_binario_en(&cuenta.login, directorio_bin).await);
+    comprobaciones.push(comprobar_gitea_responde(cuenta, llavero).await);
+    comprobaciones.push(comprobar_secretos(llavero, &cuenta.login));
+    comprobaciones.push(comprobar_snapshots(&cuenta.login, &rutas_cuenta));
 
     comprobaciones
 }
@@ -318,36 +395,31 @@ fn ejecutable_de_exec_start(unidad: &str) -> Option<String> {
 /// ruta del ejecutable que la instaló. Si ese ejecutable ya no está (se desinstaló el
 /// paquete, se limpió `target/`), el temporizador falla en silencio cada vez que salta.
 fn comprobar_temporizador(directorio_systemd: &Path, login: &Nombre) -> Comprobacion {
-    let nombre = format!("cuenta:{login}:temporizador");
+    let nombre = nombre_cuenta(login, ParteCuenta::Temporizador);
     let ruta_unidad = directorio_systemd.join(nombre_servicio_sync(login));
     let Ok(unidad) = std::fs::read_to_string(&ruta_unidad) else {
         return Comprobacion::aviso(
-            &nombre,
-            "no hay temporizador de sincronización instalado",
-            "abre la ventana de gitmereba una vez: lo instala sola; hasta entonces solo se \
-             sincroniza a mano",
+            nombre,
+            TextoDoctor::TemporizadorNoInstalado,
+            TextoDoctor::ConsejoAbrirVentanaInstala,
         );
     };
     let Some(ejecutable) = ejecutable_de_exec_start(&unidad) else {
         return Comprobacion::fallo(
-            &nombre,
-            format!(
-                "«{}» no tiene un ExecStart reconocible",
-                ruta_unidad.display()
-            ),
-            "abre la ventana de gitmereba una vez: reescribe la unidad",
+            nombre,
+            TextoDoctor::TemporizadorSinExecStart { ruta: ruta_unidad },
+            TextoDoctor::ConsejoAbrirVentanaReescribe,
         );
     };
     let es_ejecutable = std::fs::metadata(&ejecutable)
         .is_ok_and(|datos| datos.is_file() && datos.permissions().mode() & 0o111 != 0);
     if es_ejecutable {
-        Comprobacion::ok(&nombre, format!("sincroniza con «{ejecutable}»"))
+        Comprobacion::ok(nombre, TextoDoctor::TemporizadorSincroniza { ejecutable })
     } else {
         Comprobacion::fallo(
-            &nombre,
-            format!("el temporizador apunta a «{ejecutable}», que ya no existe o no es ejecutable"),
-            "abre la ventana de gitmereba una vez (o guarda Ajustes): el temporizador pasa a \
-             usar el ejecutable actual",
+            nombre,
+            TextoDoctor::TemporizadorEjecutablePerdido { ejecutable },
+            TextoDoctor::ConsejoActualizarTemporizador,
         )
     }
 }
@@ -355,49 +427,56 @@ fn comprobar_temporizador(directorio_systemd: &Path, login: &Nombre) -> Comproba
 /// Cuántas capturas hay y cuántas de ellas están protegidas (pendientes de revisar: una
 /// captura solo se protege cuando se ha detectado un cambio destructivo frente a ella,
 /// ver `cuentas::proteccion`). Aviso si hay alguna protegida.
-fn comprobar_snapshots(prefijo: &str, rutas_cuenta: &RutasCuenta) -> Comprobacion {
-    let nombre = format!("{prefijo}:snapshots");
+fn comprobar_snapshots(login: &Nombre, rutas_cuenta: &RutasCuenta) -> Comprobacion {
+    let nombre = nombre_cuenta(login, ParteCuenta::Snapshots);
     match snapshots::listar_cuenta(rutas_cuenta) {
         Ok(capturas) => {
             let protegidas = capturas.iter().filter(|c| c.protegida).count();
-            let mensaje = format!("{} captura(s), {protegidas} protegida(s)", capturas.len());
+            let mensaje = TextoDoctor::SnapshotsResumen {
+                total: capturas.len(),
+                protegidas,
+            };
             if protegidas > 0 {
-                Comprobacion::aviso(
-                    &nombre,
-                    mensaje,
-                    "hay capturas protegidas por un cambio destructivo detectado en el \
-                     origen (historia reescrita, rama o tag borrado): revísalas antes de \
-                     que la retención normal pueda alcanzarlas",
-                )
+                Comprobacion::aviso(nombre, mensaje, TextoDoctor::ConsejoCapturasProtegidas)
             } else {
-                Comprobacion::ok(&nombre, mensaje)
+                Comprobacion::ok(nombre, mensaje)
             }
         }
         Err(error) => Comprobacion::fallo(
-            &nombre,
-            format!("no se pudieron listar los snapshots: {error}"),
-            "comprueba los permisos de la carpeta «snapshots/» de la cuenta",
+            nombre,
+            TextoDoctor::SnapshotsError {
+                error: error.to_string(),
+            },
+            TextoDoctor::ConsejoPermisosSnapshots,
         ),
     }
 }
 
-fn comprobar_carpeta_cuenta(prefijo: &str, carpeta: &Path) -> Comprobacion {
-    let nombre = format!("{prefijo}:carpeta");
+fn comprobar_carpeta_cuenta(login: &Nombre, carpeta: &Path) -> Comprobacion {
+    let nombre = nombre_cuenta(login, ParteCuenta::Carpeta);
     if !carpeta.exists() {
         return Comprobacion::fallo(
-            &nombre,
-            "la carpeta de la cuenta no existe",
-            "repite el alta o restaura la carpeta desde una copia",
+            nombre,
+            TextoDoctor::CarpetaNoExiste,
+            TextoDoctor::ConsejoRepetirAltaORestaurar,
         );
     }
     match permisos_de(carpeta) {
-        Ok(0o700) => Comprobacion::ok(&nombre, "existe con permisos 0700"),
+        Ok(0o700) => Comprobacion::ok(nombre, TextoDoctor::CarpetaExisteCon0700),
         Ok(modo) => Comprobacion::fallo(
-            &nombre,
-            format!("permisos {modo:o}, deberían ser 0700"),
-            format!("ejecuta: chmod 700 {}", carpeta.display()),
+            nombre,
+            TextoDoctor::PermisosIncorrectos0700 { modo },
+            TextoDoctor::ConsejoChmod700 {
+                ruta: carpeta.to_path_buf(),
+            },
         ),
-        Err(error) => Comprobacion::fallo(&nombre, error.to_string(), "revisa los permisos a mano"),
+        Err(error) => Comprobacion::fallo(
+            nombre,
+            TextoDoctor::ErrorSistema {
+                error: error.to_string(),
+            },
+            TextoDoctor::ConsejoRevisarPermisosAMano,
+        ),
     }
 }
 
@@ -408,38 +487,46 @@ fn comprobar_carpeta_cuenta(prefijo: &str, carpeta: &Path) -> Comprobacion {
 /// (Gitea escucharía en la red sin que la app lo sepa). Con acceso LAN activo, exige
 /// `PROTOCOL = https`, el certificado presente y su clave con permisos 0600, y lo
 /// informa como un **aviso** (no un error): «expuesto a la LAN por HTTPS».
-fn comprobar_app_ini(prefijo: &str, cuenta: &Cuenta, rutas_cuenta: &RutasCuenta) -> Comprobacion {
-    let nombre = format!("{prefijo}:app.ini");
+fn comprobar_app_ini(cuenta: &Cuenta, rutas_cuenta: &RutasCuenta) -> Comprobacion {
+    let nombre = nombre_cuenta(&cuenta.login, ParteCuenta::AppIni);
     let app_ini = rutas_cuenta.gitea_app_ini();
     if !app_ini.exists() {
         return Comprobacion::fallo(
-            &nombre,
-            "app.ini no existe",
-            "repite el alta: la provisión no llegó a completarse",
+            nombre,
+            TextoDoctor::AppIniNoExiste,
+            TextoDoctor::ConsejoRepetirAltaProvision,
         );
     }
     let modo = match permisos_de(&app_ini) {
         Ok(modo) => modo,
         Err(error) => {
-            return Comprobacion::fallo(&nombre, error.to_string(), "revisa los permisos a mano");
+            return Comprobacion::fallo(
+                nombre,
+                TextoDoctor::ErrorSistema {
+                    error: error.to_string(),
+                },
+                TextoDoctor::ConsejoRevisarPermisosAMano,
+            );
         }
     };
     let contenido = match std::fs::read_to_string(&app_ini) {
         Ok(contenido) => contenido,
         Err(error) => {
             return Comprobacion::fallo(
-                &nombre,
-                error.to_string(),
-                "revisa que el fichero es legible",
+                nombre,
+                TextoDoctor::ErrorSistema {
+                    error: error.to_string(),
+                },
+                TextoDoctor::ConsejoFicheroLegible,
             );
         }
     };
     let permisos_ok = modo == 0o600;
 
     match &cuenta.lan {
-        None => comprobar_app_ini_sin_lan(&nombre, permisos_ok, modo, &contenido),
+        None => comprobar_app_ini_sin_lan(nombre, permisos_ok, modo, &contenido),
         Some(acceso) => comprobar_app_ini_con_lan(
-            &nombre,
+            nombre,
             permisos_ok,
             modo,
             &contenido,
@@ -450,7 +537,7 @@ fn comprobar_app_ini(prefijo: &str, cuenta: &Cuenta, rutas_cuenta: &RutasCuenta)
 }
 
 fn comprobar_app_ini_sin_lan(
-    nombre: &str,
+    nombre: NombreComprobacion,
     permisos_ok: bool,
     modo: u32,
     contenido: &str,
@@ -458,29 +545,25 @@ fn comprobar_app_ini_sin_lan(
     let escucha_local = contenido.contains("HTTP_ADDR = 127.0.0.1");
 
     if permisos_ok && escucha_local {
-        Comprobacion::ok(nombre, "0600 y HTTP_ADDR = 127.0.0.1")
+        Comprobacion::ok(nombre, TextoDoctor::AppIniSinLanCorrecto)
     } else {
         let mut motivos = Vec::new();
         if !permisos_ok {
-            motivos.push(format!("permisos {modo:o} (deberían ser 0600)"));
+            motivos.push(MotivoAppIni::Permisos { modo });
         }
         if !escucha_local {
-            motivos.push(
-                "no contiene «HTTP_ADDR = 127.0.0.1»: Gitea podría escuchar en la red \
-                 sin acceso LAN configurado en gitmereba.toml"
-                    .to_string(),
-            );
+            motivos.push(MotivoAppIni::SinHttpAddrLocal);
         }
         Comprobacion::fallo(
             nombre,
-            motivos.join("; "),
-            "revisa app.ini a mano; sin acceso LAN nunca debe escuchar fuera de 127.0.0.1",
+            TextoDoctor::AppIniMotivos { motivos },
+            TextoDoctor::ConsejoAppIniSinLan,
         )
     }
 }
 
 fn comprobar_app_ini_con_lan(
-    nombre: &str,
+    nombre: NombreComprobacion,
     permisos_ok: bool,
     modo: u32,
     contenido: &str,
@@ -494,59 +577,63 @@ fn comprobar_app_ini_con_lan(
     if permisos_ok && https_ok && certificado_ok && clave_ok {
         Comprobacion::aviso(
             nombre,
-            format!("expuesto a la LAN por HTTPS ({host})"),
-            "confirma que hay un cortafuegos limitando el acceso a tu LAN de confianza \
-             (ver la comprobación «cortafuegos»)",
+            TextoDoctor::AppIniExpuestoLan {
+                host: host.to_string(),
+            },
+            TextoDoctor::ConsejoCortafuegosLan,
         )
     } else {
         let mut motivos = Vec::new();
         if !permisos_ok {
-            motivos.push(format!("permisos {modo:o} (deberían ser 0600)"));
+            motivos.push(MotivoAppIni::Permisos { modo });
         }
         if !https_ok {
-            motivos.push(
-                "no contiene «PROTOCOL = https» pese a tener acceso LAN configurado".to_string(),
-            );
+            motivos.push(MotivoAppIni::SinHttps);
         }
         if !certificado_ok {
-            motivos.push("no se encuentra el certificado del acceso LAN".to_string());
+            motivos.push(MotivoAppIni::SinCertificado);
         }
         if !clave_ok {
-            motivos.push("la clave del certificado no tiene permisos 0600".to_string());
+            motivos.push(MotivoAppIni::ClaveSinPermisos);
         }
         Comprobacion::fallo(
             nombre,
-            motivos.join("; "),
-            "repite «gitmereba cuenta lan --activar» para regenerar el certificado y app.ini",
+            TextoDoctor::AppIniMotivos { motivos },
+            TextoDoctor::ConsejoRegenerarLan,
         )
     }
 }
 
 /// Comprueba el binario de Gitea de `directorio_bin` (compartido entre cuentas) contra el SHA-256 fijado en el código. Se repite por cuenta para que
 /// cada tarjeta de diagnóstico esté completa.
-async fn comprobar_binario_en(prefijo: &str, directorio_bin: &Path) -> Comprobacion {
-    let nombre = format!("{prefijo}:binario-gitea");
+async fn comprobar_binario_en(login: &Nombre, directorio_bin: &Path) -> Comprobacion {
+    let nombre = nombre_cuenta(login, ParteCuenta::BinarioGitea);
     let ruta = directorio_bin.join(format!("gitea-{VERSION_GITEA}"));
     if !ruta.exists() {
         return Comprobacion::fallo(
-            &nombre,
-            format!("no se encuentra {}", ruta.display()),
-            "ejecuta de nuevo el alta o «gitmereba doctor» tras reinstalar",
+            nombre,
+            TextoDoctor::BinarioNoEncontrado { ruta },
+            TextoDoctor::ConsejoReinstalarBinario,
         );
     }
     match sha256_de(&ruta).await {
-        Ok(hash) if hash == SHA256_GITEA_1_27_3_LINUX_AMD64 => {
-            Comprobacion::ok(&nombre, format!("SHA-256 correcto ({VERSION_GITEA})"))
-        }
+        Ok(hash) if hash == SHA256_GITEA_1_27_3_LINUX_AMD64 => Comprobacion::ok(
+            nombre,
+            TextoDoctor::BinarioHashCorrecto {
+                version: VERSION_GITEA.to_string(),
+            },
+        ),
         Ok(_) => Comprobacion::fallo(
-            &nombre,
-            "el SHA-256 no coincide con el esperado",
-            "borra el binario y deja que la app lo vuelva a descargar y verificar",
+            nombre,
+            TextoDoctor::BinarioHashDistinto,
+            TextoDoctor::ConsejoBorrarBinario,
         ),
         Err(error) => Comprobacion::fallo(
-            &nombre,
-            format!("no se pudo calcular su SHA-256: {error}"),
-            "comprueba que el fichero es legible",
+            nombre,
+            TextoDoctor::BinarioHashError {
+                error: error.to_string(),
+            },
+            TextoDoctor::ConsejoFicheroLegible,
         ),
     }
 }
@@ -564,12 +651,8 @@ async fn sha256_de(ruta: &Path) -> std::io::Result<String> {
     Ok(texto)
 }
 
-async fn comprobar_gitea_responde<L: Llavero>(
-    prefijo: &str,
-    cuenta: &Cuenta,
-    llavero: &L,
-) -> Comprobacion {
-    let nombre = format!("{prefijo}:gitea");
+async fn comprobar_gitea_responde<L: Llavero>(cuenta: &Cuenta, llavero: &L) -> Comprobacion {
+    let nombre = nombre_cuenta(&cuenta.login, ParteCuenta::Gitea);
     let token = llavero
         .leer(&cuenta.login, ClaveSecreto::TokenGitea)
         .ok()
@@ -578,24 +661,34 @@ async fn comprobar_gitea_responde<L: Llavero>(
     let cliente = match super::comun::cliente_gitea_de_cuenta(cuenta, token) {
         Ok(cliente) => cliente,
         Err(error) => {
-            return Comprobacion::fallo(&nombre, error.to_string(), "revisa la URL de la cuenta");
+            return Comprobacion::fallo(
+                nombre,
+                TextoDoctor::ErrorSistema {
+                    error: error.to_string(),
+                },
+                TextoDoctor::ConsejoRevisarUrl,
+            );
         }
     };
     match cliente.salud().await {
-        Ok(true) => Comprobacion::ok(&nombre, "responde"),
+        Ok(true) => Comprobacion::ok(nombre, TextoDoctor::GiteaResponde),
         Ok(false) => Comprobacion::aviso(
-            &nombre,
-            "no responde",
-            "arráncalo con «systemctl --user start» o revisa el servicio",
+            nombre,
+            TextoDoctor::GiteaNoResponde,
+            TextoDoctor::ConsejoArrancarGitea,
         ),
-        Err(error) => {
-            Comprobacion::fallo(&nombre, error.to_string(), "revisa el servicio de Gitea")
-        }
+        Err(error) => Comprobacion::fallo(
+            nombre,
+            TextoDoctor::ErrorSistema {
+                error: error.to_string(),
+            },
+            TextoDoctor::ConsejoRevisarServicioGitea,
+        ),
     }
 }
 
-fn comprobar_secretos<L: Llavero>(prefijo: &str, llavero: &L, login: &Nombre) -> Comprobacion {
-    let nombre = format!("{prefijo}:secretos");
+fn comprobar_secretos<L: Llavero>(llavero: &L, login: &Nombre) -> Comprobacion {
+    let nombre = nombre_cuenta(login, ParteCuenta::Secretos);
     let claves = [
         ClaveSecreto::TokenGithub,
         ClaveSecreto::PasswordAdminGitea,
@@ -605,23 +698,25 @@ fn comprobar_secretos<L: Llavero>(prefijo: &str, llavero: &L, login: &Nombre) ->
     for clave in claves {
         match llavero.leer(login, clave) {
             Ok(Some(secreto)) if !secreto.esta_vacio() => {}
-            Ok(_) => faltan.push(clave.etiqueta()),
+            Ok(_) => faltan.push(clave.etiqueta().to_string()),
             Err(error) => {
                 return Comprobacion::fallo(
-                    &nombre,
-                    error.to_string(),
-                    "revisa el llavero del sistema",
+                    nombre,
+                    TextoDoctor::ErrorSistema {
+                        error: error.to_string(),
+                    },
+                    TextoDoctor::ConsejoRevisarLlavero,
                 );
             }
         }
     }
     if faltan.is_empty() {
-        Comprobacion::ok(&nombre, "los tres secretos están presentes")
+        Comprobacion::ok(nombre, TextoDoctor::SecretosPresentes)
     } else {
         Comprobacion::fallo(
-            &nombre,
-            format!("faltan en el llavero: {}", faltan.join(", ")),
-            "repite el alta para regenerarlos",
+            nombre,
+            TextoDoctor::SecretosFaltan { faltan },
+            TextoDoctor::ConsejoRegenerarSecretos,
         )
     }
 }
@@ -635,6 +730,7 @@ mod tests {
     use super::*;
     use crate::almacen::Almacen;
     use crate::config::{self, Rutas, RutasCuenta};
+    use crate::idioma::{Idioma, Localizable, Preferencia};
     use crate::modelo::Alcance;
     use crate::secretos::LlaveroEnMemoria;
     use std::os::unix::fs::PermissionsExt;
@@ -699,18 +795,21 @@ mod tests {
         let carpeta_check = informe
             .comprobaciones
             .iter()
-            .find(|c| c.nombre == "cuenta:jparga:carpeta")
+            .find(|c| c.nombre == nombre_cuenta(&nombre("jparga"), ParteCuenta::Carpeta))
             .expect("existe la comprobación de carpeta");
         assert_eq!(carpeta_check.nivel, NivelComprobacion::Fallo);
 
         let app_ini_check = informe
             .comprobaciones
             .iter()
-            .find(|c| c.nombre == "cuenta:jparga:app.ini")
+            .find(|c| c.nombre == nombre_cuenta(&nombre("jparga"), ParteCuenta::AppIni))
             .expect("existe la comprobación de app.ini");
         assert_eq!(app_ini_check.nivel, NivelComprobacion::Fallo);
         assert!(
-            app_ini_check.mensaje.contains("127.0.0.1") || app_ini_check.mensaje.contains("red")
+            app_ini_check
+                .mensaje
+                .localizar(Idioma::Es)
+                .contains("127.0.0.1")
         );
     }
 
@@ -724,25 +823,35 @@ mod tests {
 
         let informe = doctor(&contexto).await;
 
-        assert!(informe.comprobaciones.iter().any(|c| c.nombre == "git"));
-        assert!(informe.comprobaciones.iter().any(|c| c.nombre == "llavero"));
         assert!(
             informe
                 .comprobaciones
                 .iter()
-                .any(|c| c.nombre == "auditoria")
+                .any(|c| c.nombre == NombreComprobacion::Git)
         );
         assert!(
             informe
                 .comprobaciones
                 .iter()
-                .any(|c| c.nombre == "aislamiento-systemd")
+                .any(|c| c.nombre == NombreComprobacion::Llavero)
         );
         assert!(
             informe
                 .comprobaciones
                 .iter()
-                .any(|c| c.nombre == "cortafuegos")
+                .any(|c| c.nombre == NombreComprobacion::Auditoria)
+        );
+        assert!(
+            informe
+                .comprobaciones
+                .iter()
+                .any(|c| c.nombre == NombreComprobacion::AislamientoSystemd)
+        );
+        assert!(
+            informe
+                .comprobaciones
+                .iter()
+                .any(|c| c.nombre == NombreComprobacion::Cortafuegos)
         );
     }
 
@@ -792,10 +901,10 @@ mod tests {
         )
         .expect("permisos de la clave");
 
-        let comprobacion = comprobar_app_ini("cuenta:jparga", &cuenta, &rutas_cuenta);
+        let comprobacion = comprobar_app_ini(&cuenta, &rutas_cuenta);
 
         assert_eq!(comprobacion.nivel, NivelComprobacion::Aviso);
-        assert!(comprobacion.mensaje.contains("LAN"));
+        assert!(comprobacion.mensaje.localizar(Idioma::Es).contains("LAN"));
     }
 
     #[test]
@@ -816,10 +925,15 @@ mod tests {
         .expect("permisos del app.ini");
         // Sin generar el certificado.
 
-        let comprobacion = comprobar_app_ini("cuenta:jparga", &cuenta, &rutas_cuenta);
+        let comprobacion = comprobar_app_ini(&cuenta, &rutas_cuenta);
 
         assert_eq!(comprobacion.nivel, NivelComprobacion::Fallo);
-        assert!(comprobacion.mensaje.contains("certificado"));
+        assert!(
+            comprobacion
+                .mensaje
+                .localizar(Idioma::Es)
+                .contains("certificado")
+        );
     }
 
     #[test]
@@ -854,7 +968,7 @@ mod tests {
         )
         .expect("permisos del app.ini");
 
-        let comprobacion = comprobar_app_ini("cuenta:jparga", &cuenta, &rutas_cuenta);
+        let comprobacion = comprobar_app_ini(&cuenta, &rutas_cuenta);
 
         assert_eq!(comprobacion.nivel, NivelComprobacion::Fallo);
     }
@@ -863,21 +977,26 @@ mod tests {
     fn cortafuegos_avisa_pero_no_falla_si_no_hay_ufw() {
         let comprobacion = comprobar_cortafuegos(|| false);
         assert_eq!(comprobacion.nivel, NivelComprobacion::Aviso);
-        assert!(comprobacion.mensaje.contains("ufw"));
+        assert!(comprobacion.mensaje.localizar(Idioma::Es).contains("ufw"));
     }
 
     #[test]
     fn cortafuegos_avisa_recordando_activarlo_si_esta_instalado() {
         let comprobacion = comprobar_cortafuegos(|| true);
         assert_eq!(comprobacion.nivel, NivelComprobacion::Aviso);
-        assert!(comprobacion.mensaje.contains("instalado"));
+        assert!(
+            comprobacion
+                .mensaje
+                .localizar(Idioma::Es)
+                .contains("instalado")
+        );
     }
 
     #[test]
     fn aislamiento_systemd_avisa_si_apparmor_vale_uno() {
         let comprobacion = comprobar_aislamiento_systemd(|| Some("1\n".to_string()));
         assert_eq!(comprobacion.nivel, NivelComprobacion::Aviso);
-        assert_eq!(comprobacion.mensaje, AVISO_AISLAMIENTO_SYSTEMD);
+        assert_eq!(comprobacion.mensaje, TextoDoctor::AislamientoAviso);
     }
 
     #[test]
@@ -921,7 +1040,7 @@ mod tests {
         .expect("escribir unidad");
         let fallo = comprobar_temporizador(temporal.path(), &login);
         assert_eq!(fallo.nivel, NivelComprobacion::Fallo);
-        assert!(fallo.mensaje.contains("no-existe"));
+        assert!(fallo.mensaje.localizar(Idioma::Es).contains("no-existe"));
 
         let binario = temporal.path().join("gitmereba");
         std::fs::write(&binario, "#!/bin/sh\n").expect("escribir binario");
@@ -943,10 +1062,16 @@ mod tests {
         let raiz = tempfile::tempdir().expect("directorio temporal");
         let rutas_cuenta = RutasCuenta::nueva(raiz.path().join("cuenta"));
 
-        let comprobacion = comprobar_snapshots("cuenta:jparga", &rutas_cuenta);
+        let comprobacion = comprobar_snapshots(&nombre("jparga"), &rutas_cuenta);
 
         assert_eq!(comprobacion.nivel, NivelComprobacion::Ok);
-        assert!(comprobacion.mensaje.contains('0'));
+        assert!(
+            comprobacion.mensaje
+                == (TextoDoctor::SnapshotsResumen {
+                    total: 0,
+                    protegidas: 0
+                })
+        );
     }
 
     #[tokio::test]
@@ -1014,9 +1139,90 @@ mod tests {
             .await
             .expect("proteger no falla");
 
-        let comprobacion = comprobar_snapshots("cuenta:jparga", &rutas_cuenta);
+        let comprobacion = comprobar_snapshots(&nombre("jparga"), &rutas_cuenta);
 
         assert_eq!(comprobacion.nivel, NivelComprobacion::Aviso);
-        assert!(comprobacion.mensaje.contains('1'));
+        assert!(
+            comprobacion.mensaje
+                == (TextoDoctor::SnapshotsResumen {
+                    total: 1,
+                    protegidas: 1
+                })
+        );
+    }
+
+    // --- idioma ---
+
+    fn entorno<'a>(pares: &'a [(&'a str, &'a str)]) -> impl Fn(&str) -> Option<String> + 'a {
+        move |clave| {
+            pares
+                .iter()
+                .find(|(nombre, _)| *nombre == clave)
+                .map(|(_, valor)| valor.to_string())
+        }
+    }
+
+    #[test]
+    fn idioma_con_preferencia_explicita_es_informativo_e_incluye_la_ruta() {
+        let ruta = Path::new("/c/preferencias.toml");
+        let c = comprobar_idioma(
+            LecturaPreferencia::Valida(Preferencia::En),
+            ruta,
+            &entorno(&[("LANG", "es_ES.UTF-8")]),
+        );
+        assert_eq!(c.nivel, NivelComprobacion::Ok);
+        assert_eq!(
+            c.mensaje,
+            TextoDoctor::IdiomaPreferencia {
+                idioma: Idioma::En,
+                ruta: ruta.to_path_buf()
+            }
+        );
+        assert_eq!(c.consejo, None);
+    }
+
+    #[test]
+    fn idioma_auto_con_lang_es_indica_la_variable() {
+        let c = comprobar_idioma(
+            LecturaPreferencia::Ausente,
+            Path::new("/c/p.toml"),
+            &entorno(&[("LANG", "es_ES.UTF-8")]),
+        );
+        assert_eq!(c.nivel, NivelComprobacion::Ok);
+        assert_eq!(c.mensaje.localizar(Idioma::Es), "es (de LANG=es_ES.UTF-8)");
+    }
+
+    #[test]
+    fn idioma_auto_sin_variables_avisa_y_aconseja_fijarlo_en_ajustes() {
+        let c = comprobar_idioma(
+            LecturaPreferencia::Ausente,
+            Path::new("/c/p.toml"),
+            &entorno(&[]),
+        );
+        assert_eq!(c.nivel, NivelComprobacion::Aviso);
+        assert_eq!(
+            c.mensaje,
+            TextoDoctor::IdiomaPorDefecto { idioma: Idioma::En }
+        );
+        assert_eq!(c.consejo, Some(TextoDoctor::ConsejoFijarIdioma));
+    }
+
+    #[test]
+    fn idioma_con_preferencias_no_validas_avisa_e_incluye_la_ruta() {
+        let ruta = Path::new("/c/preferencias.toml");
+        let c = comprobar_idioma(
+            LecturaPreferencia::NoValida,
+            ruta,
+            &entorno(&[("LANG", "es_ES")]),
+        );
+        assert_eq!(c.nivel, NivelComprobacion::Aviso);
+        assert_eq!(
+            c.mensaje,
+            TextoDoctor::IdiomaPreferenciaNoValida {
+                idioma: Idioma::Es,
+                ruta: ruta.to_path_buf()
+            }
+        );
+        assert_eq!(c.consejo, Some(TextoDoctor::ConsejoCorregirPreferencias));
     }
 }

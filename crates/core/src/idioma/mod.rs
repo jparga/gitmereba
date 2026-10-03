@@ -4,16 +4,30 @@ mod en;
 mod es;
 mod preferencias;
 
+use serde::{Deserialize, Serialize};
+
 use crate::avisos::TextoAviso;
 use crate::config::Rutas;
+use crate::cuentas::{NombreComprobacion, TextoDoctor};
 
 pub use preferencias::{LecturaPreferencia, Preferencia, guardar_preferencia, leer_preferencia};
 
 /// Idioma en el que se muestran los textos.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Idioma {
     Es,
     En,
+}
+
+impl Idioma {
+    /// Código de dos letras (`es`, `en`).
+    pub fn codigo(self) -> &'static str {
+        match self {
+            Idioma::Es => "es",
+            Idioma::En => "en",
+        }
+    }
 }
 
 /// De dónde sale el idioma resuelto (lo muestra `doctor`).
@@ -78,6 +92,24 @@ impl Localizable for TextoAviso {
     }
 }
 
+impl Localizable for TextoDoctor {
+    fn localizar(&self, idioma: Idioma) -> String {
+        match idioma {
+            Idioma::Es => es::doctor::texto(self),
+            Idioma::En => en::doctor::texto(self),
+        }
+    }
+}
+
+impl Localizable for NombreComprobacion {
+    fn localizar(&self, idioma: Idioma) -> String {
+        match idioma {
+            Idioma::Es => es::doctor::nombre(self),
+            Idioma::En => en::doctor::nombre(self),
+        }
+    }
+}
+
 /// Idioma actual de la app: preferencia guardada y entorno real del proceso.
 pub fn idioma_actual(rutas: &Rutas) -> Idioma {
     resolver(leer_preferencia(rutas).preferencia(), &|nombre| {
@@ -89,6 +121,8 @@ pub fn idioma_actual(rutas: &Rutas) -> Idioma {
 mod tests {
     use super::*;
     use crate::avisos::CambioAviso;
+    use crate::cuentas::{MotivoAppIni, NombreComprobacion, ParteCuenta, TextoDoctor};
+    use std::path::PathBuf;
 
     fn env<'a>(pares: &'a [(&'a str, &'a str)]) -> impl Fn(&str) -> Option<String> + 'a {
         move |k| {
@@ -313,6 +347,541 @@ mod tests {
         for (texto, es, en) in casos() {
             assert_eq!(texto.localizar(Idioma::Es), es, "{texto:?}");
             assert_eq!(texto.localizar(Idioma::En), en, "{texto:?}");
+        }
+    }
+
+    fn caso_doctor(
+        texto: TextoDoctor,
+        es: &'static str,
+        en: &'static str,
+    ) -> (TextoDoctor, &'static str, &'static str) {
+        (texto, es, en)
+    }
+
+    fn ruta(r: &str) -> PathBuf {
+        PathBuf::from(r)
+    }
+
+    fn casos_doctor() -> Vec<(TextoDoctor, &'static str, &'static str)> {
+        use TextoDoctor as T;
+        vec![
+            caso_doctor(
+                T::GitVersion {
+                    version: s("git version 2.43.0"),
+                },
+                "git version 2.43.0",
+                "git version 2.43.0",
+            ),
+            caso_doctor(
+                T::GitNoDisponible { error: s("boom") },
+                "git no está disponible: boom",
+                "git is not available: boom",
+            ),
+            caso_doctor(
+                T::ConsejoInstalarGit,
+                "instala git y asegúrate de que está en el PATH",
+                "install git and make sure it is on the PATH",
+            ),
+            caso_doctor(
+                T::GpgvDisponible {
+                    ruta: ruta("/usr/bin/gpgv"),
+                },
+                "disponible en /usr/bin/gpgv",
+                "available at /usr/bin/gpgv",
+            ),
+            caso_doctor(
+                T::GpgvNoEncontrado {
+                    ruta: ruta("/usr/bin/gpgv"),
+                },
+                "no se encuentra /usr/bin/gpgv",
+                "/usr/bin/gpgv not found",
+            ),
+            caso_doctor(
+                T::ConsejoInstalarGnupg,
+                "instala el paquete gnupg (necesario para verificar el binario de Gitea)",
+                "install the gnupg package (needed to verify the Gitea binary)",
+            ),
+            caso_doctor(
+                T::LlaveroErrorInterno { error: s("x") },
+                "error interno al comprobar el llavero: x",
+                "internal error while checking the keyring: x",
+            ),
+            caso_doctor(
+                T::ConsejoRepetirComprobacion,
+                "repite la comprobación; si persiste, informa del error",
+                "repeat the check; if it persists, report the error",
+            ),
+            caso_doctor(T::LlaveroAccesible, "accesible", "accessible"),
+            caso_doctor(
+                T::LlaveroNoAccesible { error: s("x") },
+                "el llavero no está accesible: x",
+                "the keyring is not accessible: x",
+            ),
+            caso_doctor(
+                T::ConsejoSecretService,
+                "comprueba que hay un Secret Service en marcha (GNOME Keyring, KWallet)",
+                "check that a Secret Service is running (GNOME Keyring, KWallet)",
+            ),
+            caso_doctor(
+                T::DirectorioDatosNoExiste,
+                "todavía no existe (no se ha dado de alta ninguna cuenta)",
+                "does not exist yet (no account has been added)",
+            ),
+            caso_doctor(
+                T::ConsejoSeCreaConCuentaAdd,
+                "se creará automáticamente con «gitmereba cuenta add»",
+                "it will be created automatically by “gitmereba cuenta add”",
+            ),
+            caso_doctor(
+                T::PermisosCorrectos0700,
+                "permisos 0700",
+                "permissions 0700",
+            ),
+            caso_doctor(
+                T::PermisosIncorrectos0700 { modo: 0o755 },
+                "permisos 755, deberían ser 0700",
+                "permissions 755, should be 0700",
+            ),
+            caso_doctor(
+                T::ConsejoChmod700 { ruta: ruta("/d") },
+                "ejecuta: chmod 700 /d",
+                "run: chmod 700 /d",
+            ),
+            caso_doctor(
+                T::PermisosNoLegibles { error: s("x") },
+                "no se pudo leer sus permisos: x",
+                "could not read its permissions: x",
+            ),
+            caso_doctor(
+                T::ConsejoDirectorioAccesible,
+                "comprueba que el directorio existe y es accesible",
+                "check that the directory exists and is accessible",
+            ),
+            caso_doctor(
+                T::AislamientoAviso,
+                "Este sistema impide a los servicios de usuario aislar el sistema de \
+                 ficheros: las protecciones de montaje de las unidades no se aplican. \
+                 Siguen activas las de llamadas al sistema y red.",
+                "This system prevents user services from isolating the file system: the \
+                 mount protections of the units are not applied. System call and network \
+                 protections remain active.",
+            ),
+            caso_doctor(
+                T::ConsejoAislamiento,
+                "las protecciones de montaje (ProtectSystem, ProtectHome, ReadWritePaths, \
+                 PrivateTmp) de las unidades de usuario no se aplican en este sistema; las de \
+                 llamadas al sistema (seccomp) y red siguen activas",
+                "the mount protections (ProtectSystem, ProtectHome, ReadWritePaths, \
+                 PrivateTmp) of user units are not applied on this system; the system call \
+                 (seccomp) and network ones remain active",
+            ),
+            caso_doctor(
+                T::AislamientoOk,
+                "las protecciones de montaje de las unidades de usuario se aplican",
+                "the mount protections of user units are applied",
+            ),
+            caso_doctor(
+                T::UfwInstalado,
+                "ufw está instalado: revisa que esté activo antes de exponer alguna cuenta a la LAN",
+                "ufw is installed: check that it is active before exposing any account to the LAN",
+            ),
+            caso_doctor(
+                T::ConsejoActivarUfw,
+                "actívalo con «sudo ufw enable» y, para cada cuenta expuesta, limita el acceso con \
+                 «sudo ufw allow from <red>/<prefijo> to any port <puerto> proto tcp»",
+                "enable it with “sudo ufw enable” and, for each exposed account, limit access with \
+                 “sudo ufw allow from <network>/<prefix> to any port <port> proto tcp”",
+            ),
+            caso_doctor(
+                T::UfwNoEncontrado,
+                "no se encontró «ufw» en este sistema",
+                "“ufw” was not found on this system",
+            ),
+            caso_doctor(
+                T::ConsejoInstalarUfw,
+                "instala ufw (u otro cortafuegos) antes de exponer alguna cuenta a la LAN con \
+                 «gitmereba cuenta lan --activar», y limita el acceso a tu red de confianza",
+                "install ufw (or another firewall) before exposing any account to the LAN with \
+                 “gitmereba cuenta lan --activar”, and limit access to your trusted network",
+            ),
+            caso_doctor(T::AuditoriaIntegra, "cadena íntegra", "chain intact"),
+            caso_doctor(
+                T::AuditoriaRota { id: 7 },
+                "la cadena de auditoría está rota a partir de la entrada 7",
+                "the audit chain is broken from entry 7",
+            ),
+            caso_doctor(
+                T::ConsejoAuditoriaManipulada,
+                "investiga si el fichero de la base de datos se ha manipulado a mano",
+                "investigate whether the database file has been tampered with by hand",
+            ),
+            caso_doctor(
+                T::AuditoriaNoVerificable { error: s("x") },
+                "no se pudo verificar: x",
+                "could not be verified: x",
+            ),
+            caso_doctor(
+                T::ConsejoAccesoAlmacen,
+                "comprueba el acceso al almacén (~/.local/share/gitmereba/gitmereba.db)",
+                "check access to the store (~/.local/share/gitmereba/gitmereba.db)",
+            ),
+            caso_doctor(
+                T::CuentasIndiceIlegible { error: s("x") },
+                "no se pudo leer el índice de cuentas: x",
+                "could not read the account index: x",
+            ),
+            caso_doctor(
+                T::ConsejoPermisosIndice,
+                "revisa los permisos de ~/.local/share/gitmereba/cuentas.toml",
+                "check the permissions of ~/.local/share/gitmereba/cuentas.toml",
+            ),
+            caso_doctor(
+                T::CarpetaNoExiste,
+                "la carpeta de la cuenta no existe",
+                "the account folder does not exist",
+            ),
+            caso_doctor(
+                T::ConsejoRepetirAltaORestaurar,
+                "repite el alta o restaura la carpeta desde una copia",
+                "repeat the sign-up or restore the folder from a backup",
+            ),
+            caso_doctor(
+                T::CarpetaExisteCon0700,
+                "existe con permisos 0700",
+                "exists with permissions 0700",
+            ),
+            caso_doctor(T::ErrorSistema { error: s("x") }, "x", "x"),
+            caso_doctor(
+                T::ConsejoRevisarPermisosAMano,
+                "revisa los permisos a mano",
+                "check the permissions by hand",
+            ),
+            caso_doctor(
+                T::AppIniNoExiste,
+                "app.ini no existe",
+                "app.ini does not exist",
+            ),
+            caso_doctor(
+                T::ConsejoRepetirAltaProvision,
+                "repite el alta: la provisión no llegó a completarse",
+                "repeat the sign-up: provisioning did not complete",
+            ),
+            caso_doctor(
+                T::ConsejoFicheroLegible,
+                "comprueba que el fichero es legible",
+                "check that the file is readable",
+            ),
+            caso_doctor(
+                T::AppIniSinLanCorrecto,
+                "0600 y HTTP_ADDR = 127.0.0.1",
+                "0600 and HTTP_ADDR = 127.0.0.1",
+            ),
+            caso_doctor(
+                T::AppIniMotivos {
+                    motivos: vec![
+                        MotivoAppIni::Permisos { modo: 0o644 },
+                        MotivoAppIni::SinHttpAddrLocal,
+                    ],
+                },
+                "permisos 644 (deberían ser 0600); no contiene «HTTP_ADDR = 127.0.0.1»: Gitea \
+                 podría escuchar en la red sin acceso LAN configurado en gitmereba.toml",
+                "permissions 644 (should be 0600); does not contain “HTTP_ADDR = 127.0.0.1”: \
+                 Gitea might listen on the network without LAN access configured in gitmereba.toml",
+            ),
+            caso_doctor(
+                T::AppIniMotivos {
+                    motivos: vec![
+                        MotivoAppIni::SinHttps,
+                        MotivoAppIni::SinCertificado,
+                        MotivoAppIni::ClaveSinPermisos,
+                    ],
+                },
+                "no contiene «PROTOCOL = https» pese a tener acceso LAN configurado; no se \
+                 encuentra el certificado del acceso LAN; la clave del certificado no tiene \
+                 permisos 0600",
+                "does not contain “PROTOCOL = https” despite having LAN access configured; \
+                 the LAN access certificate was not found; the certificate key does not have \
+                 permissions 0600",
+            ),
+            caso_doctor(
+                T::ConsejoAppIniSinLan,
+                "revisa app.ini a mano; sin acceso LAN nunca debe escuchar fuera de 127.0.0.1",
+                "check app.ini by hand; without LAN access it must never listen outside 127.0.0.1",
+            ),
+            caso_doctor(
+                T::AppIniExpuestoLan {
+                    host: s("a.internal"),
+                },
+                "expuesto a la LAN por HTTPS (a.internal)",
+                "exposed to the LAN over HTTPS (a.internal)",
+            ),
+            caso_doctor(
+                T::ConsejoCortafuegosLan,
+                "confirma que hay un cortafuegos limitando el acceso a tu LAN de confianza \
+                 (ver la comprobación «cortafuegos»)",
+                "make sure a firewall limits access to your trusted LAN (see the “firewall” check)",
+            ),
+            caso_doctor(
+                T::ConsejoRegenerarLan,
+                "repite «gitmereba cuenta lan --activar» para regenerar el certificado y app.ini",
+                "repeat “gitmereba cuenta lan --activar” to regenerate the certificate and app.ini",
+            ),
+            caso_doctor(
+                T::BinarioNoEncontrado {
+                    ruta: ruta("/b/gitea"),
+                },
+                "no se encuentra /b/gitea",
+                "/b/gitea not found",
+            ),
+            caso_doctor(
+                T::ConsejoReinstalarBinario,
+                "ejecuta de nuevo el alta o «gitmereba doctor» tras reinstalar",
+                "run the sign-up again or “gitmereba doctor” after reinstalling",
+            ),
+            caso_doctor(
+                T::BinarioHashCorrecto {
+                    version: s("1.27.3"),
+                },
+                "SHA-256 correcto (1.27.3)",
+                "SHA-256 correct (1.27.3)",
+            ),
+            caso_doctor(
+                T::BinarioHashDistinto,
+                "el SHA-256 no coincide con el esperado",
+                "the SHA-256 does not match the expected one",
+            ),
+            caso_doctor(
+                T::ConsejoBorrarBinario,
+                "borra el binario y deja que la app lo vuelva a descargar y verificar",
+                "delete the binary and let the app download and verify it again",
+            ),
+            caso_doctor(
+                T::BinarioHashError { error: s("x") },
+                "no se pudo calcular su SHA-256: x",
+                "could not compute its SHA-256: x",
+            ),
+            caso_doctor(
+                T::ConsejoRevisarUrl,
+                "revisa la URL de la cuenta",
+                "check the account URL",
+            ),
+            caso_doctor(T::GiteaResponde, "responde", "responding"),
+            caso_doctor(T::GiteaNoResponde, "no responde", "not responding"),
+            caso_doctor(
+                T::ConsejoArrancarGitea,
+                "arráncalo con «systemctl --user start» o revisa el servicio",
+                "start it with “systemctl --user start” or check the service",
+            ),
+            caso_doctor(
+                T::ConsejoRevisarServicioGitea,
+                "revisa el servicio de Gitea",
+                "check the Gitea service",
+            ),
+            caso_doctor(
+                T::ConsejoRevisarLlavero,
+                "revisa el llavero del sistema",
+                "check the system keyring",
+            ),
+            caso_doctor(
+                T::SecretosPresentes,
+                "los tres secretos están presentes",
+                "all three secrets are present",
+            ),
+            caso_doctor(
+                T::SecretosFaltan {
+                    faltan: vec![s("token-github"), s("token-gitea")],
+                },
+                "faltan en el llavero: token-github, token-gitea",
+                "missing from the keyring: token-github, token-gitea",
+            ),
+            caso_doctor(
+                T::ConsejoRegenerarSecretos,
+                "repite el alta para regenerarlos",
+                "repeat the sign-up to regenerate them",
+            ),
+            caso_doctor(
+                T::SnapshotsResumen {
+                    total: 3,
+                    protegidas: 1,
+                },
+                "3 captura(s), 1 protegida(s)",
+                "3 snapshot(s), 1 protected",
+            ),
+            caso_doctor(
+                T::ConsejoCapturasProtegidas,
+                "hay capturas protegidas por un cambio destructivo detectado en el origen \
+                 (historia reescrita, rama o tag borrado): revísalas antes de que la retención \
+                 normal pueda alcanzarlas",
+                "there are snapshots protected by a destructive change detected at the origin \
+                 (rewritten history, deleted branch or tag): review them before normal \
+                 retention can reach them",
+            ),
+            caso_doctor(
+                T::SnapshotsError { error: s("x") },
+                "no se pudieron listar los snapshots: x",
+                "could not list the snapshots: x",
+            ),
+            caso_doctor(
+                T::ConsejoPermisosSnapshots,
+                "comprueba los permisos de la carpeta «snapshots/» de la cuenta",
+                "check the permissions of the account's “snapshots/” folder",
+            ),
+            caso_doctor(
+                T::TemporizadorNoInstalado,
+                "no hay temporizador de sincronización instalado",
+                "no sync timer is installed",
+            ),
+            caso_doctor(
+                T::ConsejoAbrirVentanaInstala,
+                "abre la ventana de gitmereba una vez: lo instala sola; hasta entonces solo se \
+                 sincroniza a mano",
+                "open the gitmereba window once: it installs itself; until then it only syncs \
+                 by hand",
+            ),
+            caso_doctor(
+                T::TemporizadorSinExecStart {
+                    ruta: ruta("/u/x.service"),
+                },
+                "«/u/x.service» no tiene un ExecStart reconocible",
+                "“/u/x.service” has no recognizable ExecStart",
+            ),
+            caso_doctor(
+                T::ConsejoAbrirVentanaReescribe,
+                "abre la ventana de gitmereba una vez: reescribe la unidad",
+                "open the gitmereba window once: it rewrites the unit",
+            ),
+            caso_doctor(
+                T::TemporizadorSincroniza {
+                    ejecutable: s("/bin/gm"),
+                },
+                "sincroniza con «/bin/gm»",
+                "syncs with “/bin/gm”",
+            ),
+            caso_doctor(
+                T::TemporizadorEjecutablePerdido {
+                    ejecutable: s("/bin/gm"),
+                },
+                "el temporizador apunta a «/bin/gm», que ya no existe o no es ejecutable",
+                "the timer points to “/bin/gm”, which no longer exists or is not executable",
+            ),
+            caso_doctor(
+                T::ConsejoActualizarTemporizador,
+                "abre la ventana de gitmereba una vez (o guarda Ajustes): el temporizador pasa a \
+                 usar el ejecutable actual",
+                "open the gitmereba window once (or save Settings): the timer switches to the \
+                 current executable",
+            ),
+            caso_doctor(
+                T::IdiomaPreferencia {
+                    idioma: Idioma::En,
+                    ruta: ruta("/c/preferencias.toml"),
+                },
+                "en (preferencia, /c/preferencias.toml)",
+                "en (preference, /c/preferencias.toml)",
+            ),
+            caso_doctor(
+                T::IdiomaVariable {
+                    idioma: Idioma::Es,
+                    variable: s("LANG"),
+                    valor: s("es_ES.UTF-8"),
+                },
+                "es (de LANG=es_ES.UTF-8)",
+                "es (from LANG=es_ES.UTF-8)",
+            ),
+            caso_doctor(
+                T::IdiomaPorDefecto { idioma: Idioma::En },
+                "en (por defecto: no hay LC_ALL, LC_MESSAGES ni LANG)",
+                "en (default: LC_ALL, LC_MESSAGES and LANG are not set)",
+            ),
+            caso_doctor(
+                T::ConsejoFijarIdioma,
+                "fija el idioma en Ajustes",
+                "set the language in Settings",
+            ),
+            caso_doctor(
+                T::IdiomaPreferenciaNoValida {
+                    idioma: Idioma::En,
+                    ruta: ruta("/c/p.toml"),
+                },
+                "no se pudo interpretar «/c/p.toml»; idioma en uso: en",
+                "could not parse “/c/p.toml”; language in use: en",
+            ),
+            caso_doctor(
+                T::ConsejoCorregirPreferencias,
+                "corrige o borra el fichero, o fija el idioma en Ajustes",
+                "fix or delete the file, or set the language in Settings",
+            ),
+        ]
+    }
+
+    #[test]
+    fn cada_frase_de_doctor_se_renderiza_en_espanol_y_en_ingles() {
+        for (texto, es, en) in casos_doctor() {
+            assert_eq!(texto.localizar(Idioma::Es), es, "{texto:?}");
+            assert_eq!(texto.localizar(Idioma::En), en, "{texto:?}");
+        }
+    }
+
+    #[test]
+    fn los_nombres_de_comprobacion_se_renderizan_en_ambos_idiomas() {
+        use NombreComprobacion as N;
+        let cuenta = |parte| N::Cuenta {
+            login: s("jparga"),
+            parte,
+        };
+        let casos = [
+            (N::Git, "git", "git"),
+            (N::Gpgv, "gpgv", "gpgv"),
+            (N::Llavero, "llavero", "keyring"),
+            (N::DirectorioDatos, "directorio-datos", "data-directory"),
+            (N::Auditoria, "auditoria", "audit"),
+            (
+                N::AislamientoSystemd,
+                "aislamiento-systemd",
+                "systemd-isolation",
+            ),
+            (N::Cortafuegos, "cortafuegos", "firewall"),
+            (N::Cuentas, "cuentas", "accounts"),
+            (N::Idioma, "idioma", "language"),
+            (
+                cuenta(ParteCuenta::Carpeta),
+                "cuenta:jparga:carpeta",
+                "account:jparga:folder",
+            ),
+            (
+                cuenta(ParteCuenta::AppIni),
+                "cuenta:jparga:app.ini",
+                "account:jparga:app.ini",
+            ),
+            (
+                cuenta(ParteCuenta::BinarioGitea),
+                "cuenta:jparga:binario-gitea",
+                "account:jparga:gitea-binary",
+            ),
+            (
+                cuenta(ParteCuenta::Gitea),
+                "cuenta:jparga:gitea",
+                "account:jparga:gitea",
+            ),
+            (
+                cuenta(ParteCuenta::Secretos),
+                "cuenta:jparga:secretos",
+                "account:jparga:secrets",
+            ),
+            (
+                cuenta(ParteCuenta::Snapshots),
+                "cuenta:jparga:snapshots",
+                "account:jparga:snapshots",
+            ),
+            (
+                cuenta(ParteCuenta::Temporizador),
+                "cuenta:jparga:temporizador",
+                "account:jparga:timer",
+            ),
+        ];
+        for (nombre, es, en) in casos {
+            assert_eq!(nombre.localizar(Idioma::Es), es, "{nombre:?}");
+            assert_eq!(nombre.localizar(Idioma::En), en, "{nombre:?}");
         }
     }
 }
