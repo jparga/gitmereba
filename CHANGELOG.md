@@ -6,6 +6,23 @@ Todos los cambios relevantes de gitmereba. Formato basado en
 
 ## [Sin publicar]
 
+## [0.7.0] - 2026-10-03
+
+### Añadido
+
+- **Interfaz en inglés y español.** La ventana, la CLI (ayudas y salida), `doctor`, los avisos de
+  escritorio, los mensajes de error y la ayuda integrada están en los dos idiomas. El idioma sale
+  del sistema (`LC_ALL`, `LC_MESSAGES`, `LANG`; sin ellos, o con `C`/`POSIX`, inglés) y se puede
+  fijar en Ajustes. La preferencia se guarda en `$XDG_CONFIG_HOME/gitmereba/preferencias.toml`, y
+  `doctor` muestra qué idioma se usa y de dónde sale.
+- Manual de usuario en inglés (`docs/manual.en.md`) y capturas en inglés en el README.
+- La entrada de escritorio tiene nombre y descripción en inglés y en español.
+
+### Cambiado
+
+- Los subcomandos y opciones de la CLI siguen en español en los dos idiomas. El histórico de
+  sincronización, el registro de auditoría y los logs se guardan en español.
+
 ## [0.6.0] - 2026-10-02
 
 Primera versión pública, bajo la licencia GPL-3.0-or-later.
@@ -32,5 +49,6 @@ Primera versión pública, bajo la licencia GPL-3.0-or-later.
   ejecutan en la CI.
 - **Paquete `.deb`** y `.tar.gz`, con `SHA256SUMS` y atestación de procedencia.
 
-[Sin publicar]: https://github.com/jparga/gitmereba/compare/v0.6.0...HEAD
+[Sin publicar]: https://github.com/jparga/gitmereba/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/jparga/gitmereba/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/jparga/gitmereba/releases/tag/v0.6.0
