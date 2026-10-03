@@ -17,7 +17,9 @@ use crate::secretos::{ClaveSecreto, Llavero, Secreto};
 use crate::snapshots;
 
 use super::contexto::Contexto;
-use super::doctor_textos::{MotivoAppIni, NombreComprobacion, ParteCuenta, TextoDoctor};
+use super::doctor_textos::{
+    MotivoAppIni, NombreComprobacion, ParteCuenta, TextoDoctor, TextoExterno,
+};
 use super::listar::listar;
 
 const RUTA_GPGV: &str = "/usr/bin/gpgv";
@@ -131,7 +133,7 @@ pub async fn doctor<L: Llavero>(contexto: &Contexto<'_, L>) -> InformeDoctor {
         Err(error) => comprobaciones.push(Comprobacion::fallo(
             NombreComprobacion::Cuentas,
             TextoDoctor::CuentasIndiceIlegible {
-                error: error.to_string(),
+                error: TextoExterno::de(&error),
             },
             TextoDoctor::ConsejoPermisosIndice,
         )),
@@ -197,7 +199,7 @@ async fn comprobar_git() -> Comprobacion {
         Err(error) => Comprobacion::fallo(
             NombreComprobacion::Git,
             TextoDoctor::GitNoDisponible {
-                error: error.to_string(),
+                error: TextoExterno::de(&error),
             },
             TextoDoctor::ConsejoInstalarGit,
         ),
@@ -228,7 +230,7 @@ fn comprobar_llavero<L: Llavero>(llavero: &L) -> Comprobacion {
             return Comprobacion::fallo(
                 nombre,
                 TextoDoctor::LlaveroErrorInterno {
-                    error: error.to_string(),
+                    error: TextoExterno::de(&error),
                 },
                 TextoDoctor::ConsejoRepetirComprobacion,
             );
@@ -242,7 +244,7 @@ fn comprobar_llavero<L: Llavero>(llavero: &L) -> Comprobacion {
         Err(error) => Comprobacion::fallo(
             nombre,
             TextoDoctor::LlaveroNoAccesible {
-                error: error.to_string(),
+                error: TextoExterno::de(&error),
             },
             TextoDoctor::ConsejoSecretService,
         ),
@@ -270,7 +272,7 @@ fn comprobar_directorio_datos(directorio: &Path) -> Comprobacion {
         Err(error) => Comprobacion::fallo(
             nombre,
             TextoDoctor::PermisosNoLegibles {
-                error: error.to_string(),
+                error: TextoExterno::literal(error.to_string()),
             },
             TextoDoctor::ConsejoDirectorioAccesible,
         ),
@@ -342,7 +344,7 @@ fn comprobar_auditoria(almacen: &crate::almacen::Almacen) -> Comprobacion {
         Err(error) => Comprobacion::fallo(
             nombre,
             TextoDoctor::AuditoriaNoVerificable {
-                error: error.to_string(),
+                error: TextoExterno::de(&error),
             },
             TextoDoctor::ConsejoAccesoAlmacen,
         ),
@@ -445,7 +447,7 @@ fn comprobar_snapshots(login: &Nombre, rutas_cuenta: &RutasCuenta) -> Comprobaci
         Err(error) => Comprobacion::fallo(
             nombre,
             TextoDoctor::SnapshotsError {
-                error: error.to_string(),
+                error: TextoExterno::de(&error),
             },
             TextoDoctor::ConsejoPermisosSnapshots,
         ),
@@ -473,7 +475,7 @@ fn comprobar_carpeta_cuenta(login: &Nombre, carpeta: &Path) -> Comprobacion {
         Err(error) => Comprobacion::fallo(
             nombre,
             TextoDoctor::ErrorSistema {
-                error: error.to_string(),
+                error: TextoExterno::literal(error.to_string()),
             },
             TextoDoctor::ConsejoRevisarPermisosAMano,
         ),
@@ -503,7 +505,7 @@ fn comprobar_app_ini(cuenta: &Cuenta, rutas_cuenta: &RutasCuenta) -> Comprobacio
             return Comprobacion::fallo(
                 nombre,
                 TextoDoctor::ErrorSistema {
-                    error: error.to_string(),
+                    error: TextoExterno::literal(error.to_string()),
                 },
                 TextoDoctor::ConsejoRevisarPermisosAMano,
             );
@@ -515,7 +517,7 @@ fn comprobar_app_ini(cuenta: &Cuenta, rutas_cuenta: &RutasCuenta) -> Comprobacio
             return Comprobacion::fallo(
                 nombre,
                 TextoDoctor::ErrorSistema {
-                    error: error.to_string(),
+                    error: TextoExterno::literal(error.to_string()),
                 },
                 TextoDoctor::ConsejoRevisarFicheroLegible,
             );
@@ -631,7 +633,7 @@ async fn comprobar_binario_en(login: &Nombre, directorio_bin: &Path) -> Comproba
         Err(error) => Comprobacion::fallo(
             nombre,
             TextoDoctor::BinarioHashError {
-                error: error.to_string(),
+                error: TextoExterno::literal(error.to_string()),
             },
             TextoDoctor::ConsejoFicheroLegible,
         ),
@@ -664,7 +666,7 @@ async fn comprobar_gitea_responde<L: Llavero>(cuenta: &Cuenta, llavero: &L) -> C
             return Comprobacion::fallo(
                 nombre,
                 TextoDoctor::ErrorSistema {
-                    error: error.to_string(),
+                    error: TextoExterno::de(&error),
                 },
                 TextoDoctor::ConsejoRevisarUrl,
             );
@@ -680,7 +682,7 @@ async fn comprobar_gitea_responde<L: Llavero>(cuenta: &Cuenta, llavero: &L) -> C
         Err(error) => Comprobacion::fallo(
             nombre,
             TextoDoctor::ErrorSistema {
-                error: error.to_string(),
+                error: TextoExterno::de(&error),
             },
             TextoDoctor::ConsejoRevisarServicioGitea,
         ),
@@ -703,7 +705,7 @@ fn comprobar_secretos<L: Llavero>(llavero: &L, login: &Nombre) -> Comprobacion {
                 return Comprobacion::fallo(
                     nombre,
                     TextoDoctor::ErrorSistema {
-                        error: error.to_string(),
+                        error: TextoExterno::de(&error),
                     },
                     TextoDoctor::ConsejoRevisarLlavero,
                 );
