@@ -9,6 +9,7 @@ use time::{Duration, OffsetDateTime};
 use crate::config::RutasCuenta;
 use crate::git;
 use crate::github::{ApiGithub, ErrorGithub};
+use crate::idioma::TextoExterno;
 use crate::modelo::{Cuenta, IdRepo, RepoLocal, RepoOrigen};
 
 use super::aviso::Aviso;
@@ -240,7 +241,7 @@ pub async fn verificar_cuenta<G: ApiGithub>(
             }
             Err(e) => avisos.push(Aviso::ErrorRepo {
                 id,
-                mensaje: e.to_string(),
+                mensaje: TextoExterno::de(&e),
             }),
         }
     }

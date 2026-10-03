@@ -5,7 +5,8 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::idioma::{Idioma, Localizable};
+use crate::idioma::Idioma;
+pub use crate::idioma::TextoExterno;
 
 /// Parte de una cuenta que revisa una comprobación.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -43,35 +44,6 @@ pub enum MotivoAppIni {
     SinHttps,
     SinCertificado,
     ClaveSinPermisos,
-}
-
-/// Texto de un error que `doctor` muestra dentro de un mensaje. El informe se construye una
-/// sola vez y se muestra después en el idioma elegido, así que el error se guarda ya
-/// localizado en ambos idiomas.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TextoExterno {
-    pub es: String,
-    pub en: String,
-}
-
-impl TextoExterno {
-    /// Error de `core`: su texto en cada idioma.
-    pub fn de(error: &impl Localizable) -> Self {
-        Self {
-            es: error.localizar(Idioma::Es),
-            en: error.localizar(Idioma::En),
-        }
-    }
-
-    /// Error de una librería ajena (io, sistema) que no se puede traducir: el mismo texto
-    /// en ambos idiomas.
-    pub fn literal(texto: impl Into<String>) -> Self {
-        let texto = texto.into();
-        Self {
-            es: texto.clone(),
-            en: texto,
-        }
-    }
 }
 
 /// Mensajes y consejos de `doctor`. Los parámetros que vienen del exterior (errores,
