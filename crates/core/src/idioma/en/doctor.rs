@@ -142,6 +142,7 @@ pub(crate) fn texto(t: &TextoDoctor) -> String {
         TextoDoctor::ConsejoRepetirAltaProvision => {
             "repeat the sign-up: provisioning did not complete".to_string()
         }
+        TextoDoctor::ConsejoRevisarFicheroLegible => "check that the file is readable".to_string(),
         TextoDoctor::ConsejoFicheroLegible => "check that the file is readable".to_string(),
         TextoDoctor::AppIniSinLanCorrecto => "0600 and HTTP_ADDR = 127.0.0.1".to_string(),
         TextoDoctor::AppIniMotivos { motivos } => {

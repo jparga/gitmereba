@@ -567,6 +567,11 @@ mod tests {
                 "repeat the sign-up: provisioning did not complete",
             ),
             caso_doctor(
+                T::ConsejoRevisarFicheroLegible,
+                "revisa que el fichero es legible",
+                "check that the file is readable",
+            ),
+            caso_doctor(
                 T::ConsejoFicheroLegible,
                 "comprueba que el fichero es legible",
                 "check that the file is readable",
