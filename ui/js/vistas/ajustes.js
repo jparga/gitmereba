@@ -117,6 +117,9 @@ function dialogoBaja(login, onBaja) {
   return dialogo;
 }
 
+/** Dice si el formulario de la cuenta tiene cambios sin guardar; lo fija `panelCuenta`. */
+let hayCambiosSinGuardar = () => false;
+
 async function panelCuenta(contenedor, login, recargarCuentas) {
   const datos = await api.ajustesLeer(login);
   const cuenta = datos.cuenta;
@@ -137,6 +140,12 @@ async function panelCuenta(contenedor, login, recargarCuentas) {
   const campoCarpeta = h('input', { id: 'campo-carpeta', type: 'text', value: cuenta.carpeta, readonly: true });
 
   const mensajeGuardado = h('p', { clase: 'hint' });
+
+  // Valores del formulario tal como se cargaron o se guardaron por última vez.
+  const instantanea = () =>
+    JSON.stringify([campoIntervalo.value, campoForks.checked, campoOrganizaciones.value, campoCarpeta.value]);
+  let base = instantanea();
+  hayCambiosSinGuardar = () => instantanea() !== base;
 
   pintar(
     contenedor,
@@ -159,6 +168,7 @@ async function panelCuenta(contenedor, login, recargarCuentas) {
                 excluidos: cuenta.alcance.excluidos,
               },
             });
+            base = instantanea();
             mensajeGuardado.textContent = t('ajustes.guardado');
             avisar(t('ajustes.guardados'), 'success');
           } catch (error) {
@@ -237,6 +247,12 @@ async function filaIdioma() {
     {
       id: 'sel-idioma',
       onChange: async () => {
+        if (hayCambiosSinGuardar()) {
+          // Recargar descartaría lo editado: se deja el idioma como estaba.
+          selector.value = guardada;
+          avisar(t('ajustes.idioma.cambios_sin_guardar'), 'error');
+          return;
+        }
         try {
           await api.fijarIdioma(selector.value);
           globalThis.location.reload();
