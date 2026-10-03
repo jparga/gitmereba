@@ -66,6 +66,7 @@ puesta_en_escena() {
     done
 
     install -m 0644 "$raiz/docs/manual.md" "$destino/usr/share/doc/gitmereba/manual.md"
+    install -m 0644 "$raiz/docs/manual.en.md" "$destino/usr/share/doc/gitmereba/manual.en.md"
     cat > "$destino/usr/share/doc/gitmereba/copyright" <<EOF
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: gitmereba
@@ -129,7 +130,7 @@ echo "Generado: $paquete_deb"
 if [ "$hacer_tar" -eq 1 ]; then
     raiz_tar="$directorio_paquetes/tar-stage"
     rm -rf "$raiz_tar"
-    mkdir -p "$raiz_tar/bin" "$raiz_tar/share/applications"
+    mkdir -p "$raiz_tar/bin" "$raiz_tar/share/applications" "$raiz_tar/share/doc/gitmereba"
     install -m 0755 "$binario" "$raiz_tar/bin/gitmereba"
     if command -v strip >/dev/null 2>&1; then
         strip --strip-unneeded "$raiz_tar/bin/gitmereba" 2>/dev/null || true
@@ -141,6 +142,8 @@ if [ "$hacer_tar" -eq 1 ]; then
         install -m 0644 "$raiz/empaquetado/iconos/${n}x${n}/gitmereba.png" \
             "$raiz_tar/share/icons/hicolor/${n}x${n}/apps/gitmereba.png"
     done
+    install -m 0644 "$raiz/docs/manual.md" "$raiz_tar/share/doc/gitmereba/manual.md"
+    install -m 0644 "$raiz/docs/manual.en.md" "$raiz_tar/share/doc/gitmereba/manual.en.md"
     install -m 0755 "$raiz/scripts/instalar-local.sh" "$raiz_tar/instalar-local.sh"
     install -m 0755 "$raiz/scripts/desinstalar-local.sh" "$raiz_tar/desinstalar-local.sh"
 
