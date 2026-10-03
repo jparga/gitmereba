@@ -403,7 +403,11 @@ async fn usuario(args: CuentaUsuarioArgs, rutas: &Rutas) -> u8 {
                 // Única vez que se muestra: ni se guarda ni se puede volver a consultar.
                 salida::linea(
                     &mut stdout,
-                    &TextoCli::Contrasena(creado.password.exponer().to_string()).texto(idioma),
+                    &format!(
+                        "{} {}",
+                        TextoCli::EtiquetaContrasena.texto(idioma),
+                        creado.password.exponer()
+                    ),
                 );
                 salida::linea(&mut stdout, &TextoCli::NoSeVolveraMostrar.texto(idioma));
                 0
