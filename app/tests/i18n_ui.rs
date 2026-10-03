@@ -13,7 +13,6 @@ const PENDIENTES: &[&str] = &[
     "ayuda.js",
     "vistas/ajustes.js",
     "vistas/alta.js",
-    "vistas/contingencia.js",
     "vistas/credenciales.js",
     "vistas/lan.js",
 ];
