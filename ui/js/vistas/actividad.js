@@ -1,17 +1,19 @@
 import { api } from '../api.js';
 import { h, pintar, fechaAbsoluta } from '../dom.js';
+import { t } from '../i18n.js';
 
-const ETIQUETAS_RESULTADO = { ok: 'Correcto', 'con-fallos': 'Con fallos', error: 'Error' };
+// Claves de texto y no textos: el idioma se fija al arrancar, después de cargar este módulo.
+const ETIQUETAS_RESULTADO = { ok: 'actividad.resultado.ok', 'con-fallos': 'actividad.resultado.con_fallos', error: 'actividad.resultado.error' };
 const CLASES_RESULTADO = { ok: 'ok', 'con-fallos': 'warn', error: 'crit' };
 
 function badgeResultado(resultado) {
-  return h('span', { clase: `badge ${CLASES_RESULTADO[resultado] ?? 'muted'}` }, ETIQUETAS_RESULTADO[resultado] ?? resultado);
+  return h('span', { clase: `badge ${CLASES_RESULTADO[resultado] ?? 'muted'}` }, ETIQUETAS_RESULTADO[resultado] ? t(ETIQUETAS_RESULTADO[resultado]) : resultado);
 }
 
 async function pintarHistorico(contenedor, login) {
   const filas = await api.historial(login || null, 100);
   if (filas.length === 0) {
-    pintar(contenedor, h('p', { clase: 'hint' }, 'Todavía no hay sincronizaciones registradas.'));
+    pintar(contenedor, h('p', { clase: 'hint' }, t('actividad.historico.vacio')));
     return;
   }
   pintar(
@@ -28,13 +30,13 @@ async function pintarHistorico(contenedor, login) {
           h(
             'tr',
             null,
-            h('th', { scope: 'col' }, 'Fecha'),
-            h('th', { scope: 'col' }, 'Cuenta'),
-            h('th', { scope: 'col' }, 'Resultado'),
-            h('th', { scope: 'col', clase: 'num' }, 'Creados'),
-            h('th', { scope: 'col', clase: 'num' }, 'Huérfanos'),
-            h('th', { scope: 'col', clase: 'num' }, 'Fallos'),
-            h('th', { scope: 'col' }, 'Resumen'),
+            h('th', { scope: 'col' }, t('actividad.col.fecha')),
+            h('th', { scope: 'col' }, t('actividad.col.cuenta')),
+            h('th', { scope: 'col' }, t('actividad.col.resultado')),
+            h('th', { scope: 'col', clase: 'num' }, t('actividad.col.creados')),
+            h('th', { scope: 'col', clase: 'num' }, t('actividad.col.huerfanos')),
+            h('th', { scope: 'col', clase: 'num' }, t('actividad.col.fallos')),
+            h('th', { scope: 'col' }, t('actividad.col.resumen')),
           ),
         ),
         h(
@@ -64,14 +66,14 @@ async function pintarAuditoria(contenedor) {
   const integra = verificacion?.integra === true;
 
   const indicador = integra
-    ? h('p', { clase: 'integridad ok' }, 'Cadena íntegra ✓')
-    : h('p', { clase: 'integridad rota' }, `Cadena rota en #${verificacion?.rota_en_id ?? '?'}`);
+    ? h('p', { clase: 'integridad ok' }, t('actividad.cadena.integra'))
+    : h('p', { clase: 'integridad rota' }, t('actividad.cadena.rota', { id: verificacion?.rota_en_id ?? '?' }));
 
   pintar(
     contenedor,
     indicador,
     entradas.length === 0
-      ? h('p', { clase: 'hint' }, 'Todavía no hay entradas de auditoría.')
+      ? h('p', { clase: 'hint' }, t('actividad.auditoria.vacia'))
       : h(
           'div',
           { clase: 'table-wrap' },
@@ -84,10 +86,10 @@ async function pintarAuditoria(contenedor) {
               h(
                 'tr',
                 null,
-                h('th', { scope: 'col' }, 'Momento'),
-                h('th', { scope: 'col' }, 'Cuenta'),
-                h('th', { scope: 'col' }, 'Acción'),
-                h('th', { scope: 'col' }, 'Detalle'),
+                h('th', { scope: 'col' }, t('actividad.col.momento')),
+                h('th', { scope: 'col' }, t('actividad.col.cuenta')),
+                h('th', { scope: 'col' }, t('actividad.col.accion')),
+                h('th', { scope: 'col' }, t('actividad.col.detalle')),
               ),
             ),
             h(
@@ -125,7 +127,7 @@ export async function render(contenedor) {
         pintarHistorico(panelHistorico, estado.login);
       },
     },
-    h('option', { value: '' }, 'Todas las cuentas'),
+    h('option', { value: '' }, t('actividad.todas_cuentas')),
     cuentas.map((cuenta) => h('option', { value: cuenta.login }, cuenta.login)),
   );
 
@@ -153,7 +155,7 @@ export async function render(contenedor) {
       clase: 'active',
       onClick: () => seleccionarPestana('historico', botonHistorico, botonAuditoria),
     },
-    'Histórico',
+    t('actividad.pestana.historico'),
   );
   botonAuditoria = h(
     'button',
@@ -165,14 +167,14 @@ export async function render(contenedor) {
       'aria-controls': 'panel-auditoria',
       onClick: () => seleccionarPestana('auditoria', botonHistorico, botonAuditoria),
     },
-    'Auditoría',
+    t('actividad.pestana.auditoria'),
   );
 
   pintar(
     contenedor,
-    h('h1', null, 'Actividad'),
-    h('div', { clase: 'segmented', role: 'tablist', 'aria-label': 'Actividad' }, botonHistorico, botonAuditoria),
-    h('div', { clase: 'field mt mb' }, h('label', { for: 'sel-cuenta-historico' }, 'Filtrar histórico por cuenta'), selectorCuenta),
+    h('h1', null, t('actividad.titulo')),
+    h('div', { clase: 'segmented', role: 'tablist', 'aria-label': t('actividad.titulo') }, botonHistorico, botonAuditoria),
+    h('div', { clase: 'field mt mb' }, h('label', { for: 'sel-cuenta-historico' }, t('actividad.filtrar_cuenta')), selectorCuenta),
     panelHistorico,
     panelAuditoria,
   );
