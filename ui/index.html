@@ -11,7 +11,7 @@
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
-<a class="skip-link" href="#contenido">Saltar al contenido</a>
+<a class="skip-link" href="#contenido" data-i18n="nav.saltar">Saltar al contenido</a>
 
 <header class="nav">
   <div class="nav-inner">
@@ -19,23 +19,23 @@
       <span class="brand-mark" aria-hidden="true"><span class="brand-mark-letra">g</span></span>
       <span class="brand-text">
         <span class="wordmark">gitmereba</span>
-        <span class="app-name">clon local de GitHub</span>
+        <span class="app-name" data-i18n="nav.marca">clon local de GitHub</span>
       </span>
     </span>
 
-    <nav class="nav-links" aria-label="Vistas de la aplicación">
-      <a href="#/resumen" data-ruta="resumen">Resumen</a>
-      <a href="#/repositorios" data-ruta="repositorios">Repositorios</a>
-      <a href="#/contingencia" data-ruta="contingencia">Contingencia</a>
-      <a href="#/actividad" data-ruta="actividad">Actividad</a>
-      <a href="#/ajustes" data-ruta="ajustes">Ajustes</a>
+    <nav class="nav-links" aria-label="Vistas de la aplicación" data-i18n-aria-label="nav.vistas">
+      <a href="#/resumen" data-ruta="resumen" data-i18n="nav.resumen">Resumen</a>
+      <a href="#/repositorios" data-ruta="repositorios" data-i18n="nav.repositorios">Repositorios</a>
+      <a href="#/contingencia" data-ruta="contingencia" data-i18n="nav.contingencia">Contingencia</a>
+      <a href="#/actividad" data-ruta="actividad" data-i18n="nav.actividad">Actividad</a>
+      <a href="#/ajustes" data-ruta="ajustes" data-i18n="nav.ajustes">Ajustes</a>
     </nav>
 
     <div class="nav-spacer"></div>
 
     <div class="estado-github" role="status">
       <span id="estado-github-punto" class="dot"></span>
-      <span id="estado-github-texto" class="small">Comprobando GitHub…</span>
+      <span id="estado-github-texto" class="small" data-i18n="github.comprobando">Comprobando GitHub…</span>
     </div>
 
     <span id="nav-tema-slot"></span>
@@ -51,7 +51,7 @@
   <div class="foot-inner">
     <div class="foot-brand">
       <span class="wordmark">gitmereba</span>
-      <p>Todo ocurre en este equipo: nada sale a la red salvo hacia GitHub y tu Gitea local.</p>
+      <p data-i18n="pie.privacidad">Todo ocurre en este equipo: nada sale a la red salvo hacia GitHub y tu Gitea local.</p>
     </div>
   </div>
 </footer>

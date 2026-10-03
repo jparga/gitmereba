@@ -4,9 +4,16 @@
 // modo, ui/css/tema.css redefine los mismos tokens bajo `:root[data-tema="oscuro"]` y
 // `:root[data-tema="claro"]`; aquí solo se pone/quita ese atributo.
 
+import { t } from './i18n.js';
+
 const CLAVE_LOCALSTORAGE = 'gitmereba.tema';
 const ORDEN = ['auto', 'claro', 'oscuro'];
-const ETIQUETAS = { auto: 'Tema: automático', claro: 'Tema: claro', oscuro: 'Tema: oscuro' };
+// Funciones y no textos: el idioma se fija al arrancar, después de cargar este módulo.
+const ETIQUETAS = {
+  auto: () => t('tema.auto'),
+  claro: () => t('tema.claro'),
+  oscuro: () => t('tema.oscuro'),
+};
 
 function leerPreferencia() {
   try {
@@ -41,8 +48,9 @@ const botones = new Set();
 
 function actualizarBotones() {
   for (const boton of botones) {
-    boton.textContent = ETIQUETAS[actual];
-    boton.setAttribute('aria-label', `${ETIQUETAS[actual]}. Pulsa para cambiar.`);
+    const etiqueta = ETIQUETAS[actual]();
+    boton.textContent = etiqueta;
+    boton.setAttribute('aria-label', t('tema.cambiar', { etiqueta }));
   }
 }
 

@@ -2,6 +2,7 @@ import { api } from '../api.js';
 import { h, pintar, avisar, ocupar } from '../dom.js';
 import { crearConmutadorTema } from '../tema.js';
 import { navegar } from '../router.js';
+import { t } from '../i18n.js';
 import { panelLan } from './lan.js';
 
 function dialogoRotarToken(login) {
@@ -223,8 +224,44 @@ async function panelCuenta(contenedor, login, recargarCuentas) {
   );
 }
 
+/** Fila con el selector de idioma: guarda la preferencia y recarga la ventana. */
+async function filaIdioma() {
+  let guardada = 'auto';
+  try {
+    guardada = (await api.idioma()).preferencia;
+  } catch {
+    // Sin dato del backend: se muestra «Automático».
+  }
+  const selector = h(
+    'select',
+    {
+      id: 'sel-idioma',
+      onChange: async () => {
+        try {
+          await api.fijarIdioma(selector.value);
+          globalThis.location.reload();
+        } catch (error) {
+          selector.value = guardada;
+          avisar(t('ajustes.idioma.error', { mensaje: error?.mensaje ?? error }), 'error');
+        }
+      },
+    },
+    h('option', { value: 'auto' }, t('ajustes.idioma.auto')),
+    h('option', { value: 'es' }, t('ajustes.idioma.es')),
+    h('option', { value: 'en' }, t('ajustes.idioma.en')),
+  );
+  selector.value = guardada;
+  return h(
+    'div',
+    { clase: 'row between mt' },
+    h('label', { clase: 'hint', for: 'sel-idioma' }, t('ajustes.idioma.etiqueta')),
+    selector,
+  );
+}
+
 async function panelGlobal(contenedor) {
   const datos = await api.ajustesLeer(null);
+  const idioma = await filaIdioma();
   pintar(
     contenedor,
     h(
@@ -255,6 +292,7 @@ async function panelGlobal(contenedor) {
         ),
       ),
       h('div', { clase: 'row between mt' }, h('span', { clase: 'hint' }, 'Tema de la interfaz'), crearConmutadorTema()),
+      idioma,
     ),
   );
 }

@@ -372,9 +372,28 @@ async function emitirProgresoSync(login) {
 }
 
 /** Simula `invoke(comando, args)` con los mismos nombres que el contrato con la interfaz. */
+// Idioma de la previsualización: `?idioma=en` (o `es`) en la URL; sin él, el del navegador.
+// La preferencia solo vive en memoria: al recargar vuelve a leerse de la URL.
+let preferenciaIdioma = 'auto';
+
+function idiomaResuelto() {
+  const pedido = new URLSearchParams(globalThis.location?.search ?? '').get('idioma');
+  if (pedido === 'es' || pedido === 'en') return pedido;
+  if (preferenciaIdioma !== 'auto') return preferenciaIdioma;
+  return (globalThis.navigator?.language ?? 'en').startsWith('es') ? 'es' : 'en';
+}
+
 export async function invocar(comando, args = {}) {
   await esperar(120);
   switch (comando) {
+    case 'idioma':
+      return { idioma: idiomaResuelto(), preferencia: preferenciaIdioma };
+    case 'fijar_idioma':
+      if (!['auto', 'es', 'en'].includes(args.preferencia)) {
+        throw { codigo: 'datos_invalidos', mensaje: 'invalid language' };
+      }
+      preferenciaIdioma = args.preferencia;
+      return null;
     case 'listar_cuentas':
       return Object.values(CUENTAS);
 

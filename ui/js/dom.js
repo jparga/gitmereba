@@ -1,6 +1,8 @@
 // Ayudas de DOM seguras: nada de innerHTML/insertAdjacentHTML. Todo el contenido
 // dinámico se construye con createElement/textContent a través de h().
 
+import { t, formatoFecha, formatoNumero, formatoRelativo } from './i18n.js';
+
 /**
  * Crea un elemento sin pasar nunca por HTML como texto.
  *
@@ -50,13 +52,14 @@ export function pintar(contenedor, ...hijos) {
 /** Orden de urgencia de EstadoRepo, igual que el `Ord` derivado en `modelo::EstadoRepo`. */
 export const ORDEN_ESTADOS = ['fallo', 'obsoleto', 'huerfano', 'contingencia', 'excluido', 'ok'];
 
+// Funciones y no textos: el idioma se fija al arrancar, después de cargar este módulo.
 const ETIQUETAS_ESTADO = {
-  fallo: 'Fallo',
-  obsoleto: 'Obsoleto',
-  huerfano: 'Huérfano',
-  contingencia: 'Contingencia',
-  excluido: 'Excluido',
-  ok: 'Correcto',
+  fallo: () => t('estado.fallo'),
+  obsoleto: () => t('estado.obsoleto'),
+  huerfano: () => t('estado.huerfano'),
+  contingencia: () => t('estado.contingencia'),
+  excluido: () => t('estado.excluido'),
+  ok: () => t('estado.ok'),
 };
 
 const CLASES_BADGE_ESTADO = {
@@ -69,7 +72,7 @@ const CLASES_BADGE_ESTADO = {
 };
 
 export function textoEstado(estado) {
-  return ETIQUETAS_ESTADO[estado] ?? estado;
+  return ETIQUETAS_ESTADO[estado]?.() ?? estado;
 }
 
 export function claseBadgeEstado(estado) {
@@ -81,7 +84,6 @@ export function badgeEstado(estado) {
   return h('span', { clase: `badge ${claseBadgeEstado(estado)}` }, textoEstado(estado));
 }
 
-const FORMATO_RELATIVO = new Intl.RelativeTimeFormat('es', { numeric: 'auto' });
 const UNIDADES_RELATIVAS = [
   ['year', 31536000],
   ['month', 2592000],
@@ -100,36 +102,26 @@ export function fechaRelativa(iso) {
   const diffSeg = Math.round((ms - Date.now()) / 1000);
   for (const [unidad, segundos] of UNIDADES_RELATIVAS) {
     if (Math.abs(diffSeg) >= segundos) {
-      return FORMATO_RELATIVO.format(Math.round(diffSeg / segundos), unidad);
+      return formatoRelativo(Math.round(diffSeg / segundos), unidad);
     }
   }
-  return FORMATO_RELATIVO.format(diffSeg, 'second');
+  return formatoRelativo(diffSeg, 'second');
 }
-
-const FORMATO_FECHA_ABSOLUTA = new Intl.DateTimeFormat('es-ES', {
-  day: '2-digit',
-  month: '2-digit',
-  year: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-});
 
 /** «19/09/2026 20:14». Cadena vacía si `iso` no es válido. */
 export function fechaAbsoluta(iso) {
   if (!iso) return '';
   const fecha = new Date(iso);
   if (Number.isNaN(fecha.getTime())) return '';
-  return FORMATO_FECHA_ABSOLUTA.format(fecha);
+  return formatoFecha(fecha);
 }
-
-const FORMATO_NUMERO = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 });
 
 /** Formatea un tamaño en KiB como KB/MB/GB legibles. */
 export function tamanoLegible(kb) {
-  if (kb < 1024) return `${FORMATO_NUMERO.format(kb)} KB`;
+  if (kb < 1024) return `${formatoNumero(kb)} KB`;
   const mb = kb / 1024;
-  if (mb < 1024) return `${FORMATO_NUMERO.format(mb)} MB`;
-  return `${FORMATO_NUMERO.format(mb / 1024)} GB`;
+  if (mb < 1024) return `${formatoNumero(mb)} MB`;
+  return `${formatoNumero(mb / 1024)} GB`;
 }
 
 /** Días completos entre ahora y `iso` (negativo si ya pasó). */
