@@ -142,14 +142,14 @@ pub(crate) fn texto(t: &TextoDoctor) -> String {
         }
         TextoDoctor::CarpetaNoExiste => "the account folder does not exist".to_string(),
         TextoDoctor::ConsejoRepetirAltaORestaurar => {
-            "repeat the sign-up or restore the folder from a backup".to_string()
+            "repeat the account setup or restore the folder from a backup".to_string()
         }
         TextoDoctor::CarpetaExisteCon0700 => "exists with permissions 0700".to_string(),
         TextoDoctor::ErrorSistema { error } => error.en.clone(),
         TextoDoctor::ConsejoRevisarPermisosAMano => "check the permissions by hand".to_string(),
         TextoDoctor::AppIniNoExiste => "app.ini does not exist".to_string(),
         TextoDoctor::ConsejoRepetirAltaProvision => {
-            "repeat the sign-up: provisioning did not complete".to_string()
+            "repeat the account setup: provisioning did not complete".to_string()
         }
         TextoDoctor::ConsejoRevisarFicheroLegible => "check that the file is readable".to_string(),
         TextoDoctor::ConsejoFicheroLegible => "check that the file is readable".to_string(),
@@ -174,7 +174,7 @@ pub(crate) fn texto(t: &TextoDoctor) -> String {
         }
         TextoDoctor::BinarioNoEncontrado { ruta } => format!("{} not found", ruta.display()),
         TextoDoctor::ConsejoReinstalarBinario => {
-            "run the sign-up again or “gitmereba doctor” after reinstalling".to_string()
+            "run the account setup again or “gitmereba doctor” after reinstalling".to_string()
         }
         TextoDoctor::BinarioHashCorrecto { version } => format!("SHA-256 correct ({version})"),
         TextoDoctor::BinarioHashDistinto => {
@@ -199,7 +199,7 @@ pub(crate) fn texto(t: &TextoDoctor) -> String {
             format!("missing from the keyring: {}", faltan.join(", "))
         }
         TextoDoctor::ConsejoRegenerarSecretos => {
-            "repeat the sign-up to regenerate them".to_string()
+            "repeat the account setup to regenerate them".to_string()
         }
         TextoDoctor::SnapshotsResumen { total, protegidas } => {
             format!("{total} snapshot(s), {protegidas} protected")

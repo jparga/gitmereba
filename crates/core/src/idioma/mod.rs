@@ -660,7 +660,7 @@ mod tests {
             caso_doctor(
                 T::ConsejoRepetirAltaORestaurar,
                 "repite el alta o restaura la carpeta desde una copia",
-                "repeat the sign-up or restore the folder from a backup",
+                "repeat the account setup or restore the folder from a backup",
             ),
             caso_doctor(
                 T::CarpetaExisteCon0700,
@@ -687,7 +687,7 @@ mod tests {
             caso_doctor(
                 T::ConsejoRepetirAltaProvision,
                 "repite el alta: la provisión no llegó a completarse",
-                "repeat the sign-up: provisioning did not complete",
+                "repeat the account setup: provisioning did not complete",
             ),
             caso_doctor(
                 T::ConsejoRevisarFicheroLegible,
@@ -764,7 +764,7 @@ mod tests {
             caso_doctor(
                 T::ConsejoReinstalarBinario,
                 "ejecuta de nuevo el alta o «gitmereba doctor» tras reinstalar",
-                "run the sign-up again or “gitmereba doctor” after reinstalling",
+                "run the account setup again or “gitmereba doctor” after reinstalling",
             ),
             caso_doctor(
                 T::BinarioHashCorrecto {
@@ -827,7 +827,7 @@ mod tests {
             caso_doctor(
                 T::ConsejoRegenerarSecretos,
                 "repite el alta para regenerarlos",
-                "repeat the sign-up to regenerate them",
+                "repeat the account setup to regenerate them",
             ),
             caso_doctor(
                 T::SnapshotsResumen {
