@@ -11,10 +11,12 @@ use std::path::Path;
 use clap::CommandFactory;
 use gitmereba_core::almacen::{Almacen, ErrorAlmacen};
 use gitmereba_core::config::Rutas;
-use gitmereba_core::idioma::{Localizable, Preferencia, resolver};
+use gitmereba_core::idioma::{Idioma, Localizable, Preferencia, resolver};
 
 use crate::cli::{Cli, Comando};
+use crate::cli_idioma;
 use crate::salida;
+use crate::textos_cli::TextoCli;
 
 /// Código de salida de un uso incorrecto de la CLI (argumentos, no un fallo de negocio).
 pub const CODIGO_ERROR_DE_USO: u8 = 1;
@@ -49,18 +51,16 @@ fn asegurar_directorio_datos_0700(rutas: &Rutas) {
 
 /// Ejecuta el comando pedido y devuelve el código de salida del proceso (0-255, como
 /// exige `std::process::ExitCode`; el `main` hace la conversión final).
-pub async fn ejecutar(cli: Cli) -> u8 {
+pub async fn ejecutar(cli: Cli, rutas: &Rutas, idioma: Idioma) -> u8 {
     let Some(comando) = cli.comando else {
-        return sin_subcomando();
+        return sin_subcomando(idioma);
     };
 
-    let rutas = construir_rutas(cli.datos.as_deref());
-
     match comando {
-        Comando::Cuenta { accion } => cuenta::ejecutar(accion, &rutas).await,
-        Comando::Sync(args) => sync::ejecutar(args, &rutas).await,
-        Comando::Status(args) => status::ejecutar(args, &rutas).await,
-        Comando::Doctor => doctor::ejecutar(&rutas).await,
+        Comando::Cuenta { accion } => cuenta::ejecutar(accion, rutas).await,
+        Comando::Sync(args) => sync::ejecutar(args, rutas).await,
+        Comando::Status(args) => status::ejecutar(args, rutas).await,
+        Comando::Doctor => doctor::ejecutar(rutas).await,
     }
 }
 
@@ -84,12 +84,12 @@ pub(crate) fn construir_rutas(datos: Option<&Path>) -> Rutas {
 }
 
 /// Sin subcomando: imprime la ayuda y el aviso de que la ventana llega en F3.
-fn sin_subcomando() -> u8 {
+fn sin_subcomando(idioma: Idioma) -> u8 {
     let mut stdout = std::io::stdout().lock();
-    let ayuda = Cli::command().render_help();
+    let ayuda = cli_idioma::localizar(Cli::command(), idioma).render_help();
     let _ = write!(stdout, "{ayuda}");
     salida::linea(&mut stdout, "");
-    salida::linea(&mut stdout, "Sin subcomando, gitmereba abre su ventana.");
+    salida::linea(&mut stdout, &TextoCli::SinSubcomando.texto(idioma));
     0
 }
 
@@ -102,6 +102,8 @@ mod tests {
     #[tokio::test]
     async fn sin_subcomando_sale_con_exito() {
         let cli = Cli::try_parse_from(["gitmereba"]).expect("parseo válido");
-        assert_eq!(ejecutar(cli).await, 0);
+        let carpeta = tempfile::tempdir().expect("tempdir");
+        let rutas = Rutas::con_raiz(carpeta.path());
+        assert_eq!(ejecutar(cli, &rutas, Idioma::Es).await, 0);
     }
 }

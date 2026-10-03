@@ -14,6 +14,7 @@ use gitmereba_core::verificacion::OpcionesVerificacion;
 
 use crate::cli::SyncArgs;
 use crate::salida;
+use crate::textos_cli::TextoCli;
 
 use super::CODIGO_ERROR_DE_USO;
 use super::CODIGO_FALLOS_PARCIALES;
@@ -28,19 +29,13 @@ pub async fn ejecutar(args: SyncArgs, rutas: &Rutas) -> u8 {
     let llavero = match LlaveroDelSistema::nuevo() {
         Ok(llavero) => llavero,
         Err(error) => {
-            return fallo(&format!(
-                "no se pudo acceder al llavero: {}",
-                error.localizar(idioma)
-            ));
+            return fallo(&TextoCli::LlaveroInaccesible(error.localizar(idioma)).texto(idioma));
         }
     };
     let almacen = match abrir_almacen(rutas) {
         Ok(almacen) => almacen,
         Err(error) => {
-            return fallo(&format!(
-                "no se pudo abrir el almacén: {}",
-                error.localizar(idioma)
-            ));
+            return fallo(&TextoCli::AlmacenInaccesible(error.localizar(idioma)).texto(idioma));
         }
     };
     let contexto = Contexto::nuevo(rutas, &llavero, &almacen);
@@ -189,7 +184,7 @@ async fn forzar_repo(
             })
         })
         .ok_or_else(|| {
-            fallo("--repo debe tener la forma dueño/nombre");
+            fallo(&TextoCli::RepoForma.texto(idioma));
             CODIGO_ERROR_DE_USO
         })?;
     let Some(login) = logins.first() else {
@@ -199,26 +194,22 @@ async fn forzar_repo(
         .ok()
         .and_then(|indice| indice.cuentas.get(login.as_str()).cloned())
         .map(|entrada| config::RutasCuenta::nueva(entrada.carpeta))
-        .ok_or_else(|| fallo(&format!("no existe la cuenta «{login}»")))?;
-    let cuenta = config::leer_cuenta(&rutas_cuenta).map_err(|error| {
-        fallo(&format!(
-            "no se pudo leer la cuenta: {}",
-            error.localizar(idioma)
-        ))
-    })?;
+        .ok_or_else(|| fallo(&TextoCli::CuentaNoExiste(login.to_string()).texto(idioma)))?;
+    let cuenta = config::leer_cuenta(&rutas_cuenta)
+        .map_err(|error| fallo(&TextoCli::NoLeeCuenta(error.localizar(idioma)).texto(idioma)))?;
 
     match cuentas::sincronizar_repo(contexto, &cuenta, &id).await {
         Ok(cuentas::SincronizacionDeRepo::Sincronizado) => {
             salida::linea(
                 &mut std::io::stdout().lock(),
-                &format!("«{id}»: sincronización pedida."),
+                &TextoCli::RepoSincronizacionPedida(id.to_string()).texto(idioma),
             );
             Ok(())
         }
         Ok(cuentas::SincronizacionDeRepo::PendienteDeReclonar) => {
             salida::linea(
                 &mut std::io::stdout().lock(),
-                &format!("«{id}»: el clonado inicial había fallado; se vuelve a clonar."),
+                &TextoCli::RepoReclonar(id.to_string()).texto(idioma),
             );
             Ok(())
         }
@@ -232,17 +223,17 @@ async fn forzar_repo(
 fn logins_a_sincronizar(args: &SyncArgs, rutas: &Rutas, idioma: Idioma) -> Result<Vec<Nombre>, u8> {
     match (&args.login, args.todas) {
         (Some(_), true) => {
-            fallo("indica un login o --todas, no las dos cosas");
+            fallo(&TextoCli::LoginYTodas.texto(idioma));
             Err(CODIGO_ERROR_DE_USO)
         }
         (None, false) => {
-            fallo("indica un login o usa --todas");
+            fallo(&TextoCli::IndicaLoginOTodas.texto(idioma));
             Err(CODIGO_ERROR_DE_USO)
         }
         (Some(login), false) => match Nombre::nuevo(login.as_str()) {
             Ok(nombre) => Ok(vec![nombre]),
             Err(error) => {
-                fallo(&format!("login inválido: {}", error.localizar(idioma)));
+                fallo(&TextoCli::LoginInvalido(error.localizar(idioma)).texto(idioma));
                 Err(CODIGO_ERROR_DE_USO)
             }
         },
@@ -253,10 +244,7 @@ fn logins_a_sincronizar(args: &SyncArgs, rutas: &Rutas, idioma: Idioma) -> Resul
                 .filter_map(|login| Nombre::nuevo(login.as_str()).ok())
                 .collect()),
             Err(error) => {
-                fallo(&format!(
-                    "no se pudo leer el índice de cuentas: {}",
-                    error.localizar(idioma)
-                ));
+                fallo(&TextoCli::NoLeeIndice(error.localizar(idioma)).texto(idioma));
                 Err(1)
             }
         },

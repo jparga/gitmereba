@@ -8,6 +8,8 @@ use std::io::Write;
 use gitmereba_core::cuentas::ErrorCuentas;
 use gitmereba_core::idioma::{Idioma, Localizable};
 
+use crate::textos_cli::TextoCli;
+
 /// Escribe `linea` en `stdout` sin más adorno.
 pub fn linea(stdout: &mut impl Write, contenido: &str) {
     let _ = writeln!(stdout, "{contenido}");
@@ -18,28 +20,24 @@ pub fn linea(stdout: &mut impl Write, contenido: &str) {
 pub fn error(stderr: &mut impl Write, error: &ErrorCuentas, idioma: Idioma) {
     let _ = writeln!(stderr, "error: {}", error.localizar(idioma));
     if let Some(consejo) = consejo(error) {
-        let _ = writeln!(stderr, "consejo: {consejo}");
+        let _ = writeln!(
+            stderr,
+            "{}",
+            TextoCli::Consejo(consejo.texto(idioma)).texto(idioma)
+        );
     }
 }
 
-/// Un consejo breve en español para los errores más comunes de usuario.
-fn consejo(error: &ErrorCuentas) -> Option<&'static str> {
+/// El consejo breve para los errores más comunes de usuario.
+fn consejo(error: &ErrorCuentas) -> Option<TextoCli> {
     match error.codigo() {
-        "token-invalido" => {
-            Some("comprueba que el token no ha caducado y tiene permiso de lectura")
-        }
-        "gitea-parado" => {
-            Some("arráncalo con «systemctl --user start» o revisa «gitmereba doctor»")
-        }
-        "cuenta-no-existe" => Some("consulta los logins dados de alta con «gitmereba cuenta list»"),
-        "carpeta-no-vacia" => Some("elige una carpeta vacía o inexistente"),
-        "login-duplicado" => Some("ya hay una cuenta con ese login; usa «gitmereba cuenta list»"),
-        "carpeta-duplicada" | "puerto-duplicado" => {
-            Some("esa carpeta o puerto ya los usa otra cuenta")
-        }
-        "carpeta-no-valida-para-borrar" | "ruta-protegida" => {
-            Some("no se ha borrado nada; revisa la ruta a mano")
-        }
+        "token-invalido" => Some(TextoCli::ConsejoTokenInvalido),
+        "gitea-parado" => Some(TextoCli::ConsejoGiteaParado),
+        "cuenta-no-existe" => Some(TextoCli::ConsejoCuentaNoExiste),
+        "carpeta-no-vacia" => Some(TextoCli::ConsejoCarpetaNoVacia),
+        "login-duplicado" => Some(TextoCli::ConsejoLoginDuplicado),
+        "carpeta-duplicada" | "puerto-duplicado" => Some(TextoCli::ConsejoRecursoDuplicado),
+        "carpeta-no-valida-para-borrar" | "ruta-protegida" => Some(TextoCli::ConsejoNadaBorrado),
         _ => None,
     }
 }
@@ -110,6 +108,22 @@ mod tests {
         let texto = String::from_utf8(salida).expect("utf8");
         assert!(texto.starts_with("error: "));
         assert!(!texto.contains("GiteaParado"));
+    }
+
+    #[test]
+    fn el_consejo_sale_en_el_idioma_pedido() {
+        let fallo = ErrorCuentas::GiteaParado(
+            gitmereba_core::modelo::Nombre::nuevo("jparga").expect("nombre"),
+        );
+        let mut es = Vec::new();
+        error(&mut es, &fallo, Idioma::Es);
+        let mut en = Vec::new();
+        error(&mut en, &fallo, Idioma::En);
+        let es = String::from_utf8(es).expect("utf8");
+        let en = String::from_utf8(en).expect("utf8");
+        assert!(es.contains("\nconsejo: arráncalo con «systemctl --user start»"));
+        assert!(en.contains("\nhint: start it with"));
+        assert!(!en.contains("consejo"));
     }
 
     #[test]

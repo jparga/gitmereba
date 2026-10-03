@@ -17,6 +17,7 @@ use gitmereba_core::secretos::{ClaveSecreto, Llavero, LlaveroDelSistema, Secreto
 
 use crate::cli::{ComandoCuenta, CuentaAddArgs, CuentaLanArgs, CuentaRmArgs, CuentaUsuarioArgs};
 use crate::salida;
+use crate::textos_cli::TextoCli;
 
 use super::CODIGO_ERROR_DE_USO;
 
@@ -34,10 +35,12 @@ async fn add(args: CuentaAddArgs, rutas: &Rutas) -> u8 {
     let idioma = idioma_actual(rutas);
     let login = match Nombre::nuevo(args.login.as_str()) {
         Ok(login) => login,
-        Err(error) => return fallo_uso(&format!("login inválido: {}", error.localizar(idioma))),
+        Err(error) => {
+            return fallo_uso(&TextoCli::LoginInvalido(error.localizar(idioma)).texto(idioma));
+        }
     };
     if !args.carpeta.is_absolute() {
-        return fallo_uso("la carpeta debe ser una ruta absoluta");
+        return fallo_uso(&TextoCli::CarpetaNoAbsoluta.texto(idioma));
     }
     let organizaciones: Result<Vec<Nombre>, _> = args
         .organizaciones
@@ -47,10 +50,9 @@ async fn add(args: CuentaAddArgs, rutas: &Rutas) -> u8 {
     let organizaciones = match organizaciones {
         Ok(organizaciones) => organizaciones,
         Err(error) => {
-            return fallo_uso(&format!(
-                "nombre de organización inválido: {}",
-                error.localizar(idioma)
-            ));
+            return fallo_uso(
+                &TextoCli::OrganizacionInvalida(error.localizar(idioma)).texto(idioma),
+            );
         }
     };
 
@@ -83,30 +85,24 @@ async fn add(args: CuentaAddArgs, rutas: &Rutas) -> u8 {
         Ok(previsualizacion) => previsualizacion,
         Err(error) => return emitir_error(idioma, &error),
     };
-    mostrar_previsualizacion(&previsualizacion);
+    mostrar_previsualizacion(&previsualizacion, idioma);
 
-    if !args.si && !confirmar("¿Continuar con el alta?") {
+    if !args.si && !confirmar(&TextoCli::ConfirmarAlta.texto(idioma), idioma) {
         let mut stdout = std::io::stdout().lock();
-        salida::linea(&mut stdout, "Alta cancelada.");
+        salida::linea(&mut stdout, &TextoCli::AltaCancelada.texto(idioma));
         return 0;
     }
 
     let llavero = match LlaveroDelSistema::nuevo() {
         Ok(llavero) => llavero,
         Err(error) => {
-            return fallo(&format!(
-                "no se pudo acceder al llavero: {}",
-                error.localizar(idioma)
-            ));
+            return fallo(&TextoCli::LlaveroInaccesible(error.localizar(idioma)).texto(idioma));
         }
     };
     let almacen = match abrir_almacen(rutas) {
         Ok(almacen) => almacen,
         Err(error) => {
-            return fallo(&format!(
-                "no se pudo abrir el almacén: {}",
-                error.localizar(idioma)
-            ));
+            return fallo(&TextoCli::AlmacenInaccesible(error.localizar(idioma)).texto(idioma));
         }
     };
     let contexto = Contexto::nuevo(rutas, &llavero, &almacen);
@@ -127,10 +123,7 @@ async fn add(args: CuentaAddArgs, rutas: &Rutas) -> u8 {
         .await;
         if resultado.is_ok() {
             let mut stdout = std::io::stdout().lock();
-            salida::linea(
-                &mut stdout,
-                "Gitea arrancado en primer plano. Pulsa Ctrl-C para pararlo.",
-            );
+            salida::linea(&mut stdout, &TextoCli::GiteaPrimerPlano.texto(idioma));
             drop(stdout);
             let _ = tokio::signal::ctrl_c().await;
             let _ = lanzador.parar(rutas, &solicitud.login).await;
@@ -165,19 +158,13 @@ async fn list(rutas: &Rutas) -> u8 {
     let llavero = match LlaveroDelSistema::nuevo() {
         Ok(llavero) => llavero,
         Err(error) => {
-            return fallo(&format!(
-                "no se pudo acceder al llavero: {}",
-                error.localizar(idioma)
-            ));
+            return fallo(&TextoCli::LlaveroInaccesible(error.localizar(idioma)).texto(idioma));
         }
     };
     let almacen = match abrir_almacen(rutas) {
         Ok(almacen) => almacen,
         Err(error) => {
-            return fallo(&format!(
-                "no se pudo abrir el almacén: {}",
-                error.localizar(idioma)
-            ));
+            return fallo(&TextoCli::AlmacenInaccesible(error.localizar(idioma)).texto(idioma));
         }
     };
     let contexto = Contexto::nuevo(rutas, &llavero, &almacen);
@@ -186,7 +173,7 @@ async fn list(rutas: &Rutas) -> u8 {
         Ok(cuentas) => {
             let mut stdout = std::io::stdout().lock();
             if cuentas.is_empty() {
-                salida::linea(&mut stdout, "No hay ninguna cuenta dada de alta.");
+                salida::linea(&mut stdout, &TextoCli::NoHayCuentas.texto(idioma));
                 return 0;
             }
             let filas: Vec<Vec<String>> = cuentas
@@ -202,7 +189,12 @@ async fn list(rutas: &Rutas) -> u8 {
                 .collect();
             salida::tabla(
                 &mut stdout,
-                &["login", "carpeta", "puerto", "intervalo (min)"],
+                &[
+                    &TextoCli::ColLogin.texto(idioma),
+                    &TextoCli::ColCarpeta.texto(idioma),
+                    &TextoCli::ColPuerto.texto(idioma),
+                    &TextoCli::ColIntervalo.texto(idioma),
+                ],
                 &filas,
             );
             0
@@ -215,31 +207,27 @@ async fn rm(args: CuentaRmArgs, rutas: &Rutas) -> u8 {
     let idioma = idioma_actual(rutas);
     let login = match Nombre::nuevo(args.login.as_str()) {
         Ok(login) => login,
-        Err(error) => return fallo_uso(&format!("login inválido: {}", error.localizar(idioma))),
+        Err(error) => {
+            return fallo_uso(&TextoCli::LoginInvalido(error.localizar(idioma)).texto(idioma));
+        }
     };
 
-    if !args.si && !confirmar_login(&args.login) {
+    if !args.si && !confirmar_login(&args.login, idioma) {
         let mut stdout = std::io::stdout().lock();
-        salida::linea(&mut stdout, "Baja cancelada.");
+        salida::linea(&mut stdout, &TextoCli::BajaCancelada.texto(idioma));
         return 0;
     }
 
     let llavero = match LlaveroDelSistema::nuevo() {
         Ok(llavero) => llavero,
         Err(error) => {
-            return fallo(&format!(
-                "no se pudo acceder al llavero: {}",
-                error.localizar(idioma)
-            ));
+            return fallo(&TextoCli::LlaveroInaccesible(error.localizar(idioma)).texto(idioma));
         }
     };
     let almacen = match abrir_almacen(rutas) {
         Ok(almacen) => almacen,
         Err(error) => {
-            return fallo(&format!(
-                "no se pudo abrir el almacén: {}",
-                error.localizar(idioma)
-            ));
+            return fallo(&TextoCli::AlmacenInaccesible(error.localizar(idioma)).texto(idioma));
         }
     };
     let contexto = Contexto::nuevo(rutas, &llavero, &almacen);
@@ -248,7 +236,10 @@ async fn rm(args: CuentaRmArgs, rutas: &Rutas) -> u8 {
     match cuentas::baja(&contexto, &lanzador, &login, args.borrar_datos).await {
         Ok(()) => {
             let mut stdout = std::io::stdout().lock();
-            salida::linea(&mut stdout, &format!("Cuenta «{login}» dada de baja."));
+            salida::linea(
+                &mut stdout,
+                &TextoCli::CuentaBaja(login.to_string()).texto(idioma),
+            );
             0
         }
         Err(error) => emitir_error(idioma, &error),
@@ -259,19 +250,21 @@ async fn lan(args: CuentaLanArgs, rutas: &Rutas) -> u8 {
     let idioma = idioma_actual(rutas);
     let login = match Nombre::nuevo(args.login.as_str()) {
         Ok(login) => login,
-        Err(error) => return fallo_uso(&format!("login inválido: {}", error.localizar(idioma))),
+        Err(error) => {
+            return fallo_uso(&TextoCli::LoginInvalido(error.localizar(idioma)).texto(idioma));
+        }
     };
     // clap ya exige que se dé exactamente una de `--activar`/`--desactivar`/`--estado`
     // (un `ArgGroup` obligatorio y exclusivo), pero no aplica de forma fiable el
     // `requires` de `--host` sobre `--activar` cuando ambos son miembros de ese mismo
     // grupo: se comprueba a mano aquí.
     if args.host.is_some() && !args.activar {
-        return fallo_uso("«--host» solo tiene sentido junto con «--activar»");
+        return fallo_uso(&TextoCli::HostSoloConActivar.texto(idioma));
     }
     let host = match args.host.as_deref().map(NombreHostInterno::nuevo) {
         Some(Ok(host)) => Some(host),
         Some(Err(error)) => {
-            return fallo_uso(&format!("host inválido: {}", error.localizar(idioma)));
+            return fallo_uso(&TextoCli::HostInvalido(error.localizar(idioma)).texto(idioma));
         }
         None => None,
     };
@@ -279,19 +272,13 @@ async fn lan(args: CuentaLanArgs, rutas: &Rutas) -> u8 {
     let llavero = match LlaveroDelSistema::nuevo() {
         Ok(llavero) => llavero,
         Err(error) => {
-            return fallo(&format!(
-                "no se pudo acceder al llavero: {}",
-                error.localizar(idioma)
-            ));
+            return fallo(&TextoCli::LlaveroInaccesible(error.localizar(idioma)).texto(idioma));
         }
     };
     let almacen = match abrir_almacen(rutas) {
         Ok(almacen) => almacen,
         Err(error) => {
-            return fallo(&format!(
-                "no se pudo abrir el almacén: {}",
-                error.localizar(idioma)
-            ));
+            return fallo(&TextoCli::AlmacenInaccesible(error.localizar(idioma)).texto(idioma));
         }
     };
     let contexto = Contexto::nuevo(rutas, &llavero, &almacen);
@@ -299,7 +286,7 @@ async fn lan(args: CuentaLanArgs, rutas: &Rutas) -> u8 {
     if args.estado {
         return match cuentas::estado_lan(&contexto, &login) {
             Ok(informe) => {
-                mostrar_informe_lan(&login, &informe);
+                mostrar_informe_lan(&login, &informe, idioma);
                 0
             }
             Err(error) => emitir_error(idioma, &error),
@@ -310,7 +297,7 @@ async fn lan(args: CuentaLanArgs, rutas: &Rutas) -> u8 {
     if args.activar {
         return match cuentas::exponer_lan(&contexto, &lanzador, &login, host).await {
             Ok(informe) => {
-                mostrar_informe_lan(&login, &informe);
+                mostrar_informe_lan(&login, &informe, idioma);
                 0
             }
             Err(error) => emitir_error(idioma, &error),
@@ -323,7 +310,7 @@ async fn lan(args: CuentaLanArgs, rutas: &Rutas) -> u8 {
     );
     match cuentas::ocultar_lan(&contexto, &lanzador, &login).await {
         Ok(informe) => {
-            mostrar_informe_lan(&login, &informe);
+            mostrar_informe_lan(&login, &informe, idioma);
             0
         }
         Err(error) => emitir_error(idioma, &error),
@@ -335,16 +322,17 @@ async fn usuario(args: CuentaUsuarioArgs, rutas: &Rutas) -> u8 {
     let idioma = idioma_actual(rutas);
     let login = match Nombre::nuevo(args.login.as_str()) {
         Ok(login) => login,
-        Err(error) => return fallo_uso(&format!("login inválido: {}", error.localizar(idioma))),
+        Err(error) => {
+            return fallo_uso(&TextoCli::LoginInvalido(error.localizar(idioma)).texto(idioma));
+        }
     };
     let nombre = match args.crear.as_deref().or(args.eliminar.as_deref()) {
         Some(texto) => match Nombre::nuevo(texto) {
             Ok(nombre) => Some(nombre),
             Err(error) => {
-                return fallo_uso(&format!(
-                    "nombre de usuario inválido: {}",
-                    error.localizar(idioma)
-                ));
+                return fallo_uso(
+                    &TextoCli::NombreUsuarioInvalido(error.localizar(idioma)).texto(idioma),
+                );
             }
         },
         None => None,
@@ -353,19 +341,13 @@ async fn usuario(args: CuentaUsuarioArgs, rutas: &Rutas) -> u8 {
     let llavero = match LlaveroDelSistema::nuevo() {
         Ok(llavero) => llavero,
         Err(error) => {
-            return fallo(&format!(
-                "no se pudo acceder al llavero: {}",
-                error.localizar(idioma)
-            ));
+            return fallo(&TextoCli::LlaveroInaccesible(error.localizar(idioma)).texto(idioma));
         }
     };
     let almacen = match abrir_almacen(rutas) {
         Ok(almacen) => almacen,
         Err(error) => {
-            return fallo(&format!(
-                "no se pudo abrir el almacén: {}",
-                error.localizar(idioma)
-            ));
+            return fallo(&TextoCli::AlmacenInaccesible(error.localizar(idioma)).texto(idioma));
         }
     };
     let contexto = Contexto::nuevo(rutas, &llavero, &almacen);
@@ -374,10 +356,7 @@ async fn usuario(args: CuentaUsuarioArgs, rutas: &Rutas) -> u8 {
     let Some(nombre) = nombre else {
         return match cuentas::listar_usuarios_lan(&contexto, &login).await {
             Ok(usuarios) if usuarios.is_empty() => {
-                salida::linea(
-                    &mut stdout,
-                    "No hay usuarios de la LAN: solo el administrador puede entrar.",
-                );
+                salida::linea(&mut stdout, &TextoCli::SinUsuariosLan.texto(idioma));
                 0
             }
             Ok(usuarios) => {
@@ -404,12 +383,9 @@ async fn usuario(args: CuentaUsuarioArgs, rutas: &Rutas) -> u8 {
     };
     let token = match llavero.leer(&login, ClaveSecreto::TokenGitea) {
         Ok(Some(token)) => token,
-        Ok(None) => return fallo("no hay token de administración de Gitea para esta cuenta"),
+        Ok(None) => return fallo(&TextoCli::SinTokenAdmin.texto(idioma)),
         Err(error) => {
-            return fallo(&format!(
-                "no se pudo leer el llavero: {}",
-                error.localizar(idioma)
-            ));
+            return fallo(&TextoCli::LlaveroIlegible(error.localizar(idioma)).texto(idioma));
         }
     };
     let gitea = match cuentas::cliente_gitea_de_cuenta(&cuenta, token) {
@@ -420,17 +396,16 @@ async fn usuario(args: CuentaUsuarioArgs, rutas: &Rutas) -> u8 {
     if args.crear.is_some() {
         return match cuentas::crear_usuario_lan(&contexto, &gitea, &login, &nombre).await {
             Ok(creado) => {
-                salida::linea(&mut stdout, &format!("Usuario «{}» creado.", creado.nombre));
+                salida::linea(
+                    &mut stdout,
+                    &TextoCli::UsuarioCreado(creado.nombre.to_string()).texto(idioma),
+                );
                 // Única vez que se muestra: ni se guarda ni se puede volver a consultar.
                 salida::linea(
                     &mut stdout,
-                    &format!("Contraseña: {}", creado.password.exponer()),
+                    &TextoCli::Contrasena(creado.password.exponer().to_string()).texto(idioma),
                 );
-                salida::linea(
-                    &mut stdout,
-                    "No se volverá a mostrar. Lee los mirrors y escribe en «contingencia-*»; \
-                     puede cambiarla desde la web de Gitea.",
-                );
+                salida::linea(&mut stdout, &TextoCli::NoSeVolveraMostrar.texto(idioma));
                 0
             }
             Err(error) => emitir_error(idioma, &error),
@@ -439,7 +414,10 @@ async fn usuario(args: CuentaUsuarioArgs, rutas: &Rutas) -> u8 {
 
     match cuentas::eliminar_usuario_lan(&contexto, &gitea, &login, &nombre).await {
         Ok(()) => {
-            salida::linea(&mut stdout, &format!("Usuario «{nombre}» eliminado."));
+            salida::linea(
+                &mut stdout,
+                &TextoCli::UsuarioEliminado(nombre.to_string()).texto(idioma),
+            );
             0
         }
         Err(error) => emitir_error(idioma, &error),
@@ -448,63 +426,67 @@ async fn usuario(args: CuentaUsuarioArgs, rutas: &Rutas) -> u8 {
 
 /// Imprime el informe de acceso LAN en texto claro, incluida la línea de `/etc/hosts`
 /// para los otros equipos de la LAN y para el propio anfitrión.
-fn mostrar_informe_lan(login: &Nombre, informe: &InformeLan) {
+fn mostrar_informe_lan(login: &Nombre, informe: &InformeLan, idioma: Idioma) {
     let mut stdout = std::io::stdout().lock();
     match &informe.host {
         Some(host) => {
-            salida::linea(&mut stdout, &format!("Acceso LAN activo para «{login}»."));
             salida::linea(
                 &mut stdout,
-                &format!("URL pública: {}", informe.url_publica),
+                &TextoCli::AccesoLanActivo(login.to_string()).texto(idioma),
+            );
+            salida::linea(
+                &mut stdout,
+                &TextoCli::UrlPublica(informe.url_publica.to_string()).texto(idioma),
             );
             if let Some(huella) = &informe.huella_sha256 {
                 salida::linea(
                     &mut stdout,
-                    &format!("Huella SHA-256 del certificado: {huella}"),
+                    &TextoCli::HuellaCertificado(huella.to_string()).texto(idioma),
                 );
             }
             if let Some(ruta) = &informe.ruta_certificado {
-                salida::linea(&mut stdout, &format!("Certificado: {}", ruta.display()));
+                salida::linea(
+                    &mut stdout,
+                    &TextoCli::Certificado(ruta.display().to_string()).texto(idioma),
+                );
             }
             salida::linea(&mut stdout, "");
-            salida::linea(&mut stdout, "Añade estas líneas a /etc/hosts:");
+            salida::linea(&mut stdout, &TextoCli::AnadeAHosts.texto(idioma));
             salida::linea(
                 &mut stdout,
-                &format!("  127.0.0.1  {host}   (en este equipo)"),
+                &TextoCli::LineaHostsLocal(host.to_string()).texto(idioma),
             );
             match &informe.linea_hosts {
                 Some(linea) => salida::linea(
                     &mut stdout,
-                    &format!("  {linea}   (en el resto de equipos de la LAN)"),
+                    &TextoCli::LineaHostsLan(linea.to_string()).texto(idioma),
                 ),
-                None => salida::linea(
-                    &mut stdout,
-                    "  (no se pudo determinar la IP de este equipo en la LAN)",
-                ),
+                None => salida::linea(&mut stdout, &TextoCli::SinIpLan.texto(idioma)),
             }
             if let Some(comando) = &informe.comando_git_cliente {
                 salida::linea(&mut stdout, "");
-                salida::linea(&mut stdout, "Para que git confíe en el certificado:");
+                salida::linea(&mut stdout, &TextoCli::GitConfiaEnCertificado.texto(idioma));
                 salida::linea(&mut stdout, &format!("  {comando}"));
             }
             if let Some(regla) = &informe.regla_cortafuegos_sugerida {
                 salida::linea(&mut stdout, "");
-                salida::linea(&mut stdout, "Regla de cortafuegos sugerida:");
+                salida::linea(&mut stdout, &TextoCli::ReglaCortafuegos.texto(idioma));
                 salida::linea(&mut stdout, &format!("  {regla}"));
             }
         }
         None => {
             salida::linea(
                 &mut stdout,
-                &format!("Acceso LAN inactivo para «{login}»: Gitea solo escucha en 127.0.0.1."),
+                &TextoCli::AccesoLanInactivo(login.to_string()).texto(idioma),
             );
-            salida::linea(&mut stdout, &format!("URL local: {}", informe.url_publica));
+            salida::linea(
+                &mut stdout,
+                &TextoCli::UrlLocal(informe.url_publica.to_string()).texto(idioma),
+            );
             if let Some(huella) = &informe.huella_sha256 {
                 salida::linea(
                     &mut stdout,
-                    &format!(
-                        "Hay un certificado conservado de una activación anterior (huella {huella})."
-                    ),
+                    &TextoCli::CertificadoConservado(huella.to_string()).texto(idioma),
                 );
             }
         }
@@ -515,7 +497,7 @@ fn mostrar_informe_lan(login: &Nombre, informe: &InformeLan) {
 /// `rpassword`); si no lo es, una sola línea de stdin (para `cuenta add ... < fichero`).
 fn leer_token(idioma: Idioma) -> Result<Secreto, String> {
     if std::io::stdin().is_terminal() {
-        rpassword::prompt_password("Token de lectura de GitHub: ")
+        rpassword::prompt_password(TextoCli::PedirToken.texto(idioma))
             .map(Secreto::nuevo)
             .map_err(|error| error.to_string())
     } else {
@@ -525,19 +507,20 @@ fn leer_token(idioma: Idioma) -> Result<Secreto, String> {
             .map_err(|error| error.to_string())?;
         let valor = linea.trim_end_matches(['\n', '\r']);
         if valor.is_empty() {
-            Err(match idioma {
-                Idioma::Es => "no se ha recibido ningún token por la entrada estándar".to_string(),
-                Idioma::En => "no token was received on standard input".to_string(),
-            })
+            Err(TextoCli::TokenNoRecibido.texto(idioma))
         } else {
             Ok(Secreto::nuevo(valor.to_string()))
         }
     }
 }
 
-fn confirmar(pregunta: &str) -> bool {
+fn confirmar(pregunta: &str, idioma: Idioma) -> bool {
     let mut stdout = std::io::stdout().lock();
-    let _ = write!(stdout, "{pregunta} [s/N]: ");
+    let _ = write!(
+        stdout,
+        "{pregunta} {}: ",
+        TextoCli::SufijoSiNo.texto(idioma)
+    );
     let _ = stdout.flush();
     drop(stdout);
     let mut linea = String::new();
@@ -550,9 +533,13 @@ fn confirmar(pregunta: &str) -> bool {
     )
 }
 
-fn confirmar_login(login: &str) -> bool {
+fn confirmar_login(login: &str, idioma: Idioma) -> bool {
     let mut stdout = std::io::stdout().lock();
-    let _ = write!(stdout, "Escribe «{login}» para confirmar la baja: ");
+    let _ = write!(
+        stdout,
+        "{}",
+        TextoCli::ConfirmarBaja(login.to_string()).texto(idioma)
+    );
     let _ = stdout.flush();
     drop(stdout);
     let mut linea = String::new();
@@ -562,15 +549,18 @@ fn confirmar_login(login: &str) -> bool {
     linea.trim() == login
 }
 
-fn mostrar_previsualizacion(previsualizacion: &Previsualizacion) {
+fn mostrar_previsualizacion(previsualizacion: &Previsualizacion, idioma: Idioma) {
     let mut stdout = std::io::stdout().lock();
     salida::linea(
         &mut stdout,
-        &format!("Identidad confirmada: {}", previsualizacion.login),
+        &TextoCli::IdentidadConfirmada(previsualizacion.login.to_string()).texto(idioma),
     );
     match previsualizacion.caduca_token {
-        Some(fecha) => salida::linea(&mut stdout, &format!("El token caduca: {fecha}")),
-        None => salida::linea(&mut stdout, "El token no informa de fecha de caducidad."),
+        Some(fecha) => salida::linea(
+            &mut stdout,
+            &TextoCli::TokenCaduca(fecha.to_string()).texto(idioma),
+        ),
+        None => salida::linea(&mut stdout, &TextoCli::TokenSinCaducidad.texto(idioma)),
     }
     if !previsualizacion.organizaciones_disponibles.is_empty() {
         let organizaciones: Vec<&str> = previsualizacion
@@ -580,7 +570,7 @@ fn mostrar_previsualizacion(previsualizacion: &Previsualizacion) {
             .collect();
         salida::linea(
             &mut stdout,
-            &format!("Organizaciones disponibles: {}", organizaciones.join(", ")),
+            &TextoCli::OrganizacionesDisponibles(organizaciones.join(", ")).texto(idioma),
         );
     }
 
@@ -596,14 +586,22 @@ fn mostrar_previsualizacion(previsualizacion: &Previsualizacion) {
             vec![dueno, repos.to_string(), format!("{tamano_kb} KB")]
         })
         .collect();
-    salida::tabla(&mut stdout, &["dueño", "repos", "tamaño"], &filas);
+    salida::tabla(
+        &mut stdout,
+        &[
+            &TextoCli::ColDueno.texto(idioma),
+            &TextoCli::ColRepos.texto(idioma),
+            &TextoCli::ColTamano.texto(idioma),
+        ],
+        &filas,
+    );
     salida::linea(
         &mut stdout,
-        &format!(
-            "Total: {} repo(s), {} KB",
-            previsualizacion.repos_a_clonar.len(),
-            previsualizacion.tamano_total_kb
-        ),
+        &TextoCli::TotalRepos(
+            previsualizacion.repos_a_clonar.len().to_string(),
+            previsualizacion.tamano_total_kb.to_string(),
+        )
+        .texto(idioma),
     );
 }
 

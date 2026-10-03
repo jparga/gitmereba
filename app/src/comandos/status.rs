@@ -11,6 +11,7 @@ use gitmereba_core::secretos::LlaveroDelSistema;
 
 use crate::cli::StatusArgs;
 use crate::salida;
+use crate::textos_cli::TextoCli;
 
 use super::CODIGO_ERROR_DE_USO;
 
@@ -19,19 +20,13 @@ pub async fn ejecutar(args: StatusArgs, rutas: &Rutas) -> u8 {
     let llavero = match LlaveroDelSistema::nuevo() {
         Ok(llavero) => llavero,
         Err(error) => {
-            return fallo(&format!(
-                "no se pudo acceder al llavero: {}",
-                error.localizar(idioma)
-            ));
+            return fallo(&TextoCli::LlaveroInaccesible(error.localizar(idioma)).texto(idioma));
         }
     };
     let almacen = match abrir_almacen(rutas) {
         Ok(almacen) => almacen,
         Err(error) => {
-            return fallo(&format!(
-                "no se pudo abrir el almacén: {}",
-                error.localizar(idioma)
-            ));
+            return fallo(&TextoCli::AlmacenInaccesible(error.localizar(idioma)).texto(idioma));
         }
     };
     let contexto = Contexto::nuevo(rutas, &llavero, &almacen);
@@ -41,7 +36,9 @@ pub async fn ejecutar(args: StatusArgs, rutas: &Rutas) -> u8 {
             let login = match Nombre::nuevo(login.as_str()) {
                 Ok(login) => login,
                 Err(error) => {
-                    return fallo_uso(&format!("login inválido: {}", error.localizar(idioma)));
+                    return fallo_uso(
+                        &TextoCli::LoginInvalido(error.localizar(idioma)).texto(idioma),
+                    );
                 }
             };
             match cuentas::estado(&contexto, &login).await {
@@ -66,28 +63,28 @@ pub async fn ejecutar(args: StatusArgs, rutas: &Rutas) -> u8 {
     };
 
     if args.json {
-        imprimir_json(&estados)
+        imprimir_json(&estados, idioma)
     } else {
-        imprimir_tabla(&estados);
+        imprimir_tabla(&estados, idioma);
         0
     }
 }
 
-fn imprimir_json(estados: &[EstadoCuenta]) -> u8 {
+fn imprimir_json(estados: &[EstadoCuenta], idioma: Idioma) -> u8 {
     match serde_json::to_string_pretty(estados) {
         Ok(json) => {
             let mut stdout = std::io::stdout().lock();
             salida::linea(&mut stdout, &json);
             0
         }
-        Err(error) => fallo(&format!("no se pudo serializar el estado: {error}")),
+        Err(error) => fallo(&TextoCli::NoSerializaEstado(error.to_string()).texto(idioma)),
     }
 }
 
-fn imprimir_tabla(estados: &[EstadoCuenta]) {
+fn imprimir_tabla(estados: &[EstadoCuenta], idioma: Idioma) {
     let mut stdout = std::io::stdout().lock();
     if estados.is_empty() {
-        salida::linea(&mut stdout, "No hay ninguna cuenta dada de alta.");
+        salida::linea(&mut stdout, &TextoCli::NoHayCuentas.texto(idioma));
         return;
     }
     let filas: Vec<Vec<String>> = estados
@@ -95,7 +92,7 @@ fn imprimir_tabla(estados: &[EstadoCuenta]) {
         .map(|estado| {
             vec![
                 estado.cuenta.login.to_string(),
-                si_no(estado.gitea_responde),
+                si_no(estado.gitea_responde, idioma),
                 estado
                     .version_gitea
                     .clone()
@@ -107,30 +104,30 @@ fn imprimir_tabla(estados: &[EstadoCuenta]) {
                     .ultima_sincronizacion
                     .as_ref()
                     .map(|s| s.fin.to_string())
-                    .unwrap_or_else(|| "nunca".to_string()),
+                    .unwrap_or_else(|| TextoCli::Nunca.texto(idioma)),
             ]
         })
         .collect();
     salida::tabla(
         &mut stdout,
         &[
-            "login",
-            "gitea",
-            "versión",
-            "repos",
-            "fallos",
-            "huérfanos",
-            "última sync",
+            &TextoCli::ColLogin.texto(idioma),
+            &TextoCli::ColGitea.texto(idioma),
+            &TextoCli::ColVersion.texto(idioma),
+            &TextoCli::ColRepos.texto(idioma),
+            &TextoCli::ColFallos.texto(idioma),
+            &TextoCli::ColHuerfanos.texto(idioma),
+            &TextoCli::ColUltimaSync.texto(idioma),
         ],
         &filas,
     );
 }
 
-fn si_no(valor: bool) -> String {
+fn si_no(valor: bool, idioma: Idioma) -> String {
     if valor {
-        "sí".to_string()
+        TextoCli::Si.texto(idioma)
     } else {
-        "no".to_string()
+        TextoCli::No.texto(idioma)
     }
 }
 
