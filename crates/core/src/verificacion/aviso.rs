@@ -5,6 +5,7 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
+use crate::idioma::TextoExterno;
 use crate::modelo::IdRepo;
 
 /// Algo que conviene que el usuario sepa, sin ser el fallo de un mirror concreto.
@@ -23,7 +24,7 @@ pub enum Aviso {
     RutaFueraDeRepositorios { id: IdRepo },
     /// Fallo puntual al consultar el SHA remoto de un repo (que no sea agotar el límite
     /// de peticiones): no se marca un fallo del mirror por ello.
-    ErrorRepo { id: IdRepo, mensaje: String },
+    ErrorRepo { id: IdRepo, mensaje: TextoExterno },
     /// No se ha podido consultar la identidad del token en uso, así que no se ha podido
     /// comprobar su caducidad en esta pasada.
     ErrorIdentidad { mensaje: String },
@@ -44,7 +45,7 @@ impl fmt::Display for Aviso {
                 f,
                 "la ruta local de «{id}» queda fuera de la carpeta de repositorios; no se ha tocado"
             ),
-            Aviso::ErrorRepo { id, mensaje } => write!(f, "«{id}»: {mensaje}"),
+            Aviso::ErrorRepo { id, mensaje } => write!(f, "«{id}»: {}", mensaje.es),
             Aviso::ErrorIdentidad { mensaje } => write!(
                 f,
                 "no se ha podido consultar la identidad del token: {mensaje}"
@@ -56,6 +57,27 @@ impl fmt::Display for Aviso {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::modelo::Nombre;
+
+    #[test]
+    fn un_error_repo_guardado_antes_con_cadena_se_sigue_leyendo() {
+        let antiguo =
+            r#"{"error-repo":{"id":{"dueno":"jparga","nombre":"r1"},"mensaje":"sin red"}}"#;
+        let aviso: Aviso = serde_json::from_str(antiguo).expect("formato antiguo");
+        assert_eq!(
+            aviso,
+            Aviso::ErrorRepo {
+                id: IdRepo {
+                    dueno: Nombre::nuevo("jparga").expect("nombre"),
+                    nombre: Nombre::nuevo("r1").expect("nombre"),
+                },
+                mensaje: TextoExterno::literal("sin red"),
+            }
+        );
+        let nuevo = serde_json::to_string(&aviso).expect("serializar");
+        let leido: Aviso = serde_json::from_str(&nuevo).expect("formato nuevo");
+        assert_eq!(leido, aviso);
+    }
 
     #[test]
     fn los_avisos_se_muestran_en_espanol() {

@@ -33,6 +33,52 @@ impl Idioma {
     }
 }
 
+/// Texto de un error que se muestra dentro de otro mensaje (`doctor`, avisos). El informe se construye una
+/// sola vez y se muestra después en el idioma elegido, así que el error se guarda ya
+/// localizado en ambos idiomas.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct TextoExterno {
+    pub es: String,
+    pub en: String,
+}
+
+impl TextoExterno {
+    /// Error de `core`: su texto en cada idioma.
+    pub fn de(error: &impl Localizable) -> Self {
+        Self {
+            es: error.localizar(Idioma::Es),
+            en: error.localizar(Idioma::En),
+        }
+    }
+
+    /// Error de una librería ajena (io, sistema) que no se puede traducir: el mismo texto
+    /// en ambos idiomas.
+    pub fn literal(texto: impl Into<String>) -> Self {
+        let texto = texto.into();
+        Self {
+            es: texto.clone(),
+            en: texto,
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for TextoExterno {
+    /// Acepta también una cadena suelta (formato anterior a los idiomas, que se guardó
+    /// en español): se lee como el mismo texto en ambos idiomas.
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Formato {
+            Par { es: String, en: String },
+            Cadena(String),
+        }
+        Ok(match Formato::deserialize(deserializer)? {
+            Formato::Par { es, en } => Self { es, en },
+            Formato::Cadena(texto) => Self::literal(texto),
+        })
+    }
+}
+
 /// De dónde sale el idioma resuelto (lo muestra `doctor`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OrigenIdioma {
@@ -293,10 +339,13 @@ mod tests {
                 TextoAviso::FalloRepositorio {
                     login: s("jparga"),
                     repo: s("jparga/r1"),
-                    detalle: Some(s("sin red")),
+                    detalle: Some(TextoExterno {
+                        es: s("sin red"),
+                        en: s("no network"),
+                    }),
                 },
                 "El repositorio «jparga/r1» tiene un fallo en «jparga». Detalle: sin red.",
-                "Repository “jparga/r1” has a failure in “jparga”. Detail: sin red.",
+                "Repository “jparga/r1” has a failure in “jparga”. Detail: no network.",
             ),
             (
                 TextoAviso::FallosAgregados {

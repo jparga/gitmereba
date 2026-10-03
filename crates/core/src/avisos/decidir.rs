@@ -7,6 +7,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use time::{Duration, OffsetDateTime};
 
 use crate::cuentas::CambioDetectado;
+use crate::idioma::TextoExterno;
 use crate::modelo::{EstadoRepo, IdRepo};
 use crate::snapshots::CambioDestructivo;
 use crate::sync::{AlertaPlan, ResultadoAccion};
@@ -287,7 +288,7 @@ fn procesar_tipo(
 /// ([`AvisoVerificacion::ErrorRepo`]), para enriquecer la notificación individual de un
 /// fallo (nunca la agregada). Es la vía por la que texto libre y no fiable llega al
 /// cuerpo de una notificación, así que siempre pasa por [`sanear_texto`] al usarse.
-fn mensajes_error_por_repo(entrada: &EntradaAvisos) -> BTreeMap<IdRepo, String> {
+fn mensajes_error_por_repo(entrada: &EntradaAvisos) -> BTreeMap<IdRepo, TextoExterno> {
     let mut mapa = BTreeMap::new();
     if let Some(verificacion) = &entrada.verificacion {
         for aviso in &verificacion.avisos {
@@ -302,13 +303,16 @@ fn mensajes_error_por_repo(entrada: &EntradaAvisos) -> BTreeMap<IdRepo, String> 
 fn notificacion_fallo(
     login: &str,
     id: &IdRepo,
-    mensajes: &BTreeMap<IdRepo, String>,
+    mensajes: &BTreeMap<IdRepo, TextoExterno>,
 ) -> Notificacion {
     let id_saneado = sanear_texto(&id.to_string(), LONGITUD_MAXIMA_FRAGMENTO);
     let detalle = mensajes
         .get(id)
-        .map(|mensaje| sanear_texto(mensaje, LONGITUD_MAXIMA_FRAGMENTO))
-        .filter(|detalle| !detalle.is_empty());
+        .map(|mensaje| TextoExterno {
+            es: sanear_texto(&mensaje.es, LONGITUD_MAXIMA_FRAGMENTO),
+            en: sanear_texto(&mensaje.en, LONGITUD_MAXIMA_FRAGMENTO),
+        })
+        .filter(|detalle| !detalle.es.is_empty() || !detalle.en.is_empty());
     Notificacion {
         titulo: TextoAviso::TituloFalloSincronizacion,
         cuerpo: TextoAviso::FalloRepositorio {
@@ -1087,7 +1091,7 @@ mod tests {
         let mut verificacion = con_fallo_verificacion(verificacion_vacia("jparga"), "repo1");
         verificacion.avisos.push(AvisoVerificacion::ErrorRepo {
             id: id("jparga", "repo1"),
-            mensaje: "<script>inyección</script>&\ncon salto de línea".to_string(),
+            mensaje: TextoExterno::literal("<script>inyección</script>&\ncon salto de línea"),
         });
         let entrada = entrada_avisos("jparga", None, Some(verificacion), false);
 
@@ -1102,6 +1106,27 @@ mod tests {
             assert!(!cuerpo.contains('\n'), "{idioma:?}: {cuerpo}");
             assert!(cuerpo.contains("inyección"), "{idioma:?}: {cuerpo}");
         }
+    }
+
+    #[test]
+    fn el_detalle_del_fallo_se_muestra_en_cada_idioma_sin_mezclar() {
+        let mut verificacion = con_fallo_verificacion(verificacion_vacia("jparga"), "repo1");
+        verificacion.avisos.push(AvisoVerificacion::ErrorRepo {
+            id: id("jparga", "repo1"),
+            mensaje: TextoExterno {
+                es: "sin red".to_string(),
+                en: "no network".to_string(),
+            },
+        });
+        let entrada = entrada_avisos("jparga", None, Some(verificacion), false);
+        let (notificaciones, _estado) = decidir(&entrada, &EstadoAvisos::default(), AHORA);
+
+        let en = notificaciones[0].cuerpo.localizar(Idioma::En);
+        assert!(en.contains("Detail: no network."), "{en}");
+        assert!(!en.contains("sin red"), "{en}");
+        let es = notificaciones[0].cuerpo.localizar(Idioma::Es);
+        assert!(es.contains("Detalle: sin red."), "{es}");
+        assert!(!es.contains("no network"), "{es}");
     }
 
     #[test]

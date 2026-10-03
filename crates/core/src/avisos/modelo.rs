@@ -1,7 +1,7 @@
 //! Tipos públicos del módulo `avisos`: qué se decide notificar y con qué se decide.
 
 use crate::cuentas::InformeProteccion;
-use crate::idioma::{Idioma, Localizable};
+use crate::idioma::{Idioma, Localizable, TextoExterno};
 use crate::modelo::Nombre;
 use crate::sync::InformeSync;
 use crate::verificacion::InformeVerificacion;
@@ -79,7 +79,7 @@ pub enum TextoAviso {
     FalloRepositorio {
         login: String,
         repo: String,
-        detalle: Option<String>,
+        detalle: Option<TextoExterno>,
     },
     FallosAgregados {
         login: String,

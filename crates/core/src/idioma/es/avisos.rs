@@ -20,7 +20,7 @@ pub(crate) fn texto(t: &TextoAviso) -> String {
         } => {
             let mut cuerpo = format!("El repositorio «{repo}» tiene un fallo en «{login}».");
             if let Some(detalle) = detalle {
-                cuerpo.push_str(&format!(" Detalle: {detalle}."));
+                cuerpo.push_str(&format!(" Detalle: {}.", detalle.es));
             }
             cuerpo
         }
