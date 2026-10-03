@@ -119,6 +119,7 @@ pub enum TextoDoctor {
     ConsejoRevisarPermisosAMano,
     AppIniNoExiste,
     ConsejoRepetirAltaProvision,
+    ConsejoRevisarFicheroLegible,
     ConsejoFicheroLegible,
     AppIniSinLanCorrecto,
     AppIniMotivos {

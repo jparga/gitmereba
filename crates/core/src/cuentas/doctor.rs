@@ -517,7 +517,7 @@ fn comprobar_app_ini(cuenta: &Cuenta, rutas_cuenta: &RutasCuenta) -> Comprobacio
                 TextoDoctor::ErrorSistema {
                     error: error.to_string(),
                 },
-                TextoDoctor::ConsejoFicheroLegible,
+                TextoDoctor::ConsejoRevisarFicheroLegible,
             );
         }
     };

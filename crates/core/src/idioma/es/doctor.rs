@@ -142,6 +142,7 @@ pub(crate) fn texto(t: &TextoDoctor) -> String {
         TextoDoctor::ConsejoRepetirAltaProvision => {
             "repite el alta: la provisión no llegó a completarse".to_string()
         }
+        TextoDoctor::ConsejoRevisarFicheroLegible => "revisa que el fichero es legible".to_string(),
         TextoDoctor::ConsejoFicheroLegible => "comprueba que el fichero es legible".to_string(),
         TextoDoctor::AppIniSinLanCorrecto => "0600 y HTTP_ADDR = 127.0.0.1".to_string(),
         TextoDoctor::AppIniMotivos { motivos } => {
