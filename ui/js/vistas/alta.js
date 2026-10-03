@@ -1,7 +1,7 @@
 import { api, suscribirProgresoAlta } from '../api.js';
 import { h, pintar, tamanoLegible, avisar } from '../dom.js';
 import { navegar } from '../router.js';
-import { t, formatoFecha } from '../i18n.js';
+import { t, formatoSoloFecha } from '../i18n.js';
 
 // Nunca se guarda un token en una variable de módulo ni de estado: cada paso lo lee
 // directamente del <input> en el momento de invocar el comando correspondiente, y lo
@@ -160,7 +160,7 @@ async function pasoDos(contenedor, datosUno, avanzar, retroceder) {
     h('div', { clase: 'card pad mb' }, h('h3', null, dueno), h('ul', { clase: 'section' }, repos.map((r) => filaRepoPreview(r, seleccionados)))),
   );
 
-  const caduca = previa.identidad.caduca ? formatoFecha(new Date(previa.identidad.caduca)) : t('alta.previa.sin_caducidad');
+  const caduca = previa.identidad.caduca ? formatoSoloFecha(new Date(previa.identidad.caduca)) : t('alta.previa.sin_caducidad');
 
   let entradaToken;
   const mensaje = h('p', { clase: 'hint' });
