@@ -1668,7 +1668,7 @@ dependencies = [
 
 [[package]]
 name = "gitmereba"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "clap",
  "gitmereba-core",
@@ -1687,7 +1687,7 @@ dependencies = [
 
 [[package]]
 name = "gitmereba-core"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "directories",
  "getrandom 0.4.3",

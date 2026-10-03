@@ -6,6 +6,13 @@ Todos los cambios relevantes de gitmereba. Formato basado en
 
 ## [Sin publicar]
 
+## [0.7.1] - 2026-10-03
+
+### Corregido
+
+- Los paquetes `.deb` y `.tar.gz` incluyen el manual en inglés (`manual.en.md`); el `.tar.gz` incluye también el español,
+  y `instalar-local.sh` los instala en `~/.local/share/doc/gitmereba/`.
+
 ## [0.7.0] - 2026-10-03
 
 ### Añadido
@@ -46,6 +53,7 @@ Primera versión pública, bajo la licencia GPL-3.0-or-later.
   ejecutan en la CI.
 - **Paquete `.deb`** y `.tar.gz`, con `SHA256SUMS` y atestación de procedencia.
 
-[Sin publicar]: https://github.com/jparga/gitmereba/compare/v0.7.0...HEAD
+[Sin publicar]: https://github.com/jparga/gitmereba/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/jparga/gitmereba/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/jparga/gitmereba/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/jparga/gitmereba/releases/tag/v0.6.0
