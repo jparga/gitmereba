@@ -16,7 +16,7 @@ const MODO_FICHERO: u32 = 0o600;
 /// el mismo directorio (con los permisos ya fijados a 0600) y luego con `rename`, que
 /// en el mismo sistema de ficheros es una operación atómica. Crea los directorios que
 /// falten con permisos 0700, fijados al crearlos.
-pub(super) fn escribir_privado(ruta: &Path, contenido: &[u8]) -> Result<(), ErrorConfig> {
+pub(crate) fn escribir_privado(ruta: &Path, contenido: &[u8]) -> Result<(), ErrorConfig> {
     let directorio = ruta.parent().ok_or_else(|| {
         ErrorConfig::Io(format!("«{}» no tiene directorio padre", ruta.display()))
     })?;
