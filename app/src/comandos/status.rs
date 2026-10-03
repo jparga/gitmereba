@@ -5,6 +5,7 @@ use std::io::Write;
 use super::abrir_almacen;
 use gitmereba_core::config::Rutas;
 use gitmereba_core::cuentas::{self, Contexto, EstadoCuenta};
+use gitmereba_core::idioma::{Idioma, Localizable, idioma_actual};
 use gitmereba_core::modelo::Nombre;
 use gitmereba_core::secretos::LlaveroDelSistema;
 
@@ -14,13 +15,24 @@ use crate::salida;
 use super::CODIGO_ERROR_DE_USO;
 
 pub async fn ejecutar(args: StatusArgs, rutas: &Rutas) -> u8 {
+    let idioma = idioma_actual(rutas);
     let llavero = match LlaveroDelSistema::nuevo() {
         Ok(llavero) => llavero,
-        Err(error) => return fallo(&format!("no se pudo acceder al llavero: {error}")),
+        Err(error) => {
+            return fallo(&format!(
+                "no se pudo acceder al llavero: {}",
+                error.localizar(idioma)
+            ));
+        }
     };
     let almacen = match abrir_almacen(rutas) {
         Ok(almacen) => almacen,
-        Err(error) => return fallo(&format!("no se pudo abrir el almacén: {error}")),
+        Err(error) => {
+            return fallo(&format!(
+                "no se pudo abrir el almacén: {}",
+                error.localizar(idioma)
+            ));
+        }
     };
     let contexto = Contexto::nuevo(rutas, &llavero, &almacen);
 
@@ -28,23 +40,25 @@ pub async fn ejecutar(args: StatusArgs, rutas: &Rutas) -> u8 {
         Some(login) => {
             let login = match Nombre::nuevo(login.as_str()) {
                 Ok(login) => login,
-                Err(error) => return fallo_uso(&format!("login inválido: {error}")),
+                Err(error) => {
+                    return fallo_uso(&format!("login inválido: {}", error.localizar(idioma)));
+                }
             };
             match cuentas::estado(&contexto, &login).await {
                 Ok(estado) => vec![estado],
-                Err(error) => return emitir_error(&error),
+                Err(error) => return emitir_error(idioma, &error),
             }
         }
         None => {
             let cuentas_dadas_de_alta = match cuentas::listar(&contexto) {
                 Ok(cuentas) => cuentas,
-                Err(error) => return emitir_error(&error),
+                Err(error) => return emitir_error(idioma, &error),
             };
             let mut estados = Vec::with_capacity(cuentas_dadas_de_alta.len());
             for cuenta in cuentas_dadas_de_alta {
                 match cuentas::estado(&contexto, &cuenta.login).await {
                     Ok(estado) => estados.push(estado),
-                    Err(error) => return emitir_error(&error),
+                    Err(error) => return emitir_error(idioma, &error),
                 }
             }
             estados
@@ -132,8 +146,8 @@ fn fallo_uso(mensaje: &str) -> u8 {
     CODIGO_ERROR_DE_USO
 }
 
-fn emitir_error(error: &gitmereba_core::cuentas::ErrorCuentas) -> u8 {
+fn emitir_error(idioma: Idioma, error: &gitmereba_core::cuentas::ErrorCuentas) -> u8 {
     let mut stderr = std::io::stderr().lock();
-    salida::error(&mut stderr, error);
+    salida::error(&mut stderr, error, idioma);
     1
 }

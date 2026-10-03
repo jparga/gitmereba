@@ -11,6 +11,7 @@ use std::path::Path;
 use clap::CommandFactory;
 use gitmereba_core::almacen::{Almacen, ErrorAlmacen};
 use gitmereba_core::config::Rutas;
+use gitmereba_core::idioma::{Localizable, Preferencia, resolver};
 
 use crate::cli::{Cli, Comando};
 use crate::salida;
@@ -70,7 +71,9 @@ pub(crate) fn construir_rutas(datos: Option<&Path>) -> Rutas {
             Ok(rutas) => rutas,
             Err(error) => {
                 let mut stderr = std::io::stderr().lock();
-                let _ = writeln!(stderr, "error: {error}");
+                // Sin HOME no hay fichero de preferencias: el idioma sale solo del entorno.
+                let idioma = resolver(Preferencia::Auto, &|nombre| std::env::var(nombre).ok());
+                let _ = writeln!(stderr, "error: {}", error.localizar(idioma));
                 // No hay HOME: no hay una raíz razonable. Se usa el directorio actual
                 // para que los comandos sigan pudiendo ejecutarse (y fallar con un
                 // mensaje claro) en vez de entrar en pánico aquí.

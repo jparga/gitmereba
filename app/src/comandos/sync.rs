@@ -6,7 +6,7 @@ use super::abrir_almacen;
 use gitmereba_core::avisos::{self, EntradaAvisos, Notificador, NotificadorEscritorio};
 use gitmereba_core::config::{self, Rutas};
 use gitmereba_core::cuentas::{self, Contexto, ErrorCuentas};
-use gitmereba_core::idioma::idioma_actual;
+use gitmereba_core::idioma::{Idioma, Localizable, idioma_actual};
 use gitmereba_core::modelo::{IdRepo, Nombre};
 use gitmereba_core::secretos::LlaveroDelSistema;
 use gitmereba_core::sync::OpcionesSync;
@@ -19,18 +19,29 @@ use super::CODIGO_ERROR_DE_USO;
 use super::CODIGO_FALLOS_PARCIALES;
 
 pub async fn ejecutar(args: SyncArgs, rutas: &Rutas) -> u8 {
-    let logins = match logins_a_sincronizar(&args, rutas) {
+    let idioma = idioma_actual(rutas);
+    let logins = match logins_a_sincronizar(&args, rutas, idioma) {
         Ok(logins) => logins,
         Err(codigo) => return codigo,
     };
 
     let llavero = match LlaveroDelSistema::nuevo() {
         Ok(llavero) => llavero,
-        Err(error) => return fallo(&format!("no se pudo acceder al llavero: {error}")),
+        Err(error) => {
+            return fallo(&format!(
+                "no se pudo acceder al llavero: {}",
+                error.localizar(idioma)
+            ));
+        }
     };
     let almacen = match abrir_almacen(rutas) {
         Ok(almacen) => almacen,
-        Err(error) => return fallo(&format!("no se pudo abrir el almacén: {error}")),
+        Err(error) => {
+            return fallo(&format!(
+                "no se pudo abrir el almacén: {}",
+                error.localizar(idioma)
+            ));
+        }
     };
     let contexto = Contexto::nuevo(rutas, &llavero, &almacen);
 
@@ -42,7 +53,7 @@ pub async fn ejecutar(args: SyncArgs, rutas: &Rutas) -> u8 {
     let opciones_verificacion = OpcionesVerificacion::default();
 
     if let Some(texto) = &args.repo
-        && let Err(codigo) = forzar_repo(&contexto, &logins, texto).await
+        && let Err(codigo) = forzar_repo(idioma, &contexto, &logins, texto).await
     {
         return codigo;
     }
@@ -75,7 +86,7 @@ pub async fn ejecutar(args: SyncArgs, rutas: &Rutas) -> u8 {
             // Gitea parado también pasa por `avisos::decidir` (así lo exige el aviso de sincronización):
             // no ha habido ni sincronización ni verificación, pero conviene avisar.
             Err(ErrorCuentas::GiteaParado(login_parado)) => {
-                emitir_error(&ErrorCuentas::GiteaParado(login_parado.clone()));
+                emitir_error(idioma, &ErrorCuentas::GiteaParado(login_parado.clone()));
                 hubo_error = true;
                 Some(EntradaAvisos {
                     login: login_parado,
@@ -86,7 +97,7 @@ pub async fn ejecutar(args: SyncArgs, rutas: &Rutas) -> u8 {
                 })
             }
             Err(error) => {
-                emitir_error(&error);
+                emitir_error(idioma, &error);
                 hubo_error = true;
                 None
             }
@@ -164,6 +175,7 @@ async fn procesar_avisos(rutas: &Rutas, entrada: &EntradaAvisos, sin_avisos: boo
 /// `--repo dueño/nombre`: sincroniza ese mirror o, si nunca llegó a clonarse, lo descarta
 /// para que la pasada que viene a continuación lo cree de nuevo.
 async fn forzar_repo(
+    idioma: Idioma,
     contexto: &Contexto<'_, LlaveroDelSistema>,
     logins: &[Nombre],
     texto: &str,
@@ -188,8 +200,12 @@ async fn forzar_repo(
         .and_then(|indice| indice.cuentas.get(login.as_str()).cloned())
         .map(|entrada| config::RutasCuenta::nueva(entrada.carpeta))
         .ok_or_else(|| fallo(&format!("no existe la cuenta «{login}»")))?;
-    let cuenta = config::leer_cuenta(&rutas_cuenta)
-        .map_err(|error| fallo(&format!("no se pudo leer la cuenta: {error}")))?;
+    let cuenta = config::leer_cuenta(&rutas_cuenta).map_err(|error| {
+        fallo(&format!(
+            "no se pudo leer la cuenta: {}",
+            error.localizar(idioma)
+        ))
+    })?;
 
     match cuentas::sincronizar_repo(contexto, &cuenta, &id).await {
         Ok(cuentas::SincronizacionDeRepo::Sincronizado) => {
@@ -207,13 +223,13 @@ async fn forzar_repo(
             Ok(())
         }
         Err(error) => {
-            emitir_error(&error);
+            emitir_error(idioma, &error);
             Err(1)
         }
     }
 }
 
-fn logins_a_sincronizar(args: &SyncArgs, rutas: &Rutas) -> Result<Vec<Nombre>, u8> {
+fn logins_a_sincronizar(args: &SyncArgs, rutas: &Rutas, idioma: Idioma) -> Result<Vec<Nombre>, u8> {
     match (&args.login, args.todas) {
         (Some(_), true) => {
             fallo("indica un login o --todas, no las dos cosas");
@@ -226,7 +242,7 @@ fn logins_a_sincronizar(args: &SyncArgs, rutas: &Rutas) -> Result<Vec<Nombre>, u
         (Some(login), false) => match Nombre::nuevo(login.as_str()) {
             Ok(nombre) => Ok(vec![nombre]),
             Err(error) => {
-                fallo(&format!("login inválido: {error}"));
+                fallo(&format!("login inválido: {}", error.localizar(idioma)));
                 Err(CODIGO_ERROR_DE_USO)
             }
         },
@@ -237,7 +253,10 @@ fn logins_a_sincronizar(args: &SyncArgs, rutas: &Rutas) -> Result<Vec<Nombre>, u
                 .filter_map(|login| Nombre::nuevo(login.as_str()).ok())
                 .collect()),
             Err(error) => {
-                fallo(&format!("no se pudo leer el índice de cuentas: {error}"));
+                fallo(&format!(
+                    "no se pudo leer el índice de cuentas: {}",
+                    error.localizar(idioma)
+                ));
                 Err(1)
             }
         },
@@ -250,7 +269,7 @@ fn fallo(mensaje: &str) -> u8 {
     1
 }
 
-fn emitir_error(error: &ErrorCuentas) {
+fn emitir_error(idioma: Idioma, error: &ErrorCuentas) {
     let mut stderr = std::io::stderr().lock();
-    salida::error(&mut stderr, error);
+    salida::error(&mut stderr, error, idioma);
 }
