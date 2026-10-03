@@ -3,6 +3,7 @@
 
 import { api } from '../api.js';
 import { h, pintar, avisar, ocupar } from '../dom.js';
+import { t } from '../i18n.js';
 
 const NOMBRE_USUARIO_VALIDO = /^[A-Za-z0-9_.-]{1,39}$/;
 const PASSWORD_OCULTA = '••••••••••••';
@@ -16,9 +17,9 @@ function nombreUsuarioValido(nombre) {
 async function copiar(texto, que) {
   try {
     await navigator.clipboard.writeText(texto);
-    avisar(`${que} copiada al portapapeles.`, 'success');
+    avisar(t('lan.copiada', { que }), 'success');
   } catch {
-    avisar('No se pudo copiar automáticamente: usa «Mostrar» y cópiala a mano.', 'warning');
+    avisar(t('lan.copia.error'), 'warning');
   }
 }
 
@@ -39,13 +40,13 @@ function copiable(etiqueta, texto) {
           onClick: async () => {
             try {
               await navigator.clipboard.writeText(texto);
-              avisar('Copiado.', 'success');
+              avisar(t('lan.copiado'), 'success');
             } catch {
-              avisar('No se pudo copiar automáticamente.', 'warning');
+              avisar(t('lan.copiar.error'), 'warning');
             }
           },
         },
-        'Copiar',
+        t('lan.copiar'),
       ),
     ),
   );
@@ -58,16 +59,16 @@ function dialogoDesactivar(login, alConfirmar) {
     h(
       'div',
       { clase: 'dialogo-cuerpo' },
-      h('h2', { id: 'titulo-lan-desactivar' }, 'Dejar de compartir en la red local'),
+      h('h2', { id: 'titulo-lan-desactivar' }, t('lan.desactivar.titulo')),
       h(
         'p',
         null,
-        `El Gitea de «${login}» volverá a escuchar solo en este equipo y se reiniciará. Los demás equipos dejarán de poder clonar o enviar cambios.`,
+        t('lan.desactivar.texto', { login }),
       ),
       h(
         'div',
         { clase: 'dialogo-botones' },
-        h('button', { type: 'button', clase: 'btn ghost', onClick: () => dialogo.close() }, 'Cancelar'),
+        h('button', { type: 'button', clase: 'btn ghost', onClick: () => dialogo.close() }, t('lan.cancelar')),
         h(
           'button',
           {
@@ -78,7 +79,7 @@ function dialogoDesactivar(login, alConfirmar) {
               await alConfirmar();
             },
           },
-          'Dejar de compartir',
+          t('lan.desactivar.confirmar'),
         ),
       ),
     ),
@@ -94,27 +95,27 @@ function vistaActiva(contenedor, login, informe, recargar) {
     h(
       'div',
       { clase: 'row between' },
-      h('h2', null, 'Acceso desde la red local'),
-      h('span', { clase: 'badge purple' }, 'Compartido por HTTPS'),
+      h('h2', null, t('lan.titulo')),
+      h('span', { clase: 'badge purple' }, t('lan.activa.badge')),
     ),
-    h('p', null, 'Dirección para los equipos de la red: ', h('span', { clase: 'mono' }, informe.url_publica)),
+    h('p', null, t('lan.activa.direccion'), h('span', { clase: 'mono' }, informe.url_publica)),
     copiable(
       informe.ip_lan
-        ? '1. En cada equipo, añade esta línea a /etc/hosts'
-        : '1. En cada equipo, añade esta línea a /etc/hosts (sustituye la IP: no se pudo detectar la de este equipo)',
+        ? t('lan.paso.hosts')
+        : t('lan.paso.hosts_sin_ip'),
       informe.linea_hosts,
     ),
-    copiable('En este mismo equipo, la línea es', `127.0.0.1  ${informe.host}`),
+    copiable(t('lan.paso.hosts_local'), `127.0.0.1  ${informe.host}`),
     copiable(
-      `2. Copia el certificado (${informe.ruta_certificado}) a cada equipo y haz que git confíe en él solo para esta dirección`,
+      t('lan.paso.certificado', { ruta: informe.ruta_certificado }),
       informe.comando_git_cliente,
     ),
-    copiable('Huella SHA-256 del certificado: compruébala en el otro equipo antes de confiar', informe.huella_sha256),
-    copiable('3. Recomendado: limita el puerto a tu red en el cortafuegos de este equipo', informe.regla_cortafuegos_sugerida),
+    copiable(t('lan.paso.huella'), informe.huella_sha256),
+    copiable(t('lan.paso.cortafuegos'), informe.regla_cortafuegos_sugerida),
     h(
       'p',
       { clase: 'hint' },
-      'Mientras está compartido, Gitea escucha en todas las interfaces de red de este equipo, también en VPN o Wi-Fi ajenas. Desactívalo fuera de tu red.',
+      t('lan.activa.aviso'),
     ),
     h(
       'div',
@@ -128,14 +129,14 @@ function vistaActiva(contenedor, login, informe, recargar) {
             dialogoDesactivar(login, async () => {
               try {
                 await api.lanDesactivar(login);
-                avisar('El Gitea de la cuenta vuelve a ser solo local.', 'success');
+                avisar(t('lan.desactivado'), 'success');
               } catch (error) {
-                avisar(`No se pudo desactivar: ${error?.mensaje ?? error}`, 'error');
+                avisar(t('lan.desactivar.error', { mensaje: error?.mensaje ?? error }), 'error');
               }
               await recargar();
             }).showModal(),
         },
-        'Dejar de compartir…',
+        t('lan.dejar_compartir'),
       ),
     ),
   );
@@ -146,18 +147,14 @@ function vistaInactiva(contenedor, login, hostSugerido, recargar) {
   const mensaje = h('p', { clase: 'hint' });
   pintar(
     contenedor,
-    h('div', { clase: 'row between' }, h('h2', null, 'Acceso desde la red local'), h('span', { clase: 'badge' }, 'Solo este equipo')),
-    h(
-      'p',
-      null,
-      'Permite que otros equipos de tu red clonen y envíen cambios a este Gitea. Siempre por HTTPS, con un certificado propio de esta cuenta; el registro sigue cerrado y los repositorios, privados.',
-    ),
+    h('div', { clase: 'row between' }, h('h2', null, t('lan.titulo')), h('span', { clase: 'badge' }, t('lan.inactiva.badge'))),
+    h('p', null, t('lan.inactiva.texto')),
     h(
       'div',
       { clase: 'field' },
-      h('label', { for: 'campo-host-lan' }, 'Nombre en la red (debe terminar en .internal)'),
+      h('label', { for: 'campo-host-lan' }, t('lan.host.etiqueta')),
       campoHost,
-      h('p', { clase: 'hint' }, 'Cada equipo lo resuelve con una línea en su /etc/hosts; no hace falta DNS.'),
+      h('p', { clase: 'hint' }, t('lan.host.ayuda')),
     ),
     mensaje,
     h(
@@ -171,18 +168,18 @@ function vistaInactiva(contenedor, login, hostSugerido, recargar) {
           onClick: async (evento) => {
             const boton = evento.currentTarget;
             boton.disabled = true;
-            mensaje.textContent = 'Generando el certificado y reiniciando Gitea…';
+            mensaje.textContent = t('lan.activando');
             try {
               await api.lanActivar(login, campoHost.value.trim() || null);
-              avisar('Compartido en la red local por HTTPS.', 'success');
+              avisar(t('lan.activado'), 'success');
               await recargar();
             } catch (error) {
-              mensaje.textContent = `Error: ${error?.mensaje ?? error}`;
+              mensaje.textContent = t('lan.error', { mensaje: error?.mensaje ?? error });
               boton.disabled = false;
             }
           },
         },
-        'Compartir en la red local',
+        t('lan.compartir'),
       ),
     ),
   );
@@ -195,16 +192,16 @@ function dialogoEliminarUsuario(login, nombre, alConfirmar) {
     h(
       'div',
       { clase: 'dialogo-cuerpo' },
-      h('h2', { id: 'titulo-lan-usuario-eliminar' }, `Eliminar el usuario «${nombre}»`),
+      h('h2', { id: 'titulo-lan-usuario-eliminar' }, t('lan.usuario.eliminar.titulo', { nombre })),
       h(
         'p',
         null,
-        `«${nombre}» dejará de poder entrar en el Gitea de «${login}». Si vuelve a necesitar acceso, habrá que crearlo de nuevo con una contraseña distinta.`,
+        t('lan.usuario.eliminar.texto', { nombre, login }),
       ),
       h(
         'div',
         { clase: 'dialogo-botones' },
-        h('button', { type: 'button', clase: 'btn ghost', onClick: () => dialogo.close() }, 'Cancelar'),
+        h('button', { type: 'button', clase: 'btn ghost', onClick: () => dialogo.close() }, t('lan.cancelar')),
         h(
           'button',
           {
@@ -215,7 +212,7 @@ function dialogoEliminarUsuario(login, nombre, alConfirmar) {
               await alConfirmar();
             },
           },
-          'Eliminar',
+          t('lan.eliminar'),
         ),
       ),
     ),
@@ -239,10 +236,10 @@ function dialogoUsuarioCreado(nombre, password) {
       onClick: () => {
         const visible = campoPassword.textContent !== PASSWORD_OCULTA;
         campoPassword.textContent = visible ? PASSWORD_OCULTA : secreto;
-        botonMostrar.textContent = visible ? 'Mostrar' : 'Ocultar';
+        botonMostrar.textContent = visible ? t('lan.mostrar') : t('lan.ocultar');
       },
     },
-    'Mostrar',
+    t('lan.mostrar'),
   );
 
   const dialogo = h(
@@ -251,31 +248,31 @@ function dialogoUsuarioCreado(nombre, password) {
     h(
       'div',
       { clase: 'dialogo-cuerpo' },
-      h('h2', { id: 'titulo-lan-usuario-creado' }, `Usuario «${nombre}» creado`),
+      h('h2', { id: 'titulo-lan-usuario-creado' }, t('lan.creado.titulo', { nombre })),
       h(
         'div',
         { clase: 'credencial' },
-        h('span', { clase: 'hint' }, 'Usuario'),
+        h('span', { clase: 'hint' }, t('lan.usuario')),
         h('code', { clase: 'pre' }, nombre),
-        h('button', { type: 'button', clase: 'btn ghost sm', onClick: () => copiar(nombre, 'Usuario') }, 'Copiar'),
-        h('span', { clase: 'hint' }, 'Contraseña'),
+        h('button', { type: 'button', clase: 'btn ghost sm', onClick: () => copiar(nombre, t('lan.usuario')) }, t('lan.copiar')),
+        h('span', { clase: 'hint' }, t('lan.password')),
         campoPassword,
         h(
           'div',
           { clase: 'row' },
           botonMostrar,
-          h('button', { type: 'button', clase: 'btn ghost sm', onClick: () => copiar(secreto, 'Contraseña') }, 'Copiar'),
+          h('button', { type: 'button', clase: 'btn ghost sm', onClick: () => copiar(secreto, t('lan.password')) }, t('lan.copiar')),
         ),
       ),
       h(
         'p',
         { clase: 'aviso-secreto' },
-        'Esta contraseña no se volverá a mostrar: cópiala ahora y pásasela a la persona por un canal seguro (no por correo ni chat sin cifrar).',
+        t('lan.creado.aviso'),
       ),
       h(
         'div',
         { clase: 'dialogo-botones' },
-        h('button', { type: 'button', clase: 'btn', onClick: () => dialogo.close() }, 'Cerrar'),
+        h('button', { type: 'button', clase: 'btn', onClick: () => dialogo.close() }, t('lan.cerrar')),
       ),
     ),
   );
@@ -306,14 +303,14 @@ function filaUsuario(login, nombre, recargar) {
             dialogoEliminarUsuario(login, nombre, async () => {
               try {
                 await api.lanUsuarioEliminar(login, nombre);
-                avisar(`Usuario «${nombre}» eliminado.`, 'success');
+                avisar(t('lan.usuario.eliminado', { nombre }), 'success');
               } catch (error) {
-                avisar(`No se pudo eliminar: ${error?.mensaje ?? error}`, 'error');
+                avisar(t('lan.usuario.eliminar.error', { mensaje: error?.mensaje ?? error }), 'error');
               }
               await recargar();
             }).showModal(),
         },
-        'Eliminar',
+        t('lan.eliminar'),
       ),
     ),
   );
@@ -321,7 +318,7 @@ function filaUsuario(login, nombre, recargar) {
 
 function listaUsuarios(login, usuarios, recargar) {
   if (usuarios.length === 0) {
-    return h('p', { clase: 'hint' }, 'Todavía no hay usuarios: solo el administrador puede entrar.');
+    return h('p', { clase: 'hint' }, t('lan.usuarios.vacio'));
   }
   return h(
     'div',
@@ -329,7 +326,7 @@ function listaUsuarios(login, usuarios, recargar) {
     h(
       'table',
       null,
-      h('thead', null, h('tr', null, h('th', { scope: 'col' }, 'Usuario'), h('th', { scope: 'col' }, 'Acciones'))),
+      h('thead', null, h('tr', null, h('th', { scope: 'col' }, t('lan.col.usuario')), h('th', { scope: 'col' }, t('lan.col.acciones')))),
       h(
         'tbody',
         null,
@@ -352,18 +349,14 @@ function vistaUsuarios(contenedor, login, usuarios, activo, recargar) {
 
   pintar(
     contenedor,
-    h('h2', null, 'Usuarios de la LAN'),
-    h(
-      'p',
-      null,
-      'Cada usuario que crees aquí puede leer todos los repositorios clonados y escribir solo en los de contingencia: es un usuario «restringido» de Gitea, que no ve nada más. Puede cambiar su propia contraseña desde la web de Gitea; si la olvida, elimínalo y créalo de nuevo. gitmereba no guarda estas contraseñas.',
-    ),
+    h('h2', null, t('lan.usuarios.titulo')),
+    h('p', null, t('lan.usuarios.texto')),
     activo
       ? null
       : h(
           'div',
           { clase: 'banner show warn' },
-          h('span', null, 'Los usuarios existen, pero sin el acceso LAN activado nadie de fuera llega a este Gitea.'),
+          h('span', null, t('lan.usuarios.aviso_inactivo')),
         ),
     listaUsuarios(login, usuarios, recargar),
     h(
@@ -374,11 +367,10 @@ function vistaUsuarios(contenedor, login, usuarios, activo, recargar) {
           evento.preventDefault();
           const nombre = campoNombre.value.trim();
           if (!nombreUsuarioValido(nombre)) {
-            mensaje.textContent =
-              'El nombre debe tener entre 1 y 39 caracteres (letras, números, «-», «_» o «.») y no puede ser «gitmereba-admin» ni empezar por «contingencia-».';
+            mensaje.textContent = t('lan.usuario.nombre_invalido');
             return;
           }
-          const liberar = ocupar(botonCrear, 'Creando…');
+          const liberar = ocupar(botonCrear, t('lan.creando'));
           try {
             const creado = await api.lanUsuarioCrear(login, nombre);
             mensaje.textContent = '';
@@ -386,7 +378,7 @@ function vistaUsuarios(contenedor, login, usuarios, activo, recargar) {
             dialogoUsuarioCreado(creado.nombre, creado.password);
             await recargar();
           } catch (error) {
-            mensaje.textContent = `Error: ${error?.mensaje ?? error}`;
+            mensaje.textContent = t('lan.error', { mensaje: error?.mensaje ?? error });
           } finally {
             liberar();
           }
@@ -395,12 +387,12 @@ function vistaUsuarios(contenedor, login, usuarios, activo, recargar) {
       h(
         'div',
         { clase: 'field' },
-        h('label', { for: 'campo-lan-usuario-nuevo' }, 'Nombre de usuario'),
+        h('label', { for: 'campo-lan-usuario-nuevo' }, t('lan.usuario.etiqueta')),
         h(
           'div',
           { clase: 'inline-form' },
           campoNombre,
-          (botonCrear = h('button', { type: 'submit', clase: 'btn' }, 'Crear usuario')),
+          (botonCrear = h('button', { type: 'submit', clase: 'btn' }, t('lan.crear'))),
         ),
       ),
       mensaje,
@@ -425,12 +417,16 @@ export function panelLan(login) {
       } catch (error) {
         pintar(
           tarjetaUsuarios,
-          h('h2', null, 'Usuarios de la LAN'),
-          h('p', { clase: 'hint' }, `No disponible: ${error?.mensaje ?? error}`),
+          h('h2', null, t('lan.usuarios.titulo')),
+          h('p', { clase: 'hint' }, t('lan.no_disponible', { mensaje: error?.mensaje ?? error })),
         );
       }
     } catch (error) {
-      pintar(tarjeta, h('h2', null, 'Acceso desde la red local'), h('p', { clase: 'hint' }, `No disponible: ${error?.mensaje ?? error}`));
+      pintar(
+        tarjeta,
+        h('h2', null, t('lan.titulo')),
+        h('p', { clase: 'hint' }, t('lan.no_disponible', { mensaje: error?.mensaje ?? error })),
+      );
     }
   }
   recargar();
