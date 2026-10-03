@@ -6,6 +6,7 @@ mod dto;
 mod dto_acciones;
 mod error;
 mod estado;
+mod idioma;
 mod lan;
 mod lectura;
 
@@ -21,6 +22,8 @@ pub fn abrir(rutas: Rutas) -> Result<(), tauri::Error> {
         .plugin(tauri_plugin_dialog::init())
         .manage(EstadoApp { rutas })
         .invoke_handler(tauri::generate_handler![
+            idioma::idioma,
+            idioma::fijar_idioma,
             lectura::listar_cuentas,
             lectura::resumen_cuenta,
             lectura::listar_repos,
