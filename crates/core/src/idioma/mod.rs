@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::avisos::TextoAviso;
 use crate::config::Rutas;
+use crate::contingencia::InformeReconciliacion;
 use crate::cuentas::{NombreComprobacion, PasoAlta, TextoDoctor};
 use crate::sync::InformeSync;
 
@@ -117,6 +118,15 @@ impl Localizable for InformeSync {
         match idioma {
             Idioma::Es => es::sync::resumen(self),
             Idioma::En => en::sync::resumen(self),
+        }
+    }
+}
+
+impl Localizable for InformeReconciliacion {
+    fn localizar(&self, idioma: Idioma) -> String {
+        match idioma {
+            Idioma::Es => es::reconciliacion::resumen(self),
+            Idioma::En => en::reconciliacion::resumen(self),
         }
     }
 }
