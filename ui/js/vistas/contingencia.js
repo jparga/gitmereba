@@ -1,5 +1,6 @@
 import { api } from '../api.js';
 import { h, pintar, avisar } from '../dom.js';
+import { t } from '../i18n.js';
 
 function dialogoConfirmarActivacion(repo, onConfirmar) {
   const dialogo = h(
@@ -8,17 +9,12 @@ function dialogoConfirmarActivacion(repo, onConfirmar) {
     h(
       'div',
       { clase: 'dialogo-cuerpo' },
-      h('h2', { id: 'titulo-confirmar-activar' }, 'Activar contingencia'),
-      h(
-        'p',
-        null,
-        `«${repo.id.dueno}/${repo.id.nombre}» pasará a ser un repositorio con escritura `,
-        'en local. El mirror original no se toca y queda en pausa hasta que reconcilies.',
-      ),
+      h('h2', { id: 'titulo-confirmar-activar' }, t('contingencia.activar')),
+      h('p', null, t('contingencia.activar.texto', { repo: `${repo.id.dueno}/${repo.id.nombre}` })),
       h(
         'div',
         { clase: 'dialogo-botones' },
-        h('button', { clase: 'btn ghost', type: 'button', onClick: () => dialogo.close() }, 'Cancelar'),
+        h('button', { clase: 'btn ghost', type: 'button', onClick: () => dialogo.close() }, t('contingencia.cancelar')),
         h(
           'button',
           {
@@ -28,7 +24,7 @@ function dialogoConfirmarActivacion(repo, onConfirmar) {
               await onConfirmar();
             },
           },
-          'Activar contingencia',
+          t('contingencia.activar'),
         ),
       ),
     ),
@@ -47,52 +43,53 @@ function dialogoReconciliar(repo, login, onHecho) {
     h(
       'div',
       { clase: 'dialogo-cuerpo' },
-      h('h2', { id: 'titulo-reconciliar' }, 'Reconciliar con GitHub'),
-      h('p', null, `Se harán push de los commits locales de «${repo.id.dueno}/${repo.id.nombre}» hacia GitHub, sin --force.`),
+      h('h2', { id: 'titulo-reconciliar' }, t('contingencia.reconciliar')),
+      h('p', null, t('contingencia.reconciliar.texto', { repo: `${repo.id.dueno}/${repo.id.nombre}` })),
       h(
         'div',
         { clase: 'field' },
-        h('label', { for: 'token-reconciliar' }, 'Token de escritura'),
+        h('label', { for: 'token-reconciliar' }, t('contingencia.token.etiqueta')),
         (entrada = h('input', {
           id: 'token-reconciliar',
           type: 'password',
           autocomplete: 'off',
           required: true,
         })),
-        h('p', { clase: 'aviso-secreto' }, 'Este token no se guarda: solo se usa para este push.'),
+        h('p', { clase: 'aviso-secreto' }, t('contingencia.token.aviso')),
       ),
       resultado,
       h(
         'div',
         { clase: 'dialogo-botones' },
-        h('button', { clase: 'btn ghost', onClick: () => dialogo.close() }, 'Cerrar'),
+        h('button', { clase: 'btn ghost', onClick: () => dialogo.close() }, t('contingencia.cerrar')),
         h(
           'button',
           {
             clase: 'btn accent',
             onClick: async (evento) => {
+              const boton = evento.currentTarget;
               const token = entrada.value;
               entrada.value = '';
               if (!token) {
-                resultado.textContent = 'Escribe un token de escritura.';
+                resultado.textContent = t('contingencia.token.falta');
                 return;
               }
-              evento.currentTarget.disabled = true;
+              boton.disabled = true;
               try {
                 const respuesta = await api.reconciliar(login, repo.id, token);
                 resultado.textContent =
                   respuesta.resultado === 'ok'
-                    ? `Éxito: ${respuesta.mensaje}`
-                    : `Divergencia detectada, no se ha forzado nada: ${respuesta.mensaje}`;
+                    ? t('contingencia.reconciliar.exito', { mensaje: respuesta.mensaje })
+                    : t('contingencia.reconciliar.divergencia', { mensaje: respuesta.mensaje });
                 if (respuesta.resultado === 'ok') await onHecho();
               } catch (error) {
-                resultado.textContent = `Error: ${error?.mensaje ?? error}`;
+                resultado.textContent = t('contingencia.reconciliar.error', { mensaje: error?.mensaje ?? error });
               } finally {
-                evento.currentTarget.disabled = false;
+                boton.disabled = false;
               }
             },
           },
-          'Reconciliar',
+          t('contingencia.reconciliar.boton'),
         ),
       ),
     ),
@@ -121,16 +118,16 @@ function filaCandidata(login, repo, recargar) {
             const dialogo = dialogoConfirmarActivacion(repo, async () => {
               try {
                 await api.activarContingencia(login, repo.id);
-                avisar(`Contingencia activada en ${repo.id.dueno}/${repo.id.nombre}.`, 'success');
+                avisar(t('contingencia.activada', { repo: `${repo.id.dueno}/${repo.id.nombre}` }), 'success');
                 await recargar();
               } catch (error) {
-                avisar(`No se pudo activar la contingencia: ${error?.mensaje ?? error}`, 'error');
+                avisar(t('contingencia.activar.error', { mensaje: error?.mensaje ?? error }), 'error');
               }
             });
             dialogo.showModal();
           },
         },
-        'Activar contingencia',
+        t('contingencia.activar'),
       ),
     ),
   );
@@ -140,7 +137,7 @@ function filaActiva(login, entrada, recargar) {
   return h(
     'li',
     { clase: 'card pad mb' },
-    h('div', { clase: 'row between' }, h('span', { clase: 'mono' }, `${entrada.id.dueno}/${entrada.id.nombre}`), h('span', { clase: 'badge purple' }, 'En contingencia')),
+    h('div', { clase: 'row between' }, h('span', { clase: 'mono' }, `${entrada.id.dueno}/${entrada.id.nombre}`), h('span', { clase: 'badge purple' }, t('contingencia.en_contingencia'))),
     h(
       'div',
       { clase: 'copiable mt' },
@@ -152,16 +149,16 @@ function filaActiva(login, entrada, recargar) {
           onClick: async () => {
             try {
               await navigator.clipboard.writeText(entrada.comando);
-              avisar('Comando copiado.', 'success');
+              avisar(t('contingencia.comando.copiado'), 'success');
             } catch {
-              avisar('No se pudo copiar automáticamente.', 'warning');
+              avisar(t('contingencia.comando.no_copiado'), 'warning');
             }
           },
         },
-        'Copiar',
+        t('contingencia.copiar'),
       ),
     ),
-    h('p', { clase: 'hint mt' }, 'Commits de más por rama:'),
+    h('p', { clase: 'hint mt' }, t('contingencia.commits_de_mas')),
     h(
       'div',
       { clase: 'commits-de-mas' },
@@ -173,7 +170,7 @@ function filaActiva(login, entrada, recargar) {
         clase: 'btn mt',
         onClick: () => dialogoReconciliar({ id: entrada.id }, login, recargar).showModal(),
       },
-      'Reconciliar con GitHub',
+      t('contingencia.reconciliar'),
     ),
   );
 }
@@ -181,7 +178,7 @@ function filaActiva(login, entrada, recargar) {
 export async function render(contenedor) {
   const cuentas = await api.listarCuentas();
   if (cuentas.length === 0) {
-    pintar(contenedor, h('div', { clase: 'card pad vacio' }, h('h2', null, 'No hay cuentas todavía'), h('p', null, 'Añade una cuenta desde Resumen.')));
+    pintar(contenedor, h('div', { clase: 'card pad vacio' }, h('h2', null, t('repos.vacio.titulo')), h('p', null, t('contingencia.vacio.texto'))));
     return;
   }
 
@@ -198,11 +195,11 @@ export async function render(contenedor) {
       zonaCandidatas,
       candidatas.length
         ? candidatas.map((r) => filaCandidata(estado.login, r, recargar))
-        : h('p', { clase: 'hint' }, 'No hay repositorios disponibles para activar.'),
+        : h('p', { clase: 'hint' }, t('contingencia.sin_candidatas')),
     );
     pintar(
       zonaActivas,
-      activas.length ? activas.map((a) => filaActiva(estado.login, a, recargar)) : h('p', { clase: 'hint' }, 'Ningún repositorio está en contingencia ahora mismo.'),
+      activas.length ? activas.map((a) => filaActiva(estado.login, a, recargar)) : h('p', { clase: 'hint' }, t('contingencia.sin_activas')),
     );
   }
 
@@ -220,16 +217,16 @@ export async function render(contenedor) {
 
   pintar(
     contenedor,
-    h('h1', null, 'Contingencia'),
+    h('h1', null, t('nav.contingencia')),
     h(
       'p',
       { clase: 'lead' },
-      'La contingencia crea una copia de trabajo con escritura de un repositorio en tu Gitea local, para que puedas seguir trabajando aunque GitHub no esté disponible. El mirror original se conserva intacto y en pausa. Cuando GitHub vuelva, reconcilia para enviar tus commits; nunca se fuerza nada.',
+      t('contingencia.lead'),
     ),
-    h('div', { clase: 'field mb' }, h('label', { for: 'sel-cuenta-contingencia' }, 'Cuenta'), selectorCuenta),
-    h('h2', null, 'Disponibles para activar'),
+    h('div', { clase: 'field mb' }, h('label', { for: 'sel-cuenta-contingencia' }, t('repos.campo.cuenta')), selectorCuenta),
+    h('h2', null, t('contingencia.disponibles')),
     zonaCandidatas,
-    h('h2', null, 'En contingencia'),
+    h('h2', null, t('contingencia.en_contingencia')),
     zonaActivas,
   );
 
