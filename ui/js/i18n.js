@@ -21,11 +21,14 @@ const OPCIONES_FECHA = {
   minute: '2-digit',
 };
 
+const OPCIONES_SOLO_FECHA = { day: '2-digit', month: '2-digit', year: 'numeric' };
+
 let codigoActual = IDIOMA_POR_DEFECTO;
 let diccionario = DICCIONARIOS[IDIOMA_POR_DEFECTO];
 let reglasPlural;
 let formatoRelativoIntl;
 let formatoFechaIntl;
+let formatoSoloFechaIntl;
 let formatoNumeroIntl;
 
 function configurar(codigo) {
@@ -35,6 +38,7 @@ function configurar(codigo) {
   reglasPlural = new Intl.PluralRules(locale);
   formatoRelativoIntl = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
   formatoFechaIntl = new Intl.DateTimeFormat(locale, OPCIONES_FECHA);
+  formatoSoloFechaIntl = new Intl.DateTimeFormat(locale, OPCIONES_SOLO_FECHA);
   formatoNumeroIntl = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
 }
 
@@ -91,6 +95,11 @@ export function formatoRelativo(valor, unidad) {
 /** Fecha y hora cortas en el locale activo. `fecha` es un `Date` válido. */
 export function formatoFecha(fecha) {
   return formatoFechaIntl.format(fecha);
+}
+
+/** Fecha sin hora en el locale activo. `fecha` es un `Date` válido. */
+export function formatoSoloFecha(fecha) {
+  return formatoSoloFechaIntl.format(fecha);
 }
 
 /** Número con hasta un decimal en el locale activo. */
