@@ -1,6 +1,6 @@
 //! Preferencia de idioma guardada en `preferencias.toml`.
 
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::{ErrorKind, Read};
 
 use serde::{Deserialize, Serialize};
@@ -49,7 +49,16 @@ struct FicheroPreferencias {
 
 /// Lee la preferencia guardada. Nunca falla: cualquier problema es `NoValida`.
 pub fn leer_preferencia(rutas: &Rutas) -> LecturaPreferencia {
-    let fichero = match File::open(rutas.fichero_preferencias()) {
+    let ruta = rutas.fichero_preferencias();
+    // Sin abrir antes: `File::open` se queda bloqueado sobre un FIFO. `metadata` sigue
+    // enlaces simbólicos, que se aceptan si apuntan a un fichero regular.
+    match fs::metadata(&ruta) {
+        Ok(meta) if meta.is_file() => {}
+        Ok(_) => return LecturaPreferencia::NoValida,
+        Err(error) if error.kind() == ErrorKind::NotFound => return LecturaPreferencia::Ausente,
+        Err(_) => return LecturaPreferencia::NoValida,
+    }
+    let fichero = match File::open(&ruta) {
         Ok(fichero) => fichero,
         Err(error) if error.kind() == ErrorKind::NotFound => return LecturaPreferencia::Ausente,
         Err(_) => return LecturaPreferencia::NoValida,
@@ -130,6 +139,34 @@ mod tests {
             assert_eq!(lectura, LecturaPreferencia::NoValida, "{contenido:.30}");
             assert_eq!(lectura.preferencia(), Preferencia::Auto);
         }
+    }
+
+    #[test]
+    fn directorio_en_la_ruta_es_no_valida() {
+        let (_dir, rutas) = rutas();
+        fs::create_dir_all(rutas.fichero_preferencias()).expect("crear directorio");
+        assert_eq!(leer_preferencia(&rutas), LecturaPreferencia::NoValida);
+    }
+
+    #[test]
+    fn fifo_en_la_ruta_no_cuelga() {
+        let (_dir, rutas) = rutas();
+        fs::create_dir_all(rutas.directorio_config()).expect("crear directorio");
+        let creado = std::process::Command::new("mkfifo")
+            .arg(rutas.fichero_preferencias())
+            .status();
+        if !matches!(creado, Ok(estado) if estado.success()) {
+            eprintln!("mkfifo no disponible: prueba omitida");
+            return;
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(leer_preferencia(&rutas));
+        });
+        let lectura = rx
+            .recv_timeout(std::time::Duration::from_secs(1))
+            .expect("la lectura se ha quedado bloqueada");
+        assert_eq!(lectura, LecturaPreferencia::NoValida);
     }
 
     #[test]
