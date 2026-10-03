@@ -9,25 +9,20 @@ use gitmereba_core::idioma::{Localizable, idioma_actual};
 use gitmereba_core::secretos::LlaveroDelSistema;
 
 use crate::salida;
+use crate::textos_cli::TextoCli;
 
 pub async fn ejecutar(rutas: &Rutas) -> u8 {
     let idioma = idioma_actual(rutas);
     let llavero = match LlaveroDelSistema::nuevo() {
         Ok(llavero) => llavero,
         Err(error) => {
-            return fallo(&format!(
-                "no se pudo acceder al llavero: {}",
-                error.localizar(idioma)
-            ));
+            return fallo(&TextoCli::LlaveroInaccesible(error.localizar(idioma)).texto(idioma));
         }
     };
     let almacen = match abrir_almacen(rutas) {
         Ok(almacen) => almacen,
         Err(error) => {
-            return fallo(&format!(
-                "no se pudo abrir el almacén: {}",
-                error.localizar(idioma)
-            ));
+            return fallo(&TextoCli::AlmacenInaccesible(error.localizar(idioma)).texto(idioma));
         }
     };
     let contexto = Contexto::nuevo(rutas, &llavero, &almacen);
@@ -37,10 +32,11 @@ pub async fn ejecutar(rutas: &Rutas) -> u8 {
     let mut stdout = std::io::stdout().lock();
     for comprobacion in &informe.comprobaciones {
         let marca = match comprobacion.nivel {
-            NivelComprobacion::Ok => "[ok]  ",
-            NivelComprobacion::Aviso => "[aviso]",
-            NivelComprobacion::Fallo => "[fallo]",
-        };
+            NivelComprobacion::Ok => TextoCli::MarcaOk,
+            NivelComprobacion::Aviso => TextoCli::MarcaAviso,
+            NivelComprobacion::Fallo => TextoCli::MarcaFallo,
+        }
+        .texto(idioma);
         salida::linea(
             &mut stdout,
             &format!(
@@ -52,7 +48,10 @@ pub async fn ejecutar(rutas: &Rutas) -> u8 {
         if let Some(consejo) = &comprobacion.consejo {
             salida::linea(
                 &mut stdout,
-                &format!("        consejo: {}", consejo.localizar(idioma)),
+                &format!(
+                    "        {}",
+                    TextoCli::Consejo(consejo.localizar(idioma)).texto(idioma)
+                ),
             );
         }
     }
