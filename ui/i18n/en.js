@@ -298,4 +298,6 @@ export default {
   'ajustes.vacio.boton': 'Add account',
   'ajustes.cuenta': 'Account',
   'ajustes.titulo': 'Settings',
+  'ayuda.titulo': 'How does this screen work?',
+  'ayuda.pie': 'Press F1 to open or close this help. The full manual is in docs/manual.en.md.',
 };

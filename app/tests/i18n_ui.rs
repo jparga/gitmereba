@@ -7,9 +7,9 @@ use std::path::{Path, PathBuf};
 
 /// Vistas y ficheros de `ui/js/` que aún tienen textos en español sueltos. Se van
 /// vaciando a medida que cada vista se migra a `t()`; la lista vacía es el criterio de
-/// cierre. Un fichero de esta lista que ya está limpio hace fallar el test: hay que
-/// quitarlo.
-const PENDIENTES: &[&str] = &["ayuda.js"];
+/// cierre y ya está vacía: todo texto de la ventana pasa por `t()` o por la ayuda. Un
+/// fichero de esta lista que ya está limpio hace fallar el test: hay que quitarlo.
+const PENDIENTES: &[&str] = &[];
 
 /// Nunca se revisan: `mock.js` son datos de ejemplo para previsualizar en un navegador y
 /// no forman parte de la ventana real.
@@ -528,5 +528,163 @@ fn el_analizador_de_diccionarios_rechaza_lo_que_no_cumple_el_formato() {
         let texto = format!("export default {{\n  'ok.k': 'v',\n  {mala}\n}};\n");
         let error = claves_de(&texto).expect_err(mala);
         assert!(error.starts_with("línea 3"), "{error}");
+    }
+}
+
+// ---------- Ayuda integrada ----------
+
+/// Contenido de `ui/i18n/ayuda.<idioma>.js`: vistas en orden con su introducción y sus
+/// puntos. Formato (una cadena por línea, comillas simples, `\'` para una comilla):
+/// `  vista: {`, `    intro: '…',`, `    puntos: [`, `      '…',`, `    ],`, `  },`.
+type Ayuda = Vec<(String, String, Vec<String>)>;
+
+fn cadena_de(texto: &str, n: usize) -> Result<String, String> {
+    let interior = texto
+        .strip_prefix('\'')
+        .and_then(|r| r.strip_suffix("',"))
+        .ok_or_else(|| format!("línea {n}: se esperaba una cadena `'…',`: {texto}"))?;
+    let mut salida = String::new();
+    let mut chars = interior.chars();
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' => match chars.next() {
+                Some('\'') => salida.push('\''),
+                _ => return Err(format!("línea {n}: escape no admitido: {texto}")),
+            },
+            '\'' => return Err(format!("línea {n}: comilla sin escapar: {texto}")),
+            c => salida.push(c),
+        }
+    }
+    Ok(salida)
+}
+
+fn ayuda_de(texto: &str) -> Result<Ayuda, String> {
+    let mut vistas: Ayuda = Vec::new();
+    let mut dentro = false;
+    let mut en_puntos = false;
+    for (i, linea) in texto.lines().enumerate() {
+        let n = i + 1;
+        let t = linea.trim();
+        if !dentro {
+            dentro = t.starts_with("export default {");
+            continue;
+        }
+        if t.is_empty() || t.starts_with("//") || t == "};" {
+            continue;
+        }
+        if en_puntos {
+            if t == "]," {
+                en_puntos = false;
+            } else {
+                let punto = cadena_de(t, n)?;
+                vistas.last_mut().ok_or("punto sin vista")?.2.push(punto);
+            }
+        } else if let Some(nombre) = t.strip_suffix(": {") {
+            vistas.push((nombre.to_string(), String::new(), Vec::new()));
+        } else if let Some(intro) = t.strip_prefix("intro: ") {
+            vistas.last_mut().ok_or("intro sin vista")?.1 = cadena_de(intro, n)?;
+        } else if t == "puntos: [" {
+            en_puntos = true;
+        } else if t != "}," {
+            return Err(format!("línea {n}: no cumple el formato de la ayuda: {t}"));
+        }
+    }
+    if !dentro {
+        return Err("falta `export default {`".to_string());
+    }
+    Ok(vistas)
+}
+
+fn ayuda(idioma: &str) -> Ayuda {
+    let ruta = ui().join(format!("i18n/ayuda.{idioma}.js"));
+    ayuda_de(&leer(&ruta)).unwrap_or_else(|e| panic!("{}: {e}", ruta.display()))
+}
+
+/// Vistas con ayuda: las rutas del router (cada una pinta su ayuda bajo el título).
+fn vistas_con_ayuda() -> Vec<String> {
+    leer(&ui().join("js/router.js"))
+        .lines()
+        .filter_map(|l| l.strip_prefix("  ")?.split_once(": () => import("))
+        .map(|(nombre, _)| nombre.to_string())
+        .collect()
+}
+
+#[test]
+fn las_ayudas_tienen_las_mismas_vistas_y_puntos_y_cubren_todas_las_vistas() {
+    let es = ayuda("es");
+    let en = ayuda("en");
+    let nombres = |a: &Ayuda| a.iter().map(|v| v.0.clone()).collect::<Vec<_>>();
+    assert_eq!(
+        nombres(&es),
+        nombres(&en),
+        "las vistas difieren entre idiomas"
+    );
+    let mut esperadas = vistas_con_ayuda();
+    assert!(
+        !esperadas.is_empty(),
+        "no se encontraron rutas en router.js"
+    );
+    let mut halladas = nombres(&es);
+    esperadas.sort();
+    halladas.sort();
+    assert_eq!(
+        halladas, esperadas,
+        "cada vista del router debe tener ayuda"
+    );
+    for (a, b) in es.iter().zip(&en) {
+        assert!(
+            !a.1.is_empty() && !b.1.is_empty(),
+            "{}: falta la introducción",
+            a.0
+        );
+        assert!(!a.2.is_empty(), "{}: sin puntos", a.0);
+        assert_eq!(a.2.len(), b.2.len(), "{}: distinto número de puntos", a.0);
+    }
+}
+
+#[test]
+fn la_ayuda_inglesa_no_cita_pantallas_inexistentes_ni_el_manual_en_espanol() {
+    let valores_en: BTreeSet<String> = leer(&ui().join("i18n/en.js"))
+        .lines()
+        .filter_map(|l| {
+            let (_, valor) = l.trim().split_once("': '")?;
+            cadena_de(&format!("'{valor}"), 0).ok()
+        })
+        .collect();
+    let mut faltan = Vec::new();
+    for (vista, intro, puntos) in ayuda("en") {
+        for texto in std::iter::once(&intro).chain(&puntos) {
+            if texto.contains("manual.md") {
+                faltan.push(format!("{vista}: cita docs/manual.md en la ayuda inglesa"));
+            }
+            for (i, trozo) in texto.split(['“', '”']).enumerate() {
+                // Los trozos de índice impar van entre “ ”.
+                if i % 2 == 1 && !valores_en.contains(trozo) {
+                    faltan.push(format!("{vista}: “{trozo}” no es un texto de en.js"));
+                }
+            }
+            if texto.contains(['«', '»']) {
+                faltan.push(format!("{vista}: comillas españolas en la ayuda inglesa"));
+            }
+        }
+    }
+    assert!(faltan.is_empty(), "{}", faltan.join("\n"));
+}
+
+#[test]
+fn el_analizador_de_la_ayuda_rechaza_lo_que_no_cumple_el_formato() {
+    let bien = "export default {\n  a: {\n    intro: 'x',\n    puntos: [\n      'it\\'s',\n    ],\n  },\n};\n";
+    let v = ayuda_de(bien).unwrap();
+    assert_eq!(
+        v,
+        [("a".to_string(), "x".to_string(), vec!["it's".to_string()])]
+    );
+    for mala in [
+        "export default {\n  a: {\n    intro: \"x\",\n  },\n};\n",
+        "export default {\n  a: {\n    puntos: [\n      'it's',\n    ],\n  },\n};\n",
+        "export default {\n  a: {\n    otra: 1,\n  },\n};\n",
+        "a: {}\n",
+    ] {
+        assert!(ayuda_de(mala).is_err(), "debía rechazarse: {mala}");
     }
 }
