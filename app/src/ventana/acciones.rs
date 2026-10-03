@@ -11,6 +11,7 @@ use gitmereba_core::cuentas::{
 };
 use gitmereba_core::gitea::ClienteGitea;
 use gitmereba_core::github::{ApiGithub, ClienteGithub};
+use gitmereba_core::idioma::{Idioma, Localizable};
 use gitmereba_core::instancia::{self, NOMBRE_ADMIN_GITEA};
 use gitmereba_core::modelo::{Alcance, IdRepo, Nombre, RepoOrigen};
 use gitmereba_core::secretos::{ClaveSecreto, Llavero, Secreto};
@@ -22,7 +23,7 @@ use super::dto_acciones::{
     RespuestaActualizarGitea, RespuestaCarpeta, RespuestaOk, ResultadoReconciliacion, indice_paso,
     payload_progreso, payload_progreso_error, payload_progreso_sync,
 };
-use super::error::ErrorUi;
+use super::error::{ErrorUi, texto};
 use super::estado::{EstadoApp, Recursos, en_hilo};
 
 /// Intervalo de sincronización con el que se da de alta una cuenta desde la ventana. El
@@ -40,11 +41,12 @@ pub async fn excluir_repo(
 ) -> Result<RespuestaOk, ErrorUi> {
     tracing::debug!(comando = "excluir_repo");
     let rutas = estado.rutas.clone();
-    en_hilo(move || async move {
+    let idioma = estado.idioma();
+    en_hilo(idioma, move || async move {
         let recursos = Recursos::abrir(&rutas)?;
         let (cuenta, rutas_cuenta) = recursos.cuenta(login.as_str())?;
         cuentas::excluir_repo(&recursos.almacen, &rutas_cuenta, &cuenta, &id, excluido)
-            .map_err(|error| error_ui_repo(&error, &id))?;
+            .map_err(|error| error_ui_repo(&error, &id, idioma))?;
         Ok(RespuestaOk::si())
     })
     .await
@@ -59,7 +61,8 @@ pub async fn sincronizar(
 ) -> Result<InformeSincResumen, ErrorUi> {
     tracing::debug!(comando = "sincronizar");
     let rutas = estado.rutas.clone();
-    en_hilo(move || async move {
+    let idioma = estado.idioma();
+    en_hilo(idioma, move || async move {
         let recursos = Recursos::abrir(&rutas)?;
         let (cuenta, _rutas_cuenta) = recursos.cuenta(login.as_str())?;
 
@@ -72,9 +75,9 @@ pub async fn sincronizar(
                 let token_github = token_github_de(&recursos, &cuenta.login)?;
                 let token_gitea = token_gitea_de(&recursos, &cuenta.login)?;
                 let github = ClienteGithub::nuevo(token_github.clone())
-                    .map_err(|error| ErrorUi::de(&error))?;
+                    .map_err(|error| ErrorUi::de(&error, idioma))?;
                 let gitea = cuentas::cliente_gitea_de_cuenta(&cuenta, token_gitea)
-                    .map_err(|error| ErrorUi::de(&error))?;
+                    .map_err(|error| ErrorUi::de(&error, idioma))?;
 
                 // Cuidado: este cierre se ejecuta dentro de `en_hilo` (otro hilo): el
                 // `AppHandle` se clona antes de moverlo, igual que hace `crear_cuenta` con
@@ -102,7 +105,7 @@ pub async fn sincronizar(
                     &al_progresar,
                 )
                 .await
-                .map_err(|error| ErrorUi::de(&error))?;
+                .map_err(|error| ErrorUi::de(&error, idioma))?;
                 let informe = resultado.sync;
                 let resultado_texto = if informe.hay_fallos() {
                     "con-fallos"
@@ -121,7 +124,7 @@ pub async fn sincronizar(
                 let inicio = time::OffsetDateTime::now_utc();
                 let hecho = cuentas::sincronizar_repo(&recursos.contexto(), &cuenta, &id)
                     .await
-                    .map_err(|error| error_ui_repo(&error, &id))?;
+                    .map_err(|error| error_ui_repo(&error, &id, idioma))?;
                 let resumen = match hecho {
                     cuentas::SincronizacionDeRepo::Sincronizado => {
                         format!("Sincronización forzada de «{id}» en «{}».", cuenta.login)
@@ -134,7 +137,7 @@ pub async fn sincronizar(
                             &gitmereba_core::sync::OpcionesSync::default(),
                         )
                         .await
-                        .map_err(|error| ErrorUi::de(&error))?;
+                        .map_err(|error| ErrorUi::de(&error, idioma))?;
                         format!("El clonado inicial de «{id}» había fallado: se vuelve a clonar.")
                     }
                 };
@@ -153,9 +156,13 @@ pub async fn sincronizar(
 }
 
 #[tauri::command]
-pub async fn elegir_carpeta(app: tauri::AppHandle) -> Result<RespuestaCarpeta, ErrorUi> {
+pub async fn elegir_carpeta(
+    app: tauri::AppHandle,
+    estado: State<'_, EstadoApp>,
+) -> Result<RespuestaCarpeta, ErrorUi> {
     tracing::debug!(comando = "elegir_carpeta");
-    en_hilo(move || async move {
+    let idioma = estado.idioma();
+    en_hilo(idioma, move || async move {
         let seleccion = app.dialog().file().blocking_pick_folder();
         let carpeta = seleccion
             .and_then(|ruta| ruta.into_path().ok())
@@ -172,23 +179,26 @@ pub async fn validar_alta(
     token: String,
     carpeta: String,
 ) -> Result<PreviaAlta, ErrorUi> {
+    let idioma = estado.idioma();
     let token = Secreto::nuevo(token);
     tracing::debug!(comando = "validar_alta");
     if token.esta_vacio() {
-        return Err(ErrorUi::token_vacio());
+        return Err(ErrorUi::token_vacio(idioma));
     }
     let rutas = estado.rutas.clone();
-    en_hilo(move || async move {
-        let login = nombre_de(&usuario)?;
+    en_hilo(idioma, move || async move {
+        let login = nombre_de(&usuario, idioma)?;
         let carpeta = PathBuf::from(carpeta);
 
-        let indice = config::leer_indice_cuentas(&rutas).map_err(|error| ErrorUi::de(&error))?;
+        let indice =
+            config::leer_indice_cuentas(&rutas).map_err(|error| ErrorUi::de(&error, idioma))?;
         let puertos: Vec<u16> = indice
             .cuentas
             .values()
             .map(|entrada| entrada.puerto)
             .collect();
-        let puerto = instancia::puerto_libre(&puertos).map_err(|error| ErrorUi::de(&error))?;
+        let puerto =
+            instancia::puerto_libre(&puertos).map_err(|error| ErrorUi::de(&error, idioma))?;
         config::validar_alta(
             &rutas,
             &indice,
@@ -197,12 +207,13 @@ pub async fn validar_alta(
             puerto,
             INTERVALO_MINUTOS_ALTA_POR_DEFECTO,
         )
-        .map_err(|error| ErrorUi::de(&error))?;
+        .map_err(|error| ErrorUi::de(&error, idioma))?;
 
-        let github = ClienteGithub::nuevo(token.clone()).map_err(|error| ErrorUi::de(&error))?;
+        let github =
+            ClienteGithub::nuevo(token.clone()).map_err(|error| ErrorUi::de(&error, idioma))?;
         let descubrimiento = cuentas::descubrir_repos(&github, &login)
             .await
-            .map_err(|error| ErrorUi::de(&error))?;
+            .map_err(|error| ErrorUi::de(&error, idioma))?;
         Ok(PreviaAlta::from(descubrimiento))
     })
     .await
@@ -218,33 +229,35 @@ pub async fn crear_cuenta(
     repos: Vec<String>,
     organizaciones: Vec<String>,
 ) -> Result<RespuestaOk, ErrorUi> {
+    let idioma = estado.idioma();
     let token = Secreto::nuevo(token);
     tracing::debug!(comando = "crear_cuenta");
     if token.esta_vacio() {
-        return Err(ErrorUi::token_vacio());
+        return Err(ErrorUi::token_vacio(idioma));
     }
     let rutas = estado.rutas.clone();
-    en_hilo(move || async move {
-        let login = nombre_de(&usuario)?;
+    en_hilo(idioma, move || async move {
+        let login = nombre_de(&usuario, idioma)?;
         let organizaciones = organizaciones
             .iter()
-            .map(|org| nombre_de(org))
+            .map(|org| nombre_de(org, idioma))
             .collect::<Result<Vec<_>, _>>()?;
         let marcados = repos
             .iter()
-            .map(|texto| parsear_id_repo(texto))
+            .map(|valor| parsear_id_repo(valor, idioma))
             .collect::<Result<Vec<_>, _>>()?;
 
-        let github = ClienteGithub::nuevo(token.clone()).map_err(|error| ErrorUi::de(&error))?;
+        let github =
+            ClienteGithub::nuevo(token.clone()).map_err(|error| ErrorUi::de(&error, idioma))?;
         let mut universo = github
             .repos_de_usuario()
             .await
-            .map_err(|error| ErrorUi::de(&error))?;
+            .map_err(|error| ErrorUi::de(&error, idioma))?;
         for organizacion in &organizaciones {
             let repos_org = github
                 .repos_de_organizacion(organizacion)
                 .await
-                .map_err(|error| ErrorUi::de(&error))?;
+                .map_err(|error| ErrorUi::de(&error, idioma))?;
             universo.extend(repos_org);
         }
         let excluidos = calcular_excluidos(&universo, &marcados);
@@ -297,9 +310,9 @@ pub async fn crear_cuenta(
             Ok(_) => Ok(RespuestaOk::si()),
             Err(error) => {
                 let paso = ultimo_paso.load(std::sync::atomic::Ordering::SeqCst);
-                let payload = payload_progreso_error(paso, error.to_string());
+                let payload = payload_progreso_error(paso, error.localizar(idioma));
                 let _ = app.emit("alta://progreso", payload);
-                Err(ErrorUi::de(&error))
+                Err(ErrorUi::de(&error, idioma))
             }
         }
     })
@@ -314,12 +327,13 @@ pub async fn activar_contingencia(
 ) -> Result<RespuestaOk, ErrorUi> {
     tracing::debug!(comando = "activar_contingencia");
     let rutas = estado.rutas.clone();
-    en_hilo(move || async move {
+    let idioma = estado.idioma();
+    en_hilo(idioma, move || async move {
         let recursos = Recursos::abrir(&rutas)?;
         let (cuenta, rutas_cuenta) = recursos.cuenta(login.as_str())?;
         let token_gitea = token_gitea_de(&recursos, &cuenta.login)?;
         let gitea = cuentas::cliente_gitea_de_cuenta(&cuenta, token_gitea.clone())
-            .map_err(|error| ErrorUi::de(&error))?;
+            .map_err(|error| ErrorUi::de(&error, idioma))?;
         let credencial = CredencialGitea {
             usuario: NOMBRE_ADMIN_GITEA.to_string(),
             token: token_gitea,
@@ -327,12 +341,12 @@ pub async fn activar_contingencia(
 
         let resultado = contingencia::activar(&gitea, &cuenta, &rutas_cuenta, &id, &credencial)
             .await
-            .map_err(|error| error_ui_repo(&error, &id))?;
+            .map_err(|error| error_ui_repo(&error, &id, idioma))?;
 
         recursos
             .almacen
             .guardar_punto_de_partida(&cuenta.login, &id, &resultado.punto_de_partida)
-            .map_err(|error| ErrorUi::de(&error))?;
+            .map_err(|error| ErrorUi::de(&error, idioma))?;
         recursos
             .almacen
             .auditar(
@@ -340,7 +354,7 @@ pub async fn activar_contingencia(
                 "contingencia.activar",
                 &format!("id={id}"),
             )
-            .map_err(|error| ErrorUi::de(&error))?;
+            .map_err(|error| ErrorUi::de(&error, idioma))?;
 
         Ok(RespuestaOk::si())
     })
@@ -354,24 +368,28 @@ pub async fn reconciliar(
     id: IdRepo,
     token: String,
 ) -> Result<ResultadoReconciliacion, ErrorUi> {
+    let idioma = estado.idioma();
     let token = Secreto::nuevo(token);
     tracing::debug!(comando = "reconciliar");
     if token.esta_vacio() {
-        return Err(ErrorUi::token_vacio());
+        return Err(ErrorUi::token_vacio(idioma));
     }
     let rutas = estado.rutas.clone();
-    en_hilo(move || async move {
+    en_hilo(idioma, move || async move {
         let recursos = Recursos::abrir(&rutas)?;
         let (cuenta, rutas_cuenta) = recursos.cuenta(login.as_str())?;
 
         let punto_de_partida = recursos
             .almacen
             .punto_de_partida(&cuenta.login, &id)
-            .map_err(|error| ErrorUi::de(&error))?
+            .map_err(|error| ErrorUi::de(&error, idioma))?
             .ok_or_else(|| {
                 ErrorUi::nuevo(
                     "no_activada",
-                    format!("la contingencia de «{id}» no está activada"),
+                    match idioma {
+                        Idioma::Es => format!("la contingencia de «{id}» no está activada"),
+                        Idioma::En => format!("contingency for «{id}» is not activated"),
+                    },
                 )
             })?;
         let origen = OrigenReconciliacion::Github(format!(
@@ -385,7 +403,7 @@ pub async fn reconciliar(
         let informe =
             contingencia::reconciliar(&rutas_cuenta, &id, &punto_de_partida, &origen, &token)
                 .await
-                .map_err(|error| error_ui_repo(&error, &id))?;
+                .map_err(|error| error_ui_repo(&error, &id, idioma))?;
 
         recursos
             .almacen
@@ -394,7 +412,7 @@ pub async fn reconciliar(
                 "contingencia.reconciliar",
                 &informe.resumen(),
             )
-            .map_err(|error| ErrorUi::de(&error))?;
+            .map_err(|error| ErrorUi::de(&error, idioma))?;
 
         // Reconciliación completa: el mirror original vuelve a sincronizarse y deja de
         // constar como contingencia. El repo hermano no se borra (eso exige confirmación
@@ -402,7 +420,7 @@ pub async fn reconciliar(
         if informe.completa {
             let token_gitea = token_gitea_de(&recursos, &cuenta.login)?;
             let gitea = cuentas::cliente_gitea_de_cuenta(&cuenta, token_gitea)
-                .map_err(|error| ErrorUi::de(&error))?;
+                .map_err(|error| ErrorUi::de(&error, idioma))?;
             contingencia::cerrar(
                 &gitea,
                 &rutas_cuenta,
@@ -412,11 +430,11 @@ pub async fn reconciliar(
                 Some(&informe),
             )
             .await
-            .map_err(|error| error_ui_repo(&error, &id))?;
+            .map_err(|error| error_ui_repo(&error, &id, idioma))?;
             recursos
                 .almacen
                 .borrar_punto_de_partida(&cuenta.login, &id)
-                .map_err(|error| ErrorUi::de(&error))?;
+                .map_err(|error| ErrorUi::de(&error, idioma))?;
             recursos
                 .almacen
                 .auditar(
@@ -424,7 +442,7 @@ pub async fn reconciliar(
                     "contingencia.cerrar",
                     &format!("id={id}"),
                 )
-                .map_err(|error| ErrorUi::de(&error))?;
+                .map_err(|error| ErrorUi::de(&error, idioma))?;
         }
 
         Ok(ResultadoReconciliacion {
@@ -448,14 +466,19 @@ pub async fn ajustes_guardar(
 ) -> Result<RespuestaOk, ErrorUi> {
     tracing::debug!(comando = "ajustes_guardar");
     let rutas = estado.rutas.clone();
-    en_hilo(move || async move {
+    let idioma = estado.idioma();
+    en_hilo(idioma, move || async move {
         let recursos = Recursos::abrir(&rutas)?;
         let (cuenta, rutas_cuenta) = recursos.cuenta(login.as_str())?;
 
         if std::path::Path::new(&ajustes.carpeta) != cuenta.carpeta {
             return Err(ErrorUi::nuevo(
                 "no_implementado",
-                "mover la carpeta de una cuenta aún no está disponible",
+                texto(
+                    idioma,
+                    "mover la carpeta de una cuenta aún no está disponible",
+                    "moving an account's folder is not available yet",
+                ),
             ));
         }
 
@@ -466,16 +489,16 @@ pub async fn ajustes_guardar(
             ajustes.intervalo_minutos,
             ajustes.alcance,
         )
-        .map_err(|error| ErrorUi::de(&error))?;
+        .map_err(|error| ErrorUi::de(&error, idioma))?;
 
         // El intervalo vive también en el timer de systemd: sin esto no cambiaría hasta
         // volver a dar de alta la cuenta.
         let (actualizada, _rutas_cuenta) = recursos.cuenta(login.as_str())?;
         let ejecutable =
-            std::env::current_exe().map_err(|error| ErrorUi::interno(error.to_string()))?;
+            std::env::current_exe().map_err(|error| ErrorUi::externo("interno", None, &error))?;
         cuentas::reparar_temporizador(&recursos.rutas, &actualizada, &ejecutable)
             .await
-            .map_err(|error| ErrorUi::de(&error))?;
+            .map_err(|error| ErrorUi::de(&error, idioma))?;
 
         Ok(RespuestaOk::si())
     })
@@ -488,16 +511,18 @@ pub async fn rotar_token(
     login: String,
     token: String,
 ) -> Result<RespuestaOk, ErrorUi> {
+    let idioma = estado.idioma();
     let token = Secreto::nuevo(token);
     tracing::debug!(comando = "rotar_token");
     if token.esta_vacio() {
-        return Err(ErrorUi::token_vacio());
+        return Err(ErrorUi::token_vacio(idioma));
     }
     let rutas = estado.rutas.clone();
-    en_hilo(move || async move {
+    en_hilo(idioma, move || async move {
         let recursos = Recursos::abrir(&rutas)?;
         let (cuenta, _rutas_cuenta) = recursos.cuenta(login.as_str())?;
-        let github = ClienteGithub::nuevo(token.clone()).map_err(|error| ErrorUi::de(&error))?;
+        let github =
+            ClienteGithub::nuevo(token.clone()).map_err(|error| ErrorUi::de(&error, idioma))?;
 
         cuentas::rotar_token(
             &recursos.llavero,
@@ -507,7 +532,7 @@ pub async fn rotar_token(
             token,
         )
         .await
-        .map_err(|error| ErrorUi::de(&error))?;
+        .map_err(|error| ErrorUi::de(&error, idioma))?;
 
         Ok(RespuestaOk::si())
     })
@@ -521,7 +546,8 @@ pub async fn baja_cuenta(
 ) -> Result<RespuestaOk, ErrorUi> {
     tracing::debug!(comando = "baja_cuenta");
     let rutas = estado.rutas.clone();
-    en_hilo(move || async move {
+    let idioma = estado.idioma();
+    en_hilo(idioma, move || async move {
         let recursos = Recursos::abrir(&rutas)?;
         let (cuenta, _rutas_cuenta) = recursos.cuenta(login.as_str())?;
         let lanzador = LanzadorSystemd;
@@ -529,7 +555,7 @@ pub async fn baja_cuenta(
         // borran desde la ventana (comando `baja_cuenta` del contrato con la interfaz).
         cuentas::baja(&recursos.contexto(), &lanzador, &cuenta.login, false)
             .await
-            .map_err(|error| ErrorUi::de(&error))?;
+            .map_err(|error| ErrorUi::de(&error, idioma))?;
         Ok(RespuestaOk::si())
     })
     .await
@@ -542,7 +568,8 @@ pub async fn abrir_gitea(
 ) -> Result<RespuestaOk, ErrorUi> {
     tracing::debug!(comando = "abrir_gitea");
     let rutas = estado.rutas.clone();
-    en_hilo(move || async move {
+    let idioma = estado.idioma();
+    en_hilo(idioma, move || async move {
         let recursos = Recursos::abrir(&rutas)?;
         let (cuenta, _rutas_cuenta) = recursos.cuenta(login.as_str())?;
         let url = cuenta.url_publica();
@@ -555,7 +582,17 @@ pub async fn abrir_gitea(
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
-            .map_err(|error| ErrorUi::interno(format!("no se pudo abrir el navegador: {error}")))?;
+            .map_err(|error| {
+                ErrorUi::externo(
+                    "interno",
+                    Some(&texto(
+                        idioma,
+                        "no se pudo abrir el navegador",
+                        "could not open the browser",
+                    )),
+                    &error,
+                )
+            })?;
 
         Ok(RespuestaOk::si())
     })
@@ -568,10 +605,11 @@ pub async fn actualizar_gitea(
 ) -> Result<RespuestaActualizarGitea, ErrorUi> {
     tracing::debug!(comando = "actualizar_gitea");
     let rutas = estado.rutas.clone();
-    en_hilo(move || async move {
+    let idioma = estado.idioma();
+    en_hilo(idioma, move || async move {
         instancia::asegurar_binario(&rutas)
             .await
-            .map_err(|error| ErrorUi::de(&error))?;
+            .map_err(|error| ErrorUi::de(&error, idioma))?;
         Ok(RespuestaActualizarGitea {
             ok: true,
             version: instancia::VERSION_GITEA.to_string(),
@@ -594,15 +632,20 @@ pub async fn credenciales_gitea(
 ) -> Result<CredencialesGiteaDto, ErrorUi> {
     tracing::debug!(comando = "credenciales_gitea");
     let rutas = estado.rutas.clone();
-    en_hilo(move || async move {
+    let idioma = estado.idioma();
+    en_hilo(idioma, move || async move {
         let recursos = Recursos::abrir(&rutas)?;
         let (cuenta, _) = recursos.cuenta(login.as_str())?;
         let password = recursos
             .llavero
             .leer(&cuenta.login, ClaveSecreto::PasswordAdminGitea)
-            .map_err(|error| ErrorUi::de(&error))?
+            .map_err(|error| ErrorUi::de(&error, idioma))?
             .ok_or_else(|| {
-                ErrorUi::interno("no hay contraseña de administración de Gitea para esta cuenta")
+                ErrorUi::interno(texto(
+                    idioma,
+                    "no hay contraseña de administración de Gitea para esta cuenta",
+                    "there is no Gitea administration password for this account",
+                ))
             })?;
         recursos
             .almacen
@@ -611,7 +654,7 @@ pub async fn credenciales_gitea(
                 "gitea.credenciales",
                 "consulta de las credenciales de administración desde la ventana",
             )
-            .map_err(|error| ErrorUi::de(&error))?;
+            .map_err(|error| ErrorUi::de(&error, idioma))?;
         Ok(CredencialesGiteaDto {
             usuario: NOMBRE_ADMIN_GITEA.to_string(),
             password: password.exponer().to_string(),
@@ -624,38 +667,53 @@ fn token_gitea_de(recursos: &Recursos, login: &Nombre) -> Result<Secreto, ErrorU
     recursos
         .llavero
         .leer(login, ClaveSecreto::TokenGitea)
-        .map_err(|error| ErrorUi::de(&error))?
-        .ok_or_else(|| ErrorUi::interno("no hay token de administración de Gitea para esta cuenta"))
+        .map_err(|error| ErrorUi::de(&error, recursos.idioma))?
+        .ok_or_else(|| {
+            ErrorUi::interno(texto(
+                recursos.idioma,
+                "no hay token de administración de Gitea para esta cuenta",
+                "there is no Gitea administration token for this account",
+            ))
+        })
 }
 
 fn token_github_de(recursos: &Recursos, login: &Nombre) -> Result<Secreto, ErrorUi> {
     recursos
         .llavero
         .leer(login, ClaveSecreto::TokenGithub)
-        .map_err(|error| ErrorUi::de(&error))?
-        .ok_or_else(|| ErrorUi::interno("no hay token de GitHub para esta cuenta"))
+        .map_err(|error| ErrorUi::de(&error, recursos.idioma))?
+        .ok_or_else(|| {
+            ErrorUi::interno(texto(
+                recursos.idioma,
+                "no hay token de GitHub para esta cuenta",
+                "there is no GitHub token for this account",
+            ))
+        })
 }
 
 /// `String` de la interfaz → `Nombre` validado, con el código de error del contrato
 /// para datos de entrada inválidos (no hay un `codigo` propio en la tabla del contrato
 /// para un nombre con caracteres no permitidos: se usa el genérico `datos_invalidos`,
 /// que ya existe para el resto de errores de forma).
-fn nombre_de(valor: &str) -> Result<Nombre, ErrorUi> {
-    Nombre::nuevo(valor).map_err(|error| ErrorUi::nuevo("datos_invalidos", error.to_string()))
+fn nombre_de(valor: &str, idioma: Idioma) -> Result<Nombre, ErrorUi> {
+    Nombre::nuevo(valor).map_err(|error| ErrorUi::nuevo("datos_invalidos", error.localizar(idioma)))
 }
 
 /// `"dueño/nombre"` → [`IdRepo`]. Pura y testeada aparte: la usan `crear_cuenta` para
 /// los repos marcados por el usuario.
-fn parsear_id_repo(valor: &str) -> Result<IdRepo, ErrorUi> {
+fn parsear_id_repo(valor: &str, idioma: Idioma) -> Result<IdRepo, ErrorUi> {
     let (dueno, nombre) = valor.split_once('/').ok_or_else(|| {
         ErrorUi::nuevo(
             "datos_invalidos",
-            format!("«{valor}» no tiene la forma «dueño/nombre»"),
+            match idioma {
+                Idioma::Es => format!("«{valor}» no tiene la forma «dueño/nombre»"),
+                Idioma::En => format!("«{valor}» does not have the form «owner/name»"),
+            },
         )
     })?;
     Ok(IdRepo {
-        dueno: nombre_de(dueno)?,
-        nombre: nombre_de(nombre)?,
+        dueno: nombre_de(dueno, idioma)?,
+        nombre: nombre_de(nombre, idioma)?,
     })
 }
 
@@ -674,10 +732,14 @@ fn calcular_excluidos(universo: &[RepoOrigen], marcados: &[IdRepo]) -> Vec<IdRep
 /// de `core` la nombran así (`cuentas::ErrorCuentas::RepoNoExiste`,
 /// `contingencia::ErrorContingencia::RepoNoExiste`) y el contrato fija en su lugar el
 /// código estable `repo_no_encontrado` (ver `ErrorUi::repo_no_encontrado`).
-fn error_ui_repo<E: std::fmt::Debug + std::fmt::Display>(error: &E, id: &IdRepo) -> ErrorUi {
-    let generico = ErrorUi::de(error);
+fn error_ui_repo<E: std::fmt::Debug + Localizable>(
+    error: &E,
+    id: &IdRepo,
+    idioma: Idioma,
+) -> ErrorUi {
+    let generico = ErrorUi::de(error, idioma);
     if generico.codigo == "repo_no_existe" {
-        ErrorUi::repo_no_encontrado(id.dueno.as_str(), id.nombre.as_str())
+        ErrorUi::repo_no_encontrado(id.dueno.as_str(), id.nombre.as_str(), idioma)
     } else {
         generico
     }
@@ -713,19 +775,19 @@ mod tests {
 
     #[test]
     fn parsear_id_repo_acepta_dueno_barra_nombre() {
-        let parseado = parsear_id_repo("jparga/gitmereba").expect("parsea");
+        let parseado = parsear_id_repo("jparga/gitmereba", Idioma::Es).expect("parsea");
         assert_eq!(parseado, id("jparga", "gitmereba"));
     }
 
     #[test]
     fn parsear_id_repo_rechaza_sin_barra() {
-        let resultado = parsear_id_repo("gitmereba");
+        let resultado = parsear_id_repo("gitmereba", Idioma::Es);
         assert!(matches!(resultado, Err(error) if error.codigo == "datos_invalidos"));
     }
 
     #[test]
     fn parsear_id_repo_rechaza_un_nombre_invalido() {
-        let resultado = parsear_id_repo("jparga/../etc");
+        let resultado = parsear_id_repo("jparga/../etc", Idioma::Es);
         assert!(matches!(resultado, Err(error) if error.codigo == "datos_invalidos"));
     }
 
@@ -761,16 +823,16 @@ mod tests {
         enum ErrorFalso {
             RepoNoExiste(String),
         }
-        impl std::fmt::Display for ErrorFalso {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "no existe")
+        impl Localizable for ErrorFalso {
+            fn localizar(&self, _idioma: Idioma) -> String {
+                "no existe".to_string()
             }
         }
 
         let error = ErrorFalso::RepoNoExiste("jparga/x".to_string());
         let repo = id("jparga", "x");
 
-        let traducido = error_ui_repo(&error, &repo);
+        let traducido = error_ui_repo(&error, &repo, Idioma::Es);
 
         assert_eq!(traducido.codigo, "repo_no_encontrado");
     }
@@ -779,13 +841,13 @@ mod tests {
     fn error_ui_repo_no_toca_otros_codigos() {
         #[derive(Debug)]
         struct ErrorFalso;
-        impl std::fmt::Display for ErrorFalso {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "token inválido")
+        impl Localizable for ErrorFalso {
+            fn localizar(&self, _idioma: Idioma) -> String {
+                "token inválido".to_string()
             }
         }
 
-        let traducido = error_ui_repo(&ErrorFalso, &id("jparga", "x"));
+        let traducido = error_ui_repo(&ErrorFalso, &id("jparga", "x"), Idioma::Es);
 
         assert_eq!(traducido.codigo, "error_falso");
     }

@@ -29,9 +29,10 @@ use super::estado::{EstadoApp, Recursos, en_hilo};
 pub async fn listar_cuentas(estado: State<'_, EstadoApp>) -> Result<Vec<Cuenta>, ErrorUi> {
     tracing::debug!(comando = "listar_cuentas");
     let rutas = estado.rutas.clone();
-    en_hilo(move || async move {
+    let idioma = estado.idioma();
+    en_hilo(idioma, move || async move {
         let recursos = Recursos::abrir(&rutas)?;
-        cuentas::listar(&recursos.contexto()).map_err(|error| ErrorUi::de(&error))
+        cuentas::listar(&recursos.contexto()).map_err(|error| ErrorUi::de(&error, idioma))
     })
     .await
 }
@@ -43,15 +44,16 @@ pub async fn resumen_cuenta(
 ) -> Result<ResumenCuentaDto, ErrorUi> {
     tracing::debug!(comando = "resumen_cuenta");
     let rutas = estado.rutas.clone();
-    en_hilo(move || async move {
+    let idioma = estado.idioma();
+    en_hilo(idioma, move || async move {
         let recursos = Recursos::abrir(&rutas)?;
         let (cuenta, rutas_cuenta) = recursos.cuenta(&login)?;
 
         let espacio_bytes = verificacion::espacio_de(rutas_cuenta.carpeta())
-            .map_err(|error| ErrorUi::de(&error))?;
+            .map_err(|error| ErrorUi::de(&error, idioma))?;
         let estado_cuenta = cuentas::estado(&recursos.contexto(), &cuenta.login)
             .await
-            .map_err(|error| ErrorUi::de(&error))?;
+            .map_err(|error| ErrorUi::de(&error, idioma))?;
 
         Ok(resumen_cuenta_dto(estado_cuenta, espacio_bytes / 1024))
     })
@@ -65,27 +67,28 @@ pub async fn listar_repos(
 ) -> Result<Vec<RepoListadoDto>, ErrorUi> {
     tracing::debug!(comando = "listar_repos");
     let rutas = estado.rutas.clone();
-    en_hilo(move || async move {
+    let idioma = estado.idioma();
+    en_hilo(idioma, move || async move {
         let recursos = Recursos::abrir(&rutas)?;
         let (cuenta, _rutas_cuenta) = recursos.cuenta(&login)?;
 
         let activas = recursos
             .almacen
             .contingencias_de(&cuenta.login)
-            .map_err(|error| ErrorUi::de(&error))?;
+            .map_err(|error| ErrorUi::de(&error, idioma))?;
         let guardados = recursos
             .almacen
             .estados_de(&cuenta.login)
-            .map_err(|error| ErrorUi::de(&error))?;
+            .map_err(|error| ErrorUi::de(&error, idioma))?;
         let guardados = marcar_contingencias(guardados, &activas);
 
         let token_gitea = recursos
             .llavero
             .leer(&cuenta.login, ClaveSecreto::TokenGitea)
-            .map_err(|error| ErrorUi::de(&error))?
+            .map_err(|error| ErrorUi::de(&error, idioma))?
             .unwrap_or_else(|| Secreto::nuevo(""));
         let gitea = cuentas::cliente_gitea_de_cuenta(&cuenta, token_gitea)
-            .map_err(|error| ErrorUi::de(&error))?;
+            .map_err(|error| ErrorUi::de(&error, idioma))?;
 
         let mut duenos: Vec<Nombre> = guardados.iter().map(|g| g.id.dueno.clone()).collect();
         duenos.sort();
@@ -107,7 +110,7 @@ pub async fn listar_repos(
         let origenes = recursos
             .almacen
             .origenes_de(&cuenta.login)
-            .map_err(|error| ErrorUi::de(&error))?;
+            .map_err(|error| ErrorUi::de(&error, idioma))?;
 
         Ok(convertir_repos_listado(
             &cuenta, guardados, &locales, &origenes,
@@ -124,16 +127,17 @@ pub async fn historial(
 ) -> Result<Vec<SincronizacionDto>, ErrorUi> {
     tracing::debug!(comando = "historial");
     let rutas = estado.rutas.clone();
-    en_hilo(move || async move {
+    let idioma = estado.idioma();
+    en_hilo(idioma, move || async move {
         let recursos = Recursos::abrir(&rutas)?;
         let nombre = login
             .map(Nombre::nuevo)
             .transpose()
-            .map_err(|error| ErrorUi::de(&error))?;
+            .map_err(|error| ErrorUi::de(&error, idioma))?;
         let listado = recursos
             .almacen
             .ultimas_sincronizaciones(nombre.as_ref(), limite)
-            .map_err(|error| ErrorUi::de(&error))?;
+            .map_err(|error| ErrorUi::de(&error, idioma))?;
         Ok(convertir_historial(listado))
     })
     .await
@@ -147,12 +151,13 @@ pub async fn auditoria(
 ) -> Result<Vec<EntradaAuditoria>, ErrorUi> {
     tracing::debug!(comando = "auditoria");
     let rutas = estado.rutas.clone();
-    en_hilo(move || async move {
+    let idioma = estado.idioma();
+    en_hilo(idioma, move || async move {
         let recursos = Recursos::abrir(&rutas)?;
         recursos
             .almacen
             .auditoria(limite, desde_id)
-            .map_err(|error| ErrorUi::de(&error))
+            .map_err(|error| ErrorUi::de(&error, idioma))
     })
     .await
 }
@@ -163,29 +168,31 @@ pub async fn verificar_auditoria(
 ) -> Result<VerificacionAuditoriaDto, ErrorUi> {
     tracing::debug!(comando = "verificar_auditoria");
     let rutas = estado.rutas.clone();
-    en_hilo(move || async move {
+    let idioma = estado.idioma();
+    en_hilo(idioma, move || async move {
         let recursos = Recursos::abrir(&rutas)?;
         let verificacion: VerificacionAuditoria = recursos
             .almacen
             .verificar_auditoria()
-            .map_err(|error| ErrorUi::de(&error))?;
+            .map_err(|error| ErrorUi::de(&error, idioma))?;
         Ok(convertir_verificacion(verificacion))
     })
     .await
 }
 
 #[tauri::command]
-pub async fn estado_github() -> Result<EstadoGithubDto, ErrorUi> {
+pub async fn estado_github(estado: State<'_, EstadoApp>) -> Result<EstadoGithubDto, ErrorUi> {
     tracing::debug!(comando = "estado_github");
-    en_hilo(move || async move {
+    let idioma = estado.idioma();
+    en_hilo(idioma, move || async move {
         // No necesita token: `estado_servicio` consulta githubstatus.com sin
         // autenticar (ver `github::cliente::ClienteGithub`).
-        let cliente =
-            ClienteGithub::nuevo(Secreto::nuevo("")).map_err(|error| ErrorUi::de(&error))?;
+        let cliente = ClienteGithub::nuevo(Secreto::nuevo(""))
+            .map_err(|error| ErrorUi::de(&error, idioma))?;
         let estado_servicio = cliente
             .estado_servicio()
             .await
-            .map_err(|error| ErrorUi::de(&error))?;
+            .map_err(|error| ErrorUi::de(&error, idioma))?;
         Ok(convertir_estado_github(
             estado_servicio,
             OffsetDateTime::now_utc(),
@@ -201,7 +208,8 @@ pub async fn estado_contingencia(
 ) -> Result<Vec<EntradaContingenciaDto>, ErrorUi> {
     tracing::debug!(comando = "estado_contingencia");
     let rutas = estado.rutas.clone();
-    en_hilo(move || async move {
+    let idioma = estado.idioma();
+    en_hilo(idioma, move || async move {
         let recursos = Recursos::abrir(&rutas)?;
         let (cuenta, rutas_cuenta) = recursos.cuenta(&login)?;
 
@@ -210,12 +218,12 @@ pub async fn estado_contingencia(
         let activas = recursos
             .almacen
             .contingencias_de(&cuenta.login)
-            .map_err(|error| ErrorUi::de(&error))?;
+            .map_err(|error| ErrorUi::de(&error, idioma))?;
 
         let mut resultado = Vec::new();
         for id_original in activas {
             let dueno_contingencia = contingencia::org_contingencia(&id_original.dueno)
-                .map_err(|error| ErrorUi::de(&error))?;
+                .map_err(|error| ErrorUi::de(&error, idioma))?;
             let comando_git = format!(
                 "git remote add mereba {}/{}/{}.git",
                 cuenta.url_publica(),
@@ -227,12 +235,12 @@ pub async fn estado_contingencia(
             let anotado = recursos
                 .almacen
                 .punto_de_partida(&cuenta.login, &id_original)
-                .map_err(|error| ErrorUi::de(&error))?;
+                .map_err(|error| ErrorUi::de(&error, idioma))?;
             let estado_contingencia = match anotado {
                 Some(punto) => contingencia::estado(&rutas_cuenta, &id_original, &punto).await,
                 None => contingencia::estado_de_mirror(&rutas_cuenta, &id_original).await,
             }
-            .map_err(|error| ErrorUi::de(&error))?;
+            .map_err(|error| ErrorUi::de(&error, idioma))?;
 
             resultado.push(EntradaContingenciaDto {
                 id: id_original,
@@ -252,13 +260,14 @@ pub async fn ajustes_leer(
 ) -> Result<AjustesDto, ErrorUi> {
     tracing::debug!(comando = "ajustes_leer");
     let rutas = estado.rutas.clone();
-    en_hilo(move || async move {
+    let idioma = estado.idioma();
+    en_hilo(idioma, move || async move {
         let recursos = Recursos::abrir(&rutas)?;
         match login {
             Some(login) => {
                 let (cuenta, rutas_cuenta) = recursos.cuenta(&login)?;
-                let capturas =
-                    snapshots::listar_cuenta(&rutas_cuenta).map_err(|error| ErrorUi::de(&error))?;
+                let capturas = snapshots::listar_cuenta(&rutas_cuenta)
+                    .map_err(|error| ErrorUi::de(&error, idioma))?;
                 Ok(AjustesDto::Cuenta(AjustesCuentaDto {
                     cuenta,
                     version_gitea: instancia::VERSION_GITEA.to_string(),
