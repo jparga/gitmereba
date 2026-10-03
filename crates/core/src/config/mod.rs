@@ -2,7 +2,7 @@
 
 mod cuenta;
 mod error;
-mod fichero;
+pub(crate) mod fichero;
 mod rutas;
 mod validacion;
 

@@ -14,6 +14,7 @@ use crate::config::error::ErrorConfig;
 pub struct Rutas {
     directorio_home: PathBuf,
     raiz_datos: PathBuf,
+    raiz_config: PathBuf,
     raiz_systemd_usuario: PathBuf,
 }
 
@@ -25,6 +26,7 @@ impl Rutas {
         Ok(Self {
             directorio_home: base.home_dir().to_path_buf(),
             raiz_datos: base.data_dir().join("gitmereba"),
+            raiz_config: base.config_dir().join("gitmereba"),
             raiz_systemd_usuario: base.config_dir().join("systemd").join("user"),
         })
     }
@@ -35,6 +37,7 @@ impl Rutas {
         Self {
             directorio_home: raiz.clone(),
             raiz_datos: raiz.join("datos"),
+            raiz_config: raiz.join("config"),
             raiz_systemd_usuario: raiz.join("systemd-user"),
         }
     }
@@ -47,6 +50,16 @@ impl Rutas {
     /// Directorio de datos de la app: `~/.local/share/gitmereba/`.
     pub fn directorio_datos(&self) -> &Path {
         &self.raiz_datos
+    }
+
+    /// Directorio de configuración de la app: `~/.config/gitmereba/`.
+    pub fn directorio_config(&self) -> &Path {
+        &self.raiz_config
+    }
+
+    /// Preferencias de la app (idioma), sin secretos.
+    pub fn fichero_preferencias(&self) -> PathBuf {
+        self.raiz_config.join("preferencias.toml")
     }
 
     /// Binarios de Gitea, compartidos entre cuentas.
@@ -161,6 +174,16 @@ mod tests {
             rutas.fichero_cuentas(),
             rutas.directorio_datos().join("cuentas.toml")
         );
+    }
+
+    #[test]
+    fn fichero_preferencias_vive_en_el_directorio_de_config() {
+        let rutas = Rutas::con_raiz("/r");
+        assert_eq!(
+            rutas.fichero_preferencias(),
+            PathBuf::from("/r/config/preferencias.toml")
+        );
+        assert_eq!(rutas.directorio_config(), Path::new("/r/config"));
     }
 
     #[test]

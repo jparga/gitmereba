@@ -8,6 +8,7 @@ pub mod cuentas;
 pub mod git;
 pub mod gitea;
 pub mod github;
+pub mod idioma;
 pub mod instancia;
 pub mod modelo;
 pub mod secretos;
