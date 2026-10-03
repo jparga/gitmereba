@@ -127,7 +127,7 @@ pub async fn sincronizar(
                     .map_err(|error| error_ui_repo(&error, &id, idioma))?;
                 let resumen = match hecho {
                     cuentas::SincronizacionDeRepo::Sincronizado => {
-                        format!("Sincronización forzada de «{id}» en «{}».", cuenta.login)
+                        resumen_repo_forzado(&id, cuenta.login.as_str(), idioma)
                     }
                     cuentas::SincronizacionDeRepo::PendienteDeReclonar => {
                         // El mirror vacío ya no existe: la pasada lo crea de nuevo.
@@ -138,7 +138,7 @@ pub async fn sincronizar(
                         )
                         .await
                         .map_err(|error| ErrorUi::de(&error, idioma))?;
-                        format!("El clonado inicial de «{id}» había fallado: se vuelve a clonar.")
+                        resumen_repo_reclonado(&id, idioma)
                     }
                 };
                 let fin = time::OffsetDateTime::now_utc();
@@ -452,7 +452,7 @@ pub async fn reconciliar(
                 "divergencia"
             }
             .to_string(),
-            mensaje: informe.resumen(),
+            mensaje: informe.localizar(idioma),
         })
     })
     .await
@@ -717,6 +717,22 @@ fn parsear_id_repo(valor: &str, idioma: Idioma) -> Result<IdRepo, ErrorUi> {
     })
 }
 
+/// Resumen de la sincronización forzada de un solo repo.
+fn resumen_repo_forzado(id: &IdRepo, login: &str, idioma: Idioma) -> String {
+    match idioma {
+        Idioma::Es => format!("Sincronización forzada de «{id}» en «{login}»."),
+        Idioma::En => format!("Forced sync of «{id}» in «{login}»."),
+    }
+}
+
+/// Resumen cuando el clonado inicial de un repo había fallado y se repite.
+fn resumen_repo_reclonado(id: &IdRepo, idioma: Idioma) -> String {
+    match idioma {
+        Idioma::Es => format!("El clonado inicial de «{id}» había fallado: se vuelve a clonar."),
+        Idioma::En => format!("The initial clone of «{id}» had failed: cloning it again."),
+    }
+}
+
 /// Repos de `universo` que no están entre los `marcados`: lo que `crear_cuenta` registra
 /// como `Alcance::excluidos` (contrato con la interfaz, comando `crear_cuenta`: «el resto queda
 /// registrado como excluido»). Pura y testeada aparte.
@@ -748,6 +764,23 @@ fn error_ui_repo<E: std::fmt::Debug + Localizable>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn el_resumen_de_un_repo_sale_en_el_idioma_pedido() {
+        let repo = id("ana", "web");
+        assert_eq!(
+            resumen_repo_forzado(&repo, "ana", Idioma::Es),
+            "Sincronización forzada de «ana/web» en «ana»."
+        );
+        assert_eq!(
+            resumen_repo_forzado(&repo, "ana", Idioma::En),
+            "Forced sync of «ana/web» in «ana»."
+        );
+        assert_eq!(
+            resumen_repo_reclonado(&repo, Idioma::En),
+            "The initial clone of «ana/web» had failed: cloning it again."
+        );
+    }
 
     fn nombre(v: &str) -> Nombre {
         Nombre::nuevo(v).expect("nombre de prueba válido")
