@@ -14,10 +14,10 @@ function nombreUsuarioValido(nombre) {
   );
 }
 
-async function copiar(texto, que) {
+async function copiar(texto, claveAviso) {
   try {
     await navigator.clipboard.writeText(texto);
-    avisar(t('lan.copiada', { que }), 'success');
+    avisar(t(claveAviso), 'success');
   } catch {
     avisar(t('lan.copia.error'), 'warning');
   }
@@ -254,14 +254,14 @@ function dialogoUsuarioCreado(nombre, password) {
         { clase: 'credencial' },
         h('span', { clase: 'hint' }, t('lan.usuario')),
         h('code', { clase: 'pre' }, nombre),
-        h('button', { type: 'button', clase: 'btn ghost sm', onClick: () => copiar(nombre, t('lan.usuario')) }, t('lan.copiar')),
+        h('button', { type: 'button', clase: 'btn ghost sm', onClick: () => copiar(nombre, 'lan.copiada.usuario') }, t('lan.copiar')),
         h('span', { clase: 'hint' }, t('lan.password')),
         campoPassword,
         h(
           'div',
           { clase: 'row' },
           botonMostrar,
-          h('button', { type: 'button', clase: 'btn ghost sm', onClick: () => copiar(secreto, t('lan.password')) }, t('lan.copiar')),
+          h('button', { type: 'button', clase: 'btn ghost sm', onClick: () => copiar(secreto, 'lan.copiada.password') }, t('lan.copiar')),
         ),
       ),
       h(
