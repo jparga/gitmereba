@@ -11,18 +11,28 @@ use gitmereba_core::secretos::LlaveroDelSistema;
 use crate::salida;
 
 pub async fn ejecutar(rutas: &Rutas) -> u8 {
+    let idioma = idioma_actual(rutas);
     let llavero = match LlaveroDelSistema::nuevo() {
         Ok(llavero) => llavero,
-        Err(error) => return fallo(&format!("no se pudo acceder al llavero: {error}")),
+        Err(error) => {
+            return fallo(&format!(
+                "no se pudo acceder al llavero: {}",
+                error.localizar(idioma)
+            ));
+        }
     };
     let almacen = match abrir_almacen(rutas) {
         Ok(almacen) => almacen,
-        Err(error) => return fallo(&format!("no se pudo abrir el almacén: {error}")),
+        Err(error) => {
+            return fallo(&format!(
+                "no se pudo abrir el almacén: {}",
+                error.localizar(idioma)
+            ));
+        }
     };
     let contexto = Contexto::nuevo(rutas, &llavero, &almacen);
 
     let informe = cuentas::doctor(&contexto).await;
-    let idioma = idioma_actual(rutas);
 
     let mut stdout = std::io::stdout().lock();
     for comprobacion in &informe.comprobaciones {

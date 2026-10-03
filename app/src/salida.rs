@@ -6,6 +6,7 @@
 use std::io::Write;
 
 use gitmereba_core::cuentas::ErrorCuentas;
+use gitmereba_core::idioma::{Idioma, Localizable};
 
 /// Escribe `linea` en `stdout` sin más adorno.
 pub fn linea(stdout: &mut impl Write, contenido: &str) {
@@ -14,8 +15,8 @@ pub fn linea(stdout: &mut impl Write, contenido: &str) {
 
 /// Imprime un error como lo vería el usuario: `error: <mensaje>` y, si existe, una
 /// línea de consejo. Nunca un `Debug` de un error (podría filtrar detalles internos).
-pub fn error(stderr: &mut impl Write, error: &ErrorCuentas) {
-    let _ = writeln!(stderr, "error: {error}");
+pub fn error(stderr: &mut impl Write, error: &ErrorCuentas, idioma: Idioma) {
+    let _ = writeln!(stderr, "error: {}", error.localizar(idioma));
     if let Some(consejo) = consejo(error) {
         let _ = writeln!(stderr, "consejo: {consejo}");
     }
@@ -105,9 +106,25 @@ mod tests {
         let fallo = ErrorCuentas::GiteaParado(
             gitmereba_core::modelo::Nombre::nuevo("jparga").expect("nombre"),
         );
-        error(&mut salida, &fallo);
+        error(&mut salida, &fallo, Idioma::Es);
         let texto = String::from_utf8(salida).expect("utf8");
         assert!(texto.starts_with("error: "));
         assert!(!texto.contains("GiteaParado"));
+    }
+
+    #[test]
+    fn error_sale_en_el_idioma_pedido() {
+        let fallo = ErrorCuentas::GiteaParado(
+            gitmereba_core::modelo::Nombre::nuevo("jparga").expect("nombre"),
+        );
+        let mut es = Vec::new();
+        error(&mut es, &fallo, Idioma::Es);
+        let mut en = Vec::new();
+        error(&mut en, &fallo, Idioma::En);
+        let es = String::from_utf8(es).expect("utf8");
+        let en = String::from_utf8(en).expect("utf8");
+        assert!(es.contains(&fallo.localizar(Idioma::Es)));
+        assert!(en.contains(&fallo.localizar(Idioma::En)));
+        assert_ne!(es, en);
     }
 }

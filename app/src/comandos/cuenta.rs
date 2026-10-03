@@ -11,6 +11,7 @@ use gitmereba_core::cuentas::{
 };
 use gitmereba_core::gitea::ClienteGitea;
 use gitmereba_core::github::ClienteGithub;
+use gitmereba_core::idioma::{Idioma, Localizable, idioma_actual};
 use gitmereba_core::modelo::{Alcance, Nombre, NombreHostInterno};
 use gitmereba_core::secretos::{ClaveSecreto, Llavero, LlaveroDelSistema, Secreto};
 
@@ -30,9 +31,10 @@ pub async fn ejecutar(accion: ComandoCuenta, rutas: &Rutas) -> u8 {
 }
 
 async fn add(args: CuentaAddArgs, rutas: &Rutas) -> u8 {
+    let idioma = idioma_actual(rutas);
     let login = match Nombre::nuevo(args.login.as_str()) {
         Ok(login) => login,
-        Err(error) => return fallo_uso(&format!("login inválido: {error}")),
+        Err(error) => return fallo_uso(&format!("login inválido: {}", error.localizar(idioma))),
     };
     if !args.carpeta.is_absolute() {
         return fallo_uso("la carpeta debe ser una ruta absoluta");
@@ -44,10 +46,15 @@ async fn add(args: CuentaAddArgs, rutas: &Rutas) -> u8 {
         .collect();
     let organizaciones = match organizaciones {
         Ok(organizaciones) => organizaciones,
-        Err(error) => return fallo_uso(&format!("nombre de organización inválido: {error}")),
+        Err(error) => {
+            return fallo_uso(&format!(
+                "nombre de organización inválido: {}",
+                error.localizar(idioma)
+            ));
+        }
     };
 
-    let token = match leer_token() {
+    let token = match leer_token(idioma) {
         Ok(token) => token,
         Err(mensaje) => return fallo(&mensaje),
     };
@@ -69,12 +76,12 @@ async fn add(args: CuentaAddArgs, rutas: &Rutas) -> u8 {
 
     let github = match ClienteGithub::nuevo(token) {
         Ok(github) => github,
-        Err(error) => return emitir_error(&ErrorCuentas::from(error)),
+        Err(error) => return emitir_error(idioma, &ErrorCuentas::from(error)),
     };
 
     let previsualizacion = match cuentas::previsualizar_alta(&github, &solicitud).await {
         Ok(previsualizacion) => previsualizacion,
-        Err(error) => return emitir_error(&error),
+        Err(error) => return emitir_error(idioma, &error),
     };
     mostrar_previsualizacion(&previsualizacion);
 
@@ -86,11 +93,21 @@ async fn add(args: CuentaAddArgs, rutas: &Rutas) -> u8 {
 
     let llavero = match LlaveroDelSistema::nuevo() {
         Ok(llavero) => llavero,
-        Err(error) => return fallo(&format!("no se pudo acceder al llavero: {error}")),
+        Err(error) => {
+            return fallo(&format!(
+                "no se pudo acceder al llavero: {}",
+                error.localizar(idioma)
+            ));
+        }
     };
     let almacen = match abrir_almacen(rutas) {
         Ok(almacen) => almacen,
-        Err(error) => return fallo(&format!("no se pudo abrir el almacén: {error}")),
+        Err(error) => {
+            return fallo(&format!(
+                "no se pudo abrir el almacén: {}",
+                error.localizar(idioma)
+            ));
+        }
     };
     let contexto = Contexto::nuevo(rutas, &llavero, &almacen);
     let aprovisionador = AprovisionadorReal;
@@ -139,18 +156,29 @@ async fn add(args: CuentaAddArgs, rutas: &Rutas) -> u8 {
             salida::linea(&mut stdout, &informe.resumen());
             0
         }
-        Err(error) => emitir_error(&error),
+        Err(error) => emitir_error(idioma, &error),
     }
 }
 
 async fn list(rutas: &Rutas) -> u8 {
+    let idioma = idioma_actual(rutas);
     let llavero = match LlaveroDelSistema::nuevo() {
         Ok(llavero) => llavero,
-        Err(error) => return fallo(&format!("no se pudo acceder al llavero: {error}")),
+        Err(error) => {
+            return fallo(&format!(
+                "no se pudo acceder al llavero: {}",
+                error.localizar(idioma)
+            ));
+        }
     };
     let almacen = match abrir_almacen(rutas) {
         Ok(almacen) => almacen,
-        Err(error) => return fallo(&format!("no se pudo abrir el almacén: {error}")),
+        Err(error) => {
+            return fallo(&format!(
+                "no se pudo abrir el almacén: {}",
+                error.localizar(idioma)
+            ));
+        }
     };
     let contexto = Contexto::nuevo(rutas, &llavero, &almacen);
 
@@ -179,14 +207,15 @@ async fn list(rutas: &Rutas) -> u8 {
             );
             0
         }
-        Err(error) => emitir_error(&error),
+        Err(error) => emitir_error(idioma, &error),
     }
 }
 
 async fn rm(args: CuentaRmArgs, rutas: &Rutas) -> u8 {
+    let idioma = idioma_actual(rutas);
     let login = match Nombre::nuevo(args.login.as_str()) {
         Ok(login) => login,
-        Err(error) => return fallo_uso(&format!("login inválido: {error}")),
+        Err(error) => return fallo_uso(&format!("login inválido: {}", error.localizar(idioma))),
     };
 
     if !args.si && !confirmar_login(&args.login) {
@@ -197,11 +226,21 @@ async fn rm(args: CuentaRmArgs, rutas: &Rutas) -> u8 {
 
     let llavero = match LlaveroDelSistema::nuevo() {
         Ok(llavero) => llavero,
-        Err(error) => return fallo(&format!("no se pudo acceder al llavero: {error}")),
+        Err(error) => {
+            return fallo(&format!(
+                "no se pudo acceder al llavero: {}",
+                error.localizar(idioma)
+            ));
+        }
     };
     let almacen = match abrir_almacen(rutas) {
         Ok(almacen) => almacen,
-        Err(error) => return fallo(&format!("no se pudo abrir el almacén: {error}")),
+        Err(error) => {
+            return fallo(&format!(
+                "no se pudo abrir el almacén: {}",
+                error.localizar(idioma)
+            ));
+        }
     };
     let contexto = Contexto::nuevo(rutas, &llavero, &almacen);
     let lanzador = LanzadorSystemd;
@@ -212,14 +251,15 @@ async fn rm(args: CuentaRmArgs, rutas: &Rutas) -> u8 {
             salida::linea(&mut stdout, &format!("Cuenta «{login}» dada de baja."));
             0
         }
-        Err(error) => emitir_error(&error),
+        Err(error) => emitir_error(idioma, &error),
     }
 }
 
 async fn lan(args: CuentaLanArgs, rutas: &Rutas) -> u8 {
+    let idioma = idioma_actual(rutas);
     let login = match Nombre::nuevo(args.login.as_str()) {
         Ok(login) => login,
-        Err(error) => return fallo_uso(&format!("login inválido: {error}")),
+        Err(error) => return fallo_uso(&format!("login inválido: {}", error.localizar(idioma))),
     };
     // clap ya exige que se dé exactamente una de `--activar`/`--desactivar`/`--estado`
     // (un `ArgGroup` obligatorio y exclusivo), pero no aplica de forma fiable el
@@ -230,17 +270,29 @@ async fn lan(args: CuentaLanArgs, rutas: &Rutas) -> u8 {
     }
     let host = match args.host.as_deref().map(NombreHostInterno::nuevo) {
         Some(Ok(host)) => Some(host),
-        Some(Err(error)) => return fallo_uso(&format!("host inválido: {error}")),
+        Some(Err(error)) => {
+            return fallo_uso(&format!("host inválido: {}", error.localizar(idioma)));
+        }
         None => None,
     };
 
     let llavero = match LlaveroDelSistema::nuevo() {
         Ok(llavero) => llavero,
-        Err(error) => return fallo(&format!("no se pudo acceder al llavero: {error}")),
+        Err(error) => {
+            return fallo(&format!(
+                "no se pudo acceder al llavero: {}",
+                error.localizar(idioma)
+            ));
+        }
     };
     let almacen = match abrir_almacen(rutas) {
         Ok(almacen) => almacen,
-        Err(error) => return fallo(&format!("no se pudo abrir el almacén: {error}")),
+        Err(error) => {
+            return fallo(&format!(
+                "no se pudo abrir el almacén: {}",
+                error.localizar(idioma)
+            ));
+        }
     };
     let contexto = Contexto::nuevo(rutas, &llavero, &almacen);
 
@@ -250,7 +302,7 @@ async fn lan(args: CuentaLanArgs, rutas: &Rutas) -> u8 {
                 mostrar_informe_lan(&login, &informe);
                 0
             }
-            Err(error) => emitir_error(&error),
+            Err(error) => emitir_error(idioma, &error),
         };
     }
 
@@ -261,7 +313,7 @@ async fn lan(args: CuentaLanArgs, rutas: &Rutas) -> u8 {
                 mostrar_informe_lan(&login, &informe);
                 0
             }
-            Err(error) => emitir_error(&error),
+            Err(error) => emitir_error(idioma, &error),
         };
     }
 
@@ -274,31 +326,47 @@ async fn lan(args: CuentaLanArgs, rutas: &Rutas) -> u8 {
             mostrar_informe_lan(&login, &informe);
             0
         }
-        Err(error) => emitir_error(&error),
+        Err(error) => emitir_error(idioma, &error),
     }
 }
 
 /// `cuenta usuario`: usuarios de Gitea para otras personas de la LAN.
 async fn usuario(args: CuentaUsuarioArgs, rutas: &Rutas) -> u8 {
+    let idioma = idioma_actual(rutas);
     let login = match Nombre::nuevo(args.login.as_str()) {
         Ok(login) => login,
-        Err(error) => return fallo_uso(&format!("login inválido: {error}")),
+        Err(error) => return fallo_uso(&format!("login inválido: {}", error.localizar(idioma))),
     };
     let nombre = match args.crear.as_deref().or(args.eliminar.as_deref()) {
         Some(texto) => match Nombre::nuevo(texto) {
             Ok(nombre) => Some(nombre),
-            Err(error) => return fallo_uso(&format!("nombre de usuario inválido: {error}")),
+            Err(error) => {
+                return fallo_uso(&format!(
+                    "nombre de usuario inválido: {}",
+                    error.localizar(idioma)
+                ));
+            }
         },
         None => None,
     };
 
     let llavero = match LlaveroDelSistema::nuevo() {
         Ok(llavero) => llavero,
-        Err(error) => return fallo(&format!("no se pudo acceder al llavero: {error}")),
+        Err(error) => {
+            return fallo(&format!(
+                "no se pudo acceder al llavero: {}",
+                error.localizar(idioma)
+            ));
+        }
     };
     let almacen = match abrir_almacen(rutas) {
         Ok(almacen) => almacen,
-        Err(error) => return fallo(&format!("no se pudo abrir el almacén: {error}")),
+        Err(error) => {
+            return fallo(&format!(
+                "no se pudo abrir el almacén: {}",
+                error.localizar(idioma)
+            ));
+        }
     };
     let contexto = Contexto::nuevo(rutas, &llavero, &almacen);
     let mut stdout = std::io::stdout().lock();
@@ -318,7 +386,7 @@ async fn usuario(args: CuentaUsuarioArgs, rutas: &Rutas) -> u8 {
                 }
                 0
             }
-            Err(error) => emitir_error(&error),
+            Err(error) => emitir_error(idioma, &error),
         };
     };
 
@@ -327,21 +395,26 @@ async fn usuario(args: CuentaUsuarioArgs, rutas: &Rutas) -> u8 {
             Some(entrada) => {
                 match config::leer_cuenta(&config::RutasCuenta::nueva(entrada.carpeta.clone())) {
                     Ok(cuenta) => cuenta,
-                    Err(error) => return emitir_error(&ErrorCuentas::from(error)),
+                    Err(error) => return emitir_error(idioma, &ErrorCuentas::from(error)),
                 }
             }
-            None => return emitir_error(&ErrorCuentas::CuentaNoExiste(login)),
+            None => return emitir_error(idioma, &ErrorCuentas::CuentaNoExiste(login)),
         },
-        Err(error) => return emitir_error(&ErrorCuentas::from(error)),
+        Err(error) => return emitir_error(idioma, &ErrorCuentas::from(error)),
     };
     let token = match llavero.leer(&login, ClaveSecreto::TokenGitea) {
         Ok(Some(token)) => token,
         Ok(None) => return fallo("no hay token de administración de Gitea para esta cuenta"),
-        Err(error) => return fallo(&format!("no se pudo leer el llavero: {error}")),
+        Err(error) => {
+            return fallo(&format!(
+                "no se pudo leer el llavero: {}",
+                error.localizar(idioma)
+            ));
+        }
     };
     let gitea = match cuentas::cliente_gitea_de_cuenta(&cuenta, token) {
         Ok(gitea) => gitea,
-        Err(error) => return emitir_error(&error),
+        Err(error) => return emitir_error(idioma, &error),
     };
 
     if args.crear.is_some() {
@@ -360,7 +433,7 @@ async fn usuario(args: CuentaUsuarioArgs, rutas: &Rutas) -> u8 {
                 );
                 0
             }
-            Err(error) => emitir_error(&error),
+            Err(error) => emitir_error(idioma, &error),
         };
     }
 
@@ -369,7 +442,7 @@ async fn usuario(args: CuentaUsuarioArgs, rutas: &Rutas) -> u8 {
             salida::linea(&mut stdout, &format!("Usuario «{nombre}» eliminado."));
             0
         }
-        Err(error) => emitir_error(&error),
+        Err(error) => emitir_error(idioma, &error),
     }
 }
 
@@ -440,7 +513,7 @@ fn mostrar_informe_lan(login: &Nombre, informe: &InformeLan) {
 
 /// Lee el token de lectura de GitHub: sin eco si stdin es un terminal (con
 /// `rpassword`); si no lo es, una sola línea de stdin (para `cuenta add ... < fichero`).
-fn leer_token() -> Result<Secreto, String> {
+fn leer_token(idioma: Idioma) -> Result<Secreto, String> {
     if std::io::stdin().is_terminal() {
         rpassword::prompt_password("Token de lectura de GitHub: ")
             .map(Secreto::nuevo)
@@ -452,7 +525,10 @@ fn leer_token() -> Result<Secreto, String> {
             .map_err(|error| error.to_string())?;
         let valor = linea.trim_end_matches(['\n', '\r']);
         if valor.is_empty() {
-            Err("no se ha recibido ningún token por la entrada estándar".to_string())
+            Err(match idioma {
+                Idioma::Es => "no se ha recibido ningún token por la entrada estándar".to_string(),
+                Idioma::En => "no token was received on standard input".to_string(),
+            })
         } else {
             Ok(Secreto::nuevo(valor.to_string()))
         }
@@ -552,8 +628,8 @@ fn fallo_uso(mensaje: &str) -> u8 {
     CODIGO_ERROR_DE_USO
 }
 
-fn emitir_error(error: &ErrorCuentas) -> u8 {
+fn emitir_error(idioma: Idioma, error: &ErrorCuentas) -> u8 {
     let mut stderr = std::io::stderr().lock();
-    salida::error(&mut stderr, error);
+    salida::error(&mut stderr, error, idioma);
     1
 }
