@@ -122,7 +122,9 @@ pub fn idioma_actual(rutas: &Rutas) -> Idioma {
 mod tests {
     use super::*;
     use crate::avisos::CambioAviso;
-    use crate::cuentas::{MotivoAppIni, NombreComprobacion, ParteCuenta, TextoDoctor};
+    use crate::cuentas::{
+        MotivoAppIni, NombreComprobacion, ParteCuenta, TextoDoctor, TextoExterno,
+    };
     use std::path::PathBuf;
 
     fn env<'a>(pares: &'a [(&'a str, &'a str)]) -> impl Fn(&str) -> Option<String> + 'a {
@@ -351,6 +353,25 @@ mod tests {
         }
     }
 
+    #[test]
+    fn un_error_de_core_en_doctor_sale_en_el_idioma_pedido() {
+        use crate::modelo::ErrorNombre;
+        let texto = TextoDoctor::LlaveroNoAccesible {
+            error: TextoExterno::de(&ErrorNombre::Vacio),
+        };
+        let en = texto.localizar(Idioma::En);
+        assert_eq!(en, "the keyring is not accessible: the name is empty");
+        assert!(!en.contains("vacío"), "{en}");
+        let es = texto.localizar(Idioma::Es);
+        assert_eq!(
+            es,
+            format!(
+                "el llavero no está accesible: {}",
+                ErrorNombre::Vacio.localizar(Idioma::Es)
+            )
+        );
+    }
+
     fn caso_doctor(
         texto: TextoDoctor,
         es: &'static str,
@@ -374,7 +395,9 @@ mod tests {
                 "git version 2.43.0",
             ),
             caso_doctor(
-                T::GitNoDisponible { error: s("boom") },
+                T::GitNoDisponible {
+                    error: TextoExterno::literal("boom"),
+                },
                 "git no está disponible: boom",
                 "git is not available: boom",
             ),
@@ -403,7 +426,9 @@ mod tests {
                 "install the gnupg package (needed to verify the Gitea binary)",
             ),
             caso_doctor(
-                T::LlaveroErrorInterno { error: s("x") },
+                T::LlaveroErrorInterno {
+                    error: TextoExterno::literal("x"),
+                },
                 "error interno al comprobar el llavero: x",
                 "internal error while checking the keyring: x",
             ),
@@ -414,7 +439,9 @@ mod tests {
             ),
             caso_doctor(T::LlaveroAccesible, "accesible", "accessible"),
             caso_doctor(
-                T::LlaveroNoAccesible { error: s("x") },
+                T::LlaveroNoAccesible {
+                    error: TextoExterno::literal("x"),
+                },
                 "el llavero no está accesible: x",
                 "the keyring is not accessible: x",
             ),
@@ -449,7 +476,9 @@ mod tests {
                 "run: chmod 700 /d",
             ),
             caso_doctor(
-                T::PermisosNoLegibles { error: s("x") },
+                T::PermisosNoLegibles {
+                    error: TextoExterno::literal("x"),
+                },
                 "no se pudo leer sus permisos: x",
                 "could not read its permissions: x",
             ),
@@ -517,7 +546,9 @@ mod tests {
                 "investigate whether the database file has been tampered with by hand",
             ),
             caso_doctor(
-                T::AuditoriaNoVerificable { error: s("x") },
+                T::AuditoriaNoVerificable {
+                    error: TextoExterno::literal("x"),
+                },
                 "no se pudo verificar: x",
                 "could not be verified: x",
             ),
@@ -527,7 +558,9 @@ mod tests {
                 "check access to the store (~/.local/share/gitmereba/gitmereba.db)",
             ),
             caso_doctor(
-                T::CuentasIndiceIlegible { error: s("x") },
+                T::CuentasIndiceIlegible {
+                    error: TextoExterno::literal("x"),
+                },
                 "no se pudo leer el índice de cuentas: x",
                 "could not read the account index: x",
             ),
@@ -551,7 +584,13 @@ mod tests {
                 "existe con permisos 0700",
                 "exists with permissions 0700",
             ),
-            caso_doctor(T::ErrorSistema { error: s("x") }, "x", "x"),
+            caso_doctor(
+                T::ErrorSistema {
+                    error: TextoExterno::literal("x"),
+                },
+                "x",
+                "x",
+            ),
             caso_doctor(
                 T::ConsejoRevisarPermisosAMano,
                 "revisa los permisos a mano",
@@ -662,7 +701,9 @@ mod tests {
                 "delete the binary and let the app download and verify it again",
             ),
             caso_doctor(
-                T::BinarioHashError { error: s("x") },
+                T::BinarioHashError {
+                    error: TextoExterno::literal("x"),
+                },
                 "no se pudo calcular su SHA-256: x",
                 "could not compute its SHA-256: x",
             ),
@@ -723,7 +764,9 @@ mod tests {
                  retention can reach them",
             ),
             caso_doctor(
-                T::SnapshotsError { error: s("x") },
+                T::SnapshotsError {
+                    error: TextoExterno::literal("x"),
+                },
                 "no se pudieron listar los snapshots: x",
                 "could not list the snapshots: x",
             ),

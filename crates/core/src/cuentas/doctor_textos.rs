@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::idioma::Idioma;
+use crate::idioma::{Idioma, Localizable};
 
 /// Parte de una cuenta que revisa una comprobación.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -44,6 +44,35 @@ pub enum MotivoAppIni {
     ClaveSinPermisos,
 }
 
+/// Texto de un error que `doctor` muestra dentro de un mensaje. El informe se construye una
+/// sola vez y se muestra después en el idioma elegido, así que el error se guarda ya
+/// localizado en ambos idiomas.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TextoExterno {
+    pub es: String,
+    pub en: String,
+}
+
+impl TextoExterno {
+    /// Error de `core`: su texto en cada idioma.
+    pub fn de(error: &impl Localizable) -> Self {
+        Self {
+            es: error.localizar(Idioma::Es),
+            en: error.localizar(Idioma::En),
+        }
+    }
+
+    /// Error de una librería ajena (io, sistema) que no se puede traducir: el mismo texto
+    /// en ambos idiomas.
+    pub fn literal(texto: impl Into<String>) -> Self {
+        let texto = texto.into();
+        Self {
+            es: texto.clone(),
+            en: texto,
+        }
+    }
+}
+
 /// Mensajes y consejos de `doctor`. Los parámetros que vienen del exterior (errores,
 /// rutas) se muestran tal cual; ninguno lleva secretos.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -53,7 +82,7 @@ pub enum TextoDoctor {
         version: String,
     },
     GitNoDisponible {
-        error: String,
+        error: TextoExterno,
     },
     ConsejoInstalarGit,
     GpgvDisponible {
@@ -65,12 +94,12 @@ pub enum TextoDoctor {
     ConsejoInstalarGnupg,
     // --- llavero ---
     LlaveroErrorInterno {
-        error: String,
+        error: TextoExterno,
     },
     ConsejoRepetirComprobacion,
     LlaveroAccesible,
     LlaveroNoAccesible {
-        error: String,
+        error: TextoExterno,
     },
     ConsejoSecretService,
     // --- directorio de datos y permisos ---
@@ -84,7 +113,7 @@ pub enum TextoDoctor {
         ruta: PathBuf,
     },
     PermisosNoLegibles {
-        error: String,
+        error: TextoExterno,
     },
     ConsejoDirectorioAccesible,
     // --- aislamiento de systemd y cortafuegos ---
@@ -102,11 +131,11 @@ pub enum TextoDoctor {
     },
     ConsejoAuditoriaManipulada,
     AuditoriaNoVerificable {
-        error: String,
+        error: TextoExterno,
     },
     ConsejoAccesoAlmacen,
     CuentasIndiceIlegible {
-        error: String,
+        error: TextoExterno,
     },
     ConsejoPermisosIndice,
     // --- carpeta y app.ini de la cuenta ---
@@ -114,7 +143,7 @@ pub enum TextoDoctor {
     ConsejoRepetirAltaORestaurar,
     CarpetaExisteCon0700,
     ErrorSistema {
-        error: String,
+        error: TextoExterno,
     },
     ConsejoRevisarPermisosAMano,
     AppIniNoExiste,
@@ -142,7 +171,7 @@ pub enum TextoDoctor {
     BinarioHashDistinto,
     ConsejoBorrarBinario,
     BinarioHashError {
-        error: String,
+        error: TextoExterno,
     },
     ConsejoRevisarUrl,
     GiteaResponde,
@@ -162,7 +191,7 @@ pub enum TextoDoctor {
     },
     ConsejoCapturasProtegidas,
     SnapshotsError {
-        error: String,
+        error: TextoExterno,
     },
     ConsejoPermisosSnapshots,
     // --- temporizador ---

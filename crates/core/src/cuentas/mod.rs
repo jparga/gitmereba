@@ -36,7 +36,7 @@ pub use baja::baja;
 pub use comun::cliente_gitea_de_cuenta;
 pub use contexto::Contexto;
 pub use doctor::{Comprobacion, InformeDoctor, NivelComprobacion, comprobar_idioma, doctor};
-pub use doctor_textos::{MotivoAppIni, NombreComprobacion, ParteCuenta, TextoDoctor};
+pub use doctor_textos::{MotivoAppIni, NombreComprobacion, ParteCuenta, TextoDoctor, TextoExterno};
 pub use error::ErrorCuentas;
 pub use estado::{ConteoRepos, EstadoCuenta, estado};
 pub use lan::{InformeLan, estado_lan, exponer_lan, ocultar_lan};

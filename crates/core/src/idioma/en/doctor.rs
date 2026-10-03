@@ -47,7 +47,9 @@ fn motivo(m: &MotivoAppIni) -> String {
 pub(crate) fn texto(t: &TextoDoctor) -> String {
     match t {
         TextoDoctor::GitVersion { version } => version.clone(),
-        TextoDoctor::GitNoDisponible { error } => format!("git is not available: {error}"),
+        TextoDoctor::GitNoDisponible { error } => {
+            format!("git is not available: {error}", error = error.en)
+        }
         TextoDoctor::ConsejoInstalarGit => {
             "install git and make sure it is on the PATH".to_string()
         }
@@ -57,14 +59,17 @@ pub(crate) fn texto(t: &TextoDoctor) -> String {
             "install the gnupg package (needed to verify the Gitea binary)".to_string()
         }
         TextoDoctor::LlaveroErrorInterno { error } => {
-            format!("internal error while checking the keyring: {error}")
+            format!(
+                "internal error while checking the keyring: {error}",
+                error = error.en
+            )
         }
         TextoDoctor::ConsejoRepetirComprobacion => {
             "repeat the check; if it persists, report the error".to_string()
         }
         TextoDoctor::LlaveroAccesible => "accessible".to_string(),
         TextoDoctor::LlaveroNoAccesible { error } => {
-            format!("the keyring is not accessible: {error}")
+            format!("the keyring is not accessible: {error}", error = error.en)
         }
         TextoDoctor::ConsejoSecretService => {
             "check that a Secret Service is running (GNOME Keyring, KWallet)".to_string()
@@ -81,7 +86,7 @@ pub(crate) fn texto(t: &TextoDoctor) -> String {
         }
         TextoDoctor::ConsejoChmod700 { ruta } => format!("run: chmod 700 {}", ruta.display()),
         TextoDoctor::PermisosNoLegibles { error } => {
-            format!("could not read its permissions: {error}")
+            format!("could not read its permissions: {error}", error = error.en)
         }
         TextoDoctor::ConsejoDirectorioAccesible => {
             "check that the directory exists and is accessible".to_string()
@@ -120,13 +125,16 @@ pub(crate) fn texto(t: &TextoDoctor) -> String {
             "investigate whether the database file has been tampered with by hand".to_string()
         }
         TextoDoctor::AuditoriaNoVerificable { error } => {
-            format!("could not be verified: {error}")
+            format!("could not be verified: {error}", error = error.en)
         }
         TextoDoctor::ConsejoAccesoAlmacen => {
             "check access to the store (~/.local/share/gitmereba/gitmereba.db)".to_string()
         }
         TextoDoctor::CuentasIndiceIlegible { error } => {
-            format!("could not read the account index: {error}")
+            format!(
+                "could not read the account index: {error}",
+                error = error.en
+            )
         }
         TextoDoctor::ConsejoPermisosIndice => {
             "check the permissions of ~/.local/share/gitmereba/cuentas.toml".to_string()
@@ -136,7 +144,7 @@ pub(crate) fn texto(t: &TextoDoctor) -> String {
             "repeat the sign-up or restore the folder from a backup".to_string()
         }
         TextoDoctor::CarpetaExisteCon0700 => "exists with permissions 0700".to_string(),
-        TextoDoctor::ErrorSistema { error } => error.clone(),
+        TextoDoctor::ErrorSistema { error } => error.en.clone(),
         TextoDoctor::ConsejoRevisarPermisosAMano => "check the permissions by hand".to_string(),
         TextoDoctor::AppIniNoExiste => "app.ini does not exist".to_string(),
         TextoDoctor::ConsejoRepetirAltaProvision => {
@@ -175,7 +183,7 @@ pub(crate) fn texto(t: &TextoDoctor) -> String {
             "delete the binary and let the app download and verify it again".to_string()
         }
         TextoDoctor::BinarioHashError { error } => {
-            format!("could not compute its SHA-256: {error}")
+            format!("could not compute its SHA-256: {error}", error = error.en)
         }
         TextoDoctor::ConsejoRevisarUrl => "check the account URL".to_string(),
         TextoDoctor::GiteaResponde => "responding".to_string(),
@@ -202,7 +210,7 @@ pub(crate) fn texto(t: &TextoDoctor) -> String {
                 .to_string()
         }
         TextoDoctor::SnapshotsError { error } => {
-            format!("could not list the snapshots: {error}")
+            format!("could not list the snapshots: {error}", error = error.en)
         }
         TextoDoctor::ConsejoPermisosSnapshots => {
             "check the permissions of the account's “snapshots/” folder".to_string()
