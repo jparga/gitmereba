@@ -5,3 +5,4 @@ pub(super) mod doctor;
 pub(super) mod progreso;
 pub(super) mod reconciliacion;
 pub(super) mod sync;
+pub(super) mod verificacion;

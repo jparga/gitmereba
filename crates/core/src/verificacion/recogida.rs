@@ -141,7 +141,7 @@ pub async fn verificar_cuenta<G: ApiGithub>(
             }
         }
         Err(e) => avisos.push(Aviso::ErrorIdentidad {
-            mensaje: e.to_string(),
+            mensaje: TextoExterno::de(&e),
         }),
     }
 

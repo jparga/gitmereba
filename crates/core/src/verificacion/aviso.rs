@@ -27,7 +27,7 @@ pub enum Aviso {
     ErrorRepo { id: IdRepo, mensaje: TextoExterno },
     /// No se ha podido consultar la identidad del token en uso, así que no se ha podido
     /// comprobar su caducidad en esta pasada.
-    ErrorIdentidad { mensaje: String },
+    ErrorIdentidad { mensaje: TextoExterno },
 }
 
 impl fmt::Display for Aviso {
@@ -48,7 +48,8 @@ impl fmt::Display for Aviso {
             Aviso::ErrorRepo { id, mensaje } => write!(f, "«{id}»: {}", mensaje.es),
             Aviso::ErrorIdentidad { mensaje } => write!(
                 f,
-                "no se ha podido consultar la identidad del token: {mensaje}"
+                "no se ha podido consultar la identidad del token: {}",
+                mensaje.es
             ),
         }
     }
@@ -77,6 +78,47 @@ mod tests {
         let nuevo = serde_json::to_string(&aviso).expect("serializar");
         let leido: Aviso = serde_json::from_str(&nuevo).expect("formato nuevo");
         assert_eq!(leido, aviso);
+    }
+
+    #[test]
+    fn un_error_identidad_guardado_antes_con_cadena_se_sigue_leyendo() {
+        let antiguo = r#"{"error-identidad":{"mensaje":"sin red"}}"#;
+        let aviso: Aviso = serde_json::from_str(antiguo).expect("formato antiguo");
+        assert_eq!(
+            aviso,
+            Aviso::ErrorIdentidad {
+                mensaje: TextoExterno::literal("sin red"),
+            }
+        );
+        let nuevo = serde_json::to_string(&aviso).expect("serializar");
+        let leido: Aviso = serde_json::from_str(&nuevo).expect("formato nuevo");
+        assert_eq!(leido, aviso);
+    }
+
+    #[test]
+    fn un_error_identidad_se_muestra_en_cada_idioma() {
+        use crate::github::ErrorGithub;
+        use crate::idioma::{Idioma, Localizable};
+
+        let error = ErrorGithub::TokenInvalido;
+        let aviso = Aviso::ErrorIdentidad {
+            mensaje: TextoExterno::de(&error),
+        };
+        let es = aviso.localizar(Idioma::Es);
+        assert_eq!(es, aviso.to_string());
+        assert_eq!(
+            es,
+            format!(
+                "no se ha podido consultar la identidad del token: {}",
+                error
+            )
+        );
+        let en = aviso.localizar(Idioma::En);
+        assert!(
+            en.starts_with("could not check the token identity: "),
+            "{en}"
+        );
+        assert!(!en.contains(&error.to_string()), "{en}");
     }
 
     #[test]
