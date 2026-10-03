@@ -5,6 +5,21 @@
 // Las formas imitan lo que documenta el contrato con la interfaz. No hay red real: los
 // `http://127.0.0.1:<puerto>` son ilustrativos (Gitea siempre escucha en local).
 
+// Idioma de la previsualización: `?idioma=en` (o `es`) en la URL; sin él, el del navegador.
+// La preferencia solo vive en memoria: al recargar vuelve a leerse de la URL.
+let preferenciaIdioma = 'auto';
+
+function idiomaResuelto() {
+  const pedido = new URLSearchParams(globalThis.location?.search ?? '').get('idioma');
+  if (pedido === 'es' || pedido === 'en') return pedido;
+  if (preferenciaIdioma !== 'auto') return preferenciaIdioma;
+  return (globalThis.navigator?.language ?? 'en').startsWith('es') ? 'es' : 'en';
+}
+
+// Texto simulado del backend en el idioma de la previsualización (los datos propios, como
+// logins o nombres de repositorio, no se traducen).
+const tx = (es, en) => (idiomaResuelto() === 'en' ? en : es);
+
 const ahora = Date.now();
 const haceMin = (m) => new Date(ahora - m * 60_000).toISOString();
 const haceHoras = (h) => new Date(ahora - h * 3_600_000).toISOString();
@@ -71,7 +86,7 @@ const REPOS = {
       estado: 'excluido',
       incluido: false,
       ultima_sync: haceDias(40),
-      detalle: 'Excluido por el usuario.',
+      detalle: tx('Excluido por el usuario.', 'Excluded by the user.'),
     }),
     repo('jparga', 'legacy-tool', {
       estado: 'obsoleto',
@@ -81,19 +96,19 @@ const REPOS = {
     repo('jparga', 'roto-ci', {
       estado: 'fallo',
       ultima_sync: haceHoras(6),
-      detalle: 'Tiempo de espera agotado al sincronizar con GitHub.',
+      detalle: tx('Tiempo de espera agotado al sincronizar con GitHub.', 'Timed out while syncing with GitHub.'),
     }),
     repo('jparga', 'borrado-en-github', {
       estado: 'huerfano',
       ultima_sync: haceDias(15),
-      detalle: 'Ya no existe en GitHub; se conserva en local.',
+      detalle: tx('Ya no existe en GitHub; se conserva en local.', 'It no longer exists on GitHub; it is kept locally.'),
     }),
     repo('mereba-oss', 'panel', { tamano_kb: 1536, ultima_sync: haceMin(20), puerto: 3900 }),
     repo('jparga', 'incidente-2024', {
       estado: 'contingencia',
       tamano_kb: 12288,
       ultima_sync: haceDias(2),
-      detalle: 'Convertido en repo con escritura durante una contingencia activa.',
+      detalle: tx('Convertido en repo con escritura durante una contingencia activa.', 'Turned into a writable repository during an active contingency.'),
     }),
   ],
   'mereba-ci': [
@@ -128,7 +143,7 @@ const REPOS = {
       tamano_kb: 512,
       ultima_sync: haceHoras(10),
       puerto: 3901,
-      detalle: 'Error de autenticación al listar el repositorio de origen.',
+      detalle: tx('Error de autenticación al listar el repositorio de origen.', 'Authentication error while listing the source repository.'),
     }),
   ],
 };
@@ -318,16 +333,27 @@ function clonarUnPocoMas(repos) {
   return repos;
 }
 
-const PASOS_ALTA = [
-  'Validar el token contra GitHub',
-  'Descubrir repositorios',
-  'Guardar el token en el llavero',
-  'Crear la carpeta y el puerto, escribir app.ini',
-  'Asegurar el binario de Gitea',
-  'Provisión desatendida (base de datos, administrador, token de API)',
-  'Instalar y arrancar las unidades systemd',
-  'Crear organizaciones y mirrors',
-];
+const PASOS_ALTA = idiomaResuelto() === 'en'
+  ? [
+      'Validate the token against GitHub',
+      'Discover repositories',
+      'Store the token in the keyring',
+      'Create the folder and the port, write app.ini',
+      'Ensure the Gitea binary',
+      'Unattended provisioning (database, administrator, API token)',
+      'Install and start the systemd units',
+      'Create organisations and mirrors',
+    ]
+  : [
+      'Validar el token contra GitHub',
+      'Descubrir repositorios',
+      'Guardar el token en el llavero',
+      'Crear la carpeta y el puerto, escribir app.ini',
+      'Asegurar el binario de Gitea',
+      'Provisión desatendida (base de datos, administrador, token de API)',
+      'Instalar y arrancar las unidades systemd',
+      'Crear organizaciones y mirrors',
+    ];
 
 const suscriptoresProgreso = new Set();
 
@@ -372,17 +398,6 @@ async function emitirProgresoSync(login) {
 }
 
 /** Simula `invoke(comando, args)` con los mismos nombres que el contrato con la interfaz. */
-// Idioma de la previsualización: `?idioma=en` (o `es`) en la URL; sin él, el del navegador.
-// La preferencia solo vive en memoria: al recargar vuelve a leerse de la URL.
-let preferenciaIdioma = 'auto';
-
-function idiomaResuelto() {
-  const pedido = new URLSearchParams(globalThis.location?.search ?? '').get('idioma');
-  if (pedido === 'es' || pedido === 'en') return pedido;
-  if (preferenciaIdioma !== 'auto') return preferenciaIdioma;
-  return (globalThis.navigator?.language ?? 'en').startsWith('es') ? 'es' : 'en';
-}
-
 export async function invocar(comando, args = {}) {
   await esperar(120);
   switch (comando) {
@@ -399,7 +414,7 @@ export async function invocar(comando, args = {}) {
 
     case 'resumen_cuenta': {
       const cuenta = CUENTAS[args.login];
-      if (!cuenta) throw { codigo: 'cuenta_no_encontrada', mensaje: `No existe la cuenta «${args.login}».` };
+      if (!cuenta) throw { codigo: 'cuenta_no_encontrada', mensaje: tx(`No existe la cuenta «${args.login}».`, `Account “${args.login}” does not exist.`) };
       const repos = REPOS[args.login] ?? [];
       return {
         cuenta,
@@ -412,7 +427,7 @@ export async function invocar(comando, args = {}) {
     }
 
     case 'listar_repos':
-      if (!CUENTAS[args.login]) throw { codigo: 'cuenta_no_encontrada', mensaje: `No existe la cuenta «${args.login}».` };
+      if (!CUENTAS[args.login]) throw { codigo: 'cuenta_no_encontrada', mensaje: tx(`No existe la cuenta «${args.login}».`, `Account “${args.login}” does not exist.`) };
       return clonarUnPocoMas(REPOS[args.login] ?? []);
 
     case 'excluir_repo': {
@@ -445,7 +460,7 @@ export async function invocar(comando, args = {}) {
       return { carpeta: '/home/jparga/gitmereba/nueva-cuenta' };
 
     case 'validar_alta':
-      if (!args.token) throw { codigo: 'token_vacio', mensaje: 'Falta el token de lectura.' };
+      if (!args.token) throw { codigo: 'token_vacio', mensaje: tx('Falta el token de lectura.', 'The read token is missing.') };
       return {
         identidad: { login: 'nueva-cuenta', scopes: [], caduca: enDias(90) },
         repos: [
@@ -486,8 +501,8 @@ export async function invocar(comando, args = {}) {
       return { ok: true };
 
     case 'reconciliar':
-      if (!args.token) throw { codigo: 'token_vacio', mensaje: 'Falta el token de escritura.' };
-      return { resultado: 'ok', mensaje: 'Reconciliado: GitHub ya contiene todos los commits locales.' };
+      if (!args.token) throw { codigo: 'token_vacio', mensaje: tx('Falta el token de escritura.', 'The write token is missing.') };
+      return { resultado: 'ok', mensaje: tx('Reconciliado: GitHub ya contiene todos los commits locales.', 'Reconciled: GitHub now has every local commit.') };
 
     case 'ajustes_leer':
       return { cuenta: CUENTAS[args.login], version_gitea: '1.27.3', snapshots: [] };
@@ -497,7 +512,7 @@ export async function invocar(comando, args = {}) {
       return { ok: true };
 
     case 'rotar_token':
-      if (!args.token) throw { codigo: 'token_vacio', mensaje: 'Falta el token nuevo.' };
+      if (!args.token) throw { codigo: 'token_vacio', mensaje: tx('Falta el token nuevo.', 'The new token is missing.') };
       return { ok: true };
 
     case 'baja_cuenta':
@@ -520,7 +535,7 @@ export async function invocar(comando, args = {}) {
     case 'lan_activar': {
       const host = args.host ?? hostSugerido(args.login);
       if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*\.internal$/.test(host)) {
-        throw { codigo: 'host_invalido', mensaje: 'El nombre debe ser un nombre de host en minúsculas que termine en «.internal».' };
+        throw { codigo: 'host_invalido', mensaje: tx('El nombre debe ser un nombre de host en minúsculas que termine en «.internal».', 'The name must be a lowercase host name ending in “.internal”.') };
       }
       LAN[args.login] = host;
       return informeLan(args.login);
@@ -537,12 +552,12 @@ export async function invocar(comando, args = {}) {
       if (!nombreUsuarioLanValido(args.nombre)) {
         throw {
           codigo: 'usuario_no_valido',
-          mensaje: `«${args.nombre}» no es un nombre de usuario válido para Gitea.`,
+          mensaje: tx(`«${args.nombre}» no es un nombre de usuario válido para Gitea.`, `“${args.nombre}” is not a valid Gitea username.`),
         };
       }
       const usuarios = USUARIOS_LAN[args.login] ?? (USUARIOS_LAN[args.login] = []);
       if (usuarios.includes(args.nombre)) {
-        throw { codigo: 'usuario_ya_existe', mensaje: `Ya existe un usuario «${args.nombre}» en este Gitea.` };
+        throw { codigo: 'usuario_ya_existe', mensaje: tx(`Ya existe un usuario «${args.nombre}» en este Gitea.`, `A user “${args.nombre}” already exists in this Gitea.`) };
       }
       usuarios.push(args.nombre);
       return { nombre: args.nombre, password: passwordLanDeEjemplo() };
@@ -556,6 +571,6 @@ export async function invocar(comando, args = {}) {
     }
 
     default:
-      throw { codigo: 'comando_desconocido', mensaje: `Comando no reconocido: «${comando}».` };
+      throw { codigo: 'comando_desconocido', mensaje: tx(`Comando no reconocido: «${comando}».`, `Unknown command: “${comando}”.`) };
   }
 }

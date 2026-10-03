@@ -9,12 +9,12 @@ Keep a local, working clone of your GitHub accounts on a native Gitea, and keep 
 ![Platform: Linux](https://img.shields.io/badge/platform-Linux-lightgrey)
 ![Rust](https://img.shields.io/badge/built%20with-Rust-orange)
 
-![gitmereba, Resumen (summary) screen](docs/capturas/resumen.png)
+![gitmereba, Summary screen](docs/capturas/resumen.en.png)
 
 <p>
-  <img src="docs/capturas/repositorios.png" alt="Repositorios screen" width="32%">
-  <img src="docs/capturas/contingencia.png" alt="Contingencia screen" width="32%">
-  <img src="docs/capturas/resumen-oscuro.png" alt="Resumen screen, dark theme" width="32%">
+  <img src="docs/capturas/repositorios.en.png" alt="Repositories screen" width="32%">
+  <img src="docs/capturas/contingencia.en.png" alt="Contingency screen" width="32%">
+  <img src="docs/capturas/resumen-oscuro.en.png" alt="Summary screen, dark theme" width="32%">
 </p>
 
 ## What it is and why
@@ -115,7 +115,7 @@ To build from source or install without root, see [`docs/compilar.md`](docs/comp
 
 ## Quick start
 
-Window: run `gitmereba` with no arguments and press *Añadir cuenta*. CLI:
+Window: run `gitmereba` with no arguments and press *Add account*. CLI (the subcommands and flags are in Spanish):
 
 ```bash
 gitmereba cuenta add --login <user> --carpeta <path>   # asks for the token without echoing it
@@ -130,14 +130,16 @@ gitmereba cuenta rm <user>             # does not delete the repositories
 
 ## Documentation
 
-- [`docs/manual.md`](docs/manual.md): user manual (Spanish)
+- [`docs/manual.en.md`](docs/manual.en.md): user manual (English); [`docs/manual.md`](docs/manual.md) is the Spanish version
 - [`docs/compilar.md`](docs/compilar.md): building, packaging and installing from source
 - [`CHANGELOG.md`](CHANGELOG.md): what changed in each version
 
 ## Language
 
-The app UI, the CLI and the manual are currently **Spanish only**. An English UI is planned.
-Contributions, including translations, are welcome.
+The app window, the built-in help, the CLI help and messages, and the manual are available in
+**English and Spanish**. The language follows your system (`LC_ALL`, `LC_MESSAGES`, `LANG`;
+English if none is set) and can be changed in Settings. The CLI subcommands and flags are in
+Spanish. Contributions, including translations, are welcome.
 
 ## Status
 
