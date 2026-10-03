@@ -12,7 +12,6 @@ use std::path::{Path, PathBuf};
 const PENDIENTES: &[&str] = &[
     "ayuda.js",
     "vistas/ajustes.js",
-    "vistas/alta.js",
     "vistas/credenciales.js",
     "vistas/lan.js",
 ];

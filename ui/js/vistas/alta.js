@@ -1,6 +1,7 @@
 import { api, suscribirProgresoAlta } from '../api.js';
 import { h, pintar, tamanoLegible, avisar } from '../dom.js';
 import { navegar } from '../router.js';
+import { t, formatoFecha } from '../i18n.js';
 
 // Nunca se guarda un token en una variable de módulo ni de estado: cada paso lo lee
 // directamente del <input> en el momento de invocar el comando correspondiente, y lo
@@ -10,7 +11,7 @@ import { navegar } from '../router.js';
 // interfaz en sus notas de seguridad).
 
 function pasosAsistente(actual) {
-  const nombres = ['Cuenta y token', 'Previsualización', 'Progreso'];
+  const nombres = [t('alta.paso.cuenta'), t('alta.paso.previa'), t('alta.paso.progreso')];
   return h(
     'ol',
     { clase: 'asistente-pasos' },
@@ -26,21 +27,19 @@ function ayudaToken() {
   return h(
     'details',
     { clase: 'disclosure mb' },
-    h('summary', null, 'Cómo crear un token de solo lectura'),
+    h('summary', null, t('alta.ayuda.titulo')),
     h(
       'div',
       null,
       h(
         'p',
         null,
-        'En GitHub: Settings → Developer settings → Personal access tokens → Fine-grained tokens → ',
-        'Generate new token. Limita el repositorio o la organización que quieras clonar y, en ',
-        '«Repository permissions», concede solo lectura a ',
-        h('strong', null, 'Contents'),
-        ' y ',
-        h('strong', null, 'Metadata'),
-        '. También se admite un token clásico con el permiso ',
-        h('strong', null, 'repo'),
+        t('alta.ayuda.pasos'),
+        h('strong', null, t('alta.ayuda.permiso_contents')),
+        t('alta.ayuda.y'),
+        h('strong', null, t('alta.ayuda.permiso_metadata')),
+        t('alta.ayuda.clasico'),
+        h('strong', null, t('alta.ayuda.permiso_repo')),
         '.',
       ),
     ),
@@ -58,16 +57,16 @@ async function pasoUno(contenedor, avanzar) {
     const token = entradaToken.value;
     const carpeta = entradaCarpeta.value.trim();
     if (!usuario || !token || !carpeta) {
-      mensaje.textContent = 'Rellena usuario, token y carpeta de destino.';
+      mensaje.textContent = t('alta.falta_datos');
       return;
     }
     boton.disabled = true;
-    mensaje.textContent = 'Comprobando…';
+    mensaje.textContent = t('alta.comprobando');
     try {
       const previa = await api.validarAlta(usuario, token, carpeta);
       avanzar({ usuario, carpeta, previa });
     } catch (error) {
-      mensaje.textContent = `No se pudo validar: ${error?.mensaje ?? error}`;
+      mensaje.textContent = t('alta.validar.error', { mensaje: error?.mensaje ?? error });
     } finally {
       // Se borra tanto en éxito como en error: en éxito, el paso 2 vuelve a pedirlo
       // antes de crear la cuenta; nunca queda retenido en el DOM más de lo necesario.
@@ -78,25 +77,25 @@ async function pasoUno(contenedor, avanzar) {
 
   pintar(
     contenedor,
-    h('h2', null, 'Usuario de GitHub y token de lectura'),
+    h('h2', null, t('alta.uno.titulo')),
     ayudaToken(),
     h(
       'div',
       { clase: 'field' },
-      h('label', { for: 'alta-usuario' }, 'Usuario de GitHub'),
+      h('label', { for: 'alta-usuario' }, t('alta.usuario')),
       (entradaUsuario = h('input', { id: 'alta-usuario', type: 'text', autocomplete: 'off', required: true })),
     ),
     h(
       'div',
       { clase: 'field' },
-      h('label', { for: 'alta-token' }, 'Token de lectura (PAT)'),
+      h('label', { for: 'alta-token' }, t('alta.token')),
       (entradaToken = h('input', { id: 'alta-token', type: 'password', autocomplete: 'off', required: true })),
-      h('p', { clase: 'aviso-secreto' }, 'No se guarda en la interfaz: se borra en cuanto se usa.'),
+      h('p', { clase: 'aviso-secreto' }, t('alta.token.aviso')),
     ),
     h(
       'div',
       { clase: 'field' },
-      h('label', { for: 'alta-carpeta' }, 'Carpeta de destino'),
+      h('label', { for: 'alta-carpeta' }, t('alta.carpeta')),
       h(
         'div',
         { clase: 'inline-form' },
@@ -111,7 +110,7 @@ async function pasoUno(contenedor, avanzar) {
               if (elegida?.carpeta) entradaCarpeta.value = elegida.carpeta;
             },
           },
-          'Elegir…',
+          t('alta.elegir'),
         ),
       ),
     ),
@@ -119,7 +118,7 @@ async function pasoUno(contenedor, avanzar) {
     h(
       'div',
       { clase: 'row mt' },
-      h('button', { clase: 'btn', onClick: (evento) => comprobar(evento.currentTarget) }, 'Comprobar'),
+      h('button', { clase: 'btn', onClick: (evento) => comprobar(evento.currentTarget) }, t('alta.comprobar')),
     ),
   );
 }
@@ -142,8 +141,8 @@ function filaRepoPreview(repo, seleccionados) {
       },
     }),
     h('label', { for: id, clase: 'mono' }, `${repo.dueno}/${repo.nombre}`),
-    repo.privado ? h('span', { clase: 'badge muted' }, 'Privado') : null,
-    repo.es_fork ? h('span', { clase: 'badge purple' }, 'Fork') : null,
+    repo.privado ? h('span', { clase: 'badge muted' }, t('repos.privado')) : null,
+    repo.es_fork ? h('span', { clase: 'badge purple' }, t('repos.col.fork')) : null,
     h('span', { clase: 'hint' }, tamanoLegible(repo.tamano_kb)),
   );
 }
@@ -161,31 +160,31 @@ async function pasoDos(contenedor, datosUno, avanzar, retroceder) {
     h('div', { clase: 'card pad mb' }, h('h3', null, dueno), h('ul', { clase: 'section' }, repos.map((r) => filaRepoPreview(r, seleccionados)))),
   );
 
-  const caduca = previa.identidad.caduca ? new Date(previa.identidad.caduca).toLocaleDateString('es-ES') : 'sin caducidad informada';
+  const caduca = previa.identidad.caduca ? formatoFecha(new Date(previa.identidad.caduca)) : t('alta.previa.sin_caducidad');
 
   let entradaToken;
   const mensaje = h('p', { clase: 'hint' });
 
   pintar(
     contenedor,
-    h('h2', null, 'Previsualización'),
-    h('p', null, `Identidad validada: ${previa.identidad.login}. Token caduca: ${caduca}.`),
-    h('p', { clase: 'hint' }, `${previa.repos.length} repositorio(s) descubiertos, ${tamanoLegible(previa.total_tamano_kb)} en total.`),
+    h('h2', null, t('alta.paso.previa')),
+    h('p', null, t('alta.previa.identidad', { login: previa.identidad.login, caduca })),
+    h('p', { clase: 'hint' }, t('alta.previa.descubiertos', { n: previa.repos.length, tamano: tamanoLegible(previa.total_tamano_kb) })),
     grupos,
-    h('h3', { clase: 'mt' }, 'Confirmar y crear'),
-    h('p', null, 'Vuelve a escribir el token de lectura para crear la cuenta.'),
+    h('h3', { clase: 'mt' }, t('alta.confirmar.titulo')),
+    h('p', null, t('alta.confirmar.texto')),
     h(
       'div',
       { clase: 'field' },
-      h('label', { for: 'alta-token-confirmar' }, 'Token de lectura'),
+      h('label', { for: 'alta-token-confirmar' }, t('alta.confirmar.token')),
       (entradaToken = h('input', { id: 'alta-token-confirmar', type: 'password', autocomplete: 'off', required: true })),
-      h('p', { clase: 'aviso-secreto' }, 'No se guarda: se borra en cuanto se envía.'),
+      h('p', { clase: 'aviso-secreto' }, t('alta.confirmar.aviso')),
     ),
     mensaje,
     h(
       'div',
       { clase: 'row mt' },
-      h('button', { clase: 'btn ghost', onClick: retroceder }, 'Atrás'),
+      h('button', { clase: 'btn ghost', onClick: retroceder }, t('alta.atras')),
       h(
         'button',
         {
@@ -194,11 +193,11 @@ async function pasoDos(contenedor, datosUno, avanzar, retroceder) {
             const token = entradaToken.value;
             entradaToken.value = '';
             if (!token) {
-              mensaje.textContent = 'Escribe el token para continuar.';
+              mensaje.textContent = t('alta.confirmar.falta_token');
               return;
             }
             if (seleccionados.size === 0) {
-              mensaje.textContent = 'Selecciona al menos un repositorio.';
+              mensaje.textContent = t('alta.confirmar.falta_repos');
               return;
             }
             evento.currentTarget.disabled = true;
@@ -211,21 +210,20 @@ async function pasoDos(contenedor, datosUno, avanzar, retroceder) {
             });
           },
         },
-        'Crear cuenta',
+        t('alta.crear'),
       ),
     ),
   );
 }
 
-const ETIQUETAS_PROGRESO_ESTADO = { 'en-curso': 'En curso…', ok: 'Hecho', error: 'Error' };
 const ICONOS_PROGRESO_ESTADO = { 'en-curso': '…', ok: '✓', error: '✕' };
 
 async function pasoTres(contenedor, datosDos) {
   const lista = h('ul', { clase: 'pasos-progreso' });
   const filas = new Map();
-  const final = h('p', { clase: 'hint mt' }, 'Creando la cuenta…');
+  const final = h('p', { clase: 'hint mt' }, t('alta.progreso.creando'));
 
-  pintar(contenedor, h('h2', null, 'Creando la cuenta'), lista, final);
+  pintar(contenedor, h('h2', null, t('alta.progreso.titulo')), lista, final);
 
   const desuscribir = await suscribirProgresoAlta((evento) => {
     let fila = filas.get(evento.paso);
@@ -242,8 +240,8 @@ async function pasoTres(contenedor, datosDos) {
     fila.className = evento.estado;
     fila.querySelector('.estado-icono').textContent = ICONOS_PROGRESO_ESTADO[evento.estado] ?? '';
     if (evento.paso === evento.total - 1 && evento.estado === 'ok') {
-      final.textContent = 'Cuenta creada. Ya puedes verla en Resumen.';
-      final.after(h('button', { clase: 'btn accent', onClick: () => navegar('resumen') }, 'Ir a Resumen'));
+      final.textContent = t('alta.progreso.creada');
+      final.after(h('button', { clase: 'btn accent', onClick: () => navegar('resumen') }, t('alta.progreso.ir_resumen')));
     }
   });
 
@@ -254,8 +252,8 @@ async function pasoTres(contenedor, datosDos) {
   try {
     await api.crearCuenta({ ...resto, token });
   } catch (error) {
-    final.textContent = `Error al crear la cuenta: ${error?.mensaje ?? error}`;
-    avisar(`No se pudo completar el alta: ${error?.mensaje ?? error}`, 'error');
+    final.textContent = t('alta.progreso.error', { mensaje: error?.mensaje ?? error });
+    avisar(t('alta.error', { mensaje: error?.mensaje ?? error }), 'error');
   }
   return desuscribir;
 }
@@ -269,7 +267,7 @@ export async function render(contenedor) {
   pintar(contenedor, cabecera, marco);
 
   function repintarCabecera(paso) {
-    pintar(cabecera, h('h1', null, 'Añadir cuenta'), pasosAsistente(paso));
+    pintar(cabecera, h('h1', null, t('resumen.anadir_cuenta')), pasosAsistente(paso));
   }
 
   async function mostrarPasoUno() {
