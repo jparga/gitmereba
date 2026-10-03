@@ -15,6 +15,8 @@ rm -f "$prefijo/share/applications/gitmereba.desktop"
 for n in "${tamanos_icono[@]}"; do
     rm -f "$prefijo/share/icons/hicolor/${n}x${n}/apps/gitmereba.png"
 done
+rm -f "$prefijo/share/doc/gitmereba/manual.md" "$prefijo/share/doc/gitmereba/manual.en.md"
+rmdir "$prefijo/share/doc/gitmereba" 2>/dev/null || true
 
 if command -v gtk-update-icon-cache >/dev/null 2>&1 && [ -d "$prefijo/share/icons/hicolor" ]; then
     gtk-update-icon-cache -q "$prefijo/share/icons/hicolor" 2>/dev/null || true

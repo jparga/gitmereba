@@ -52,6 +52,16 @@ for n in "${tamanos_icono[@]}"; do
     install -m 0644 "$icono_origen" "$prefijo/share/icons/hicolor/${n}x${n}/apps/gitmereba.png"
 done
 
+# Manuales: opcionales (en el paquete tar o en docs/ del repositorio).
+for nombre_manual in manual.md manual.en.md; do
+    if manual_origen="$(primero_existente \
+        "$script_dir/share/doc/gitmereba/$nombre_manual" \
+        "$script_dir/../docs/$nombre_manual")"; then
+        mkdir -p "$prefijo/share/doc/gitmereba"
+        install -m 0644 "$manual_origen" "$prefijo/share/doc/gitmereba/$nombre_manual"
+    fi
+done
+
 if command -v gtk-update-icon-cache >/dev/null 2>&1 && [ -d "$prefijo/share/icons/hicolor" ]; then
     gtk-update-icon-cache -q "$prefijo/share/icons/hicolor" 2>/dev/null || true
 fi
