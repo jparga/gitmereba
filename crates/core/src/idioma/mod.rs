@@ -9,7 +9,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::avisos::TextoAviso;
 use crate::config::Rutas;
-use crate::cuentas::{NombreComprobacion, TextoDoctor};
+use crate::cuentas::{NombreComprobacion, PasoAlta, TextoDoctor};
+use crate::sync::InformeSync;
 
 pub use preferencias::{LecturaPreferencia, Preferencia, guardar_preferencia, leer_preferencia};
 
@@ -109,6 +110,29 @@ impl Localizable for NombreComprobacion {
             Idioma::En => en::doctor::nombre(self),
         }
     }
+}
+
+impl Localizable for InformeSync {
+    fn localizar(&self, idioma: Idioma) -> String {
+        match idioma {
+            Idioma::Es => es::sync::resumen(self),
+            Idioma::En => en::sync::resumen(self),
+        }
+    }
+}
+
+impl Localizable for PasoAlta {
+    fn localizar(&self, idioma: Idioma) -> String {
+        match idioma {
+            Idioma::Es => es::progreso::descripcion(*self).to_string(),
+            Idioma::En => en::progreso::descripcion(*self).to_string(),
+        }
+    }
+}
+
+/// Descripción en español de un paso del alta, para `PasoAlta::descripcion`.
+pub(crate) fn descripcion_paso_es(paso: PasoAlta) -> &'static str {
+    es::progreso::descripcion(paso)
 }
 
 /// Idioma actual de la app: preferencia guardada y entorno real del proceso.

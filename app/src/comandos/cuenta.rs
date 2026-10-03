@@ -107,7 +107,7 @@ async fn add(args: CuentaAddArgs, rutas: &Rutas) -> u8 {
     };
     let contexto = Contexto::nuevo(rutas, &llavero, &almacen);
     let aprovisionador = AprovisionadorReal;
-    let mut progreso = |paso: PasoAlta, estado: EstadoPaso| imprimir_progreso(paso, estado);
+    let mut progreso = |paso: PasoAlta, estado: EstadoPaso| imprimir_progreso(paso, estado, idioma);
 
     let resultado = if args.primer_plano {
         let lanzador = LanzadorPrimerPlano::nuevo();
@@ -146,7 +146,7 @@ async fn add(args: CuentaAddArgs, rutas: &Rutas) -> u8 {
     match resultado {
         Ok(informe) => {
             let mut stdout = std::io::stdout().lock();
-            salida::linea(&mut stdout, &informe.resumen());
+            salida::linea(&mut stdout, &informe.localizar(idioma));
             0
         }
         Err(error) => emitir_error(idioma, &error),
@@ -605,13 +605,16 @@ fn mostrar_previsualizacion(previsualizacion: &Previsualizacion, idioma: Idioma)
     );
 }
 
-fn imprimir_progreso(paso: PasoAlta, estado: EstadoPaso) {
+fn imprimir_progreso(paso: PasoAlta, estado: EstadoPaso, idioma: Idioma) {
     let mut stdout = std::io::stdout().lock();
     let marca = match estado {
         EstadoPaso::Iniciando => "…",
         EstadoPaso::Hecho => "OK",
     };
-    salida::linea(&mut stdout, &format!("[{marca}] {}", paso.descripcion()));
+    salida::linea(
+        &mut stdout,
+        &format!("[{marca}] {}", paso.localizar(idioma)),
+    );
 }
 
 fn fallo(mensaje: &str) -> u8 {

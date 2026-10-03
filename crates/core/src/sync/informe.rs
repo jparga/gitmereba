@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
+use crate::idioma::{Idioma, Localizable};
 use crate::modelo::{Cuenta, IdRepo, Nombre, RepoOrigen};
 
 use super::plan::{Accion, AlertaPlan, Plan};
@@ -77,43 +78,47 @@ impl InformeSync {
                 .any(|r| matches!(r.resultado, ResultadoAccion::Error(_)))
     }
 
-    /// Una línea en español con el resumen de la pasada.
+    /// Una línea en español con el resumen de la pasada. Es el texto que se guarda en el
+    /// histórico y la auditoría; para mostrarlo al usuario, [`Localizable::localizar`].
     pub fn resumen(&self) -> String {
-        let altas = contar(&self.plan.acciones, |a| matches!(a, Accion::CrearMirror(_)));
-        let pausados = contar(&self.plan.acciones, |a| {
-            matches!(a, Accion::MarcarHuerfano(_))
-        });
-        let reanudados = contar(&self.plan.acciones, |a| matches!(a, Accion::Reanudar(_)));
-        let ajustados = contar(&self.plan.acciones, |a| {
-            matches!(a, Accion::AjustarIntervalo { .. })
-        });
-        let fallos = self
-            .resultados
-            .iter()
-            .filter(|r| matches!(r.resultado, ResultadoAccion::Error(_)))
-            .count();
-
-        let mut resumen = format!(
-            "Sincronización de «{}»: {altas} alta(s), {pausados} pausado(s), \
-             {reanudados} reanudado(s), {ajustados} ajuste(s) de intervalo, {} omitido(s)",
-            self.cuenta.login,
-            self.plan.omitidos.len()
-        );
-        if fallos > 0 {
-            resumen.push_str(&format!(", {fallos} fallo(s)"));
-        }
-        if !self.errores_de_listado.is_empty() {
-            resumen.push_str(&format!(
-                ", {} listado(s) fallido(s)",
-                self.errores_de_listado.len()
-            ));
-        }
-        if self.alerta.is_some() {
-            resumen.push_str(", alerta: demasiados huérfanos, no se ha marcado ninguno");
-        }
-        resumen.push('.');
-        resumen
+        self.localizar(Idioma::Es)
     }
+
+    /// Las cifras de la pasada, que los catálogos de idioma convierten en texto.
+    pub(crate) fn cifras(&self) -> CifrasResumen<'_> {
+        CifrasResumen {
+            login: self.cuenta.login.as_str(),
+            altas: contar(&self.plan.acciones, |a| matches!(a, Accion::CrearMirror(_))),
+            pausados: contar(&self.plan.acciones, |a| {
+                matches!(a, Accion::MarcarHuerfano(_))
+            }),
+            reanudados: contar(&self.plan.acciones, |a| matches!(a, Accion::Reanudar(_))),
+            ajustados: contar(&self.plan.acciones, |a| {
+                matches!(a, Accion::AjustarIntervalo { .. })
+            }),
+            omitidos: self.plan.omitidos.len(),
+            fallos: self
+                .resultados
+                .iter()
+                .filter(|r| matches!(r.resultado, ResultadoAccion::Error(_)))
+                .count(),
+            listados_fallidos: self.errores_de_listado.len(),
+            alerta: self.alerta.is_some(),
+        }
+    }
+}
+
+/// Cifras de un [`InformeSync`] para redactar su resumen.
+pub(crate) struct CifrasResumen<'a> {
+    pub login: &'a str,
+    pub altas: usize,
+    pub pausados: usize,
+    pub reanudados: usize,
+    pub ajustados: usize,
+    pub omitidos: usize,
+    pub fallos: usize,
+    pub listados_fallidos: usize,
+    pub alerta: bool,
 }
 
 fn contar<F: Fn(&Accion) -> bool>(acciones: &[Accion], f: F) -> usize {
@@ -196,5 +201,41 @@ mod tests {
         assert!(resumen.contains("1 alta"));
         assert!(resumen.contains("1 pausado"));
         assert!(resumen.ends_with('.'));
+    }
+
+    #[test]
+    fn el_resumen_sale_en_el_idioma_pedido() {
+        use crate::idioma::{Idioma, Localizable};
+        let mut informe = informe_base();
+        informe.plan.acciones.push(Accion::CrearMirror(repo_origen(
+            "jparga", "nuevo", false, false,
+        )));
+        informe.resultados.push(ResultadoRepo {
+            id: id("jparga", "nuevo"),
+            accion: TipoAccion::CrearMirror,
+            resultado: ResultadoAccion::Error("boom".to_string()),
+        });
+        informe.alerta = Some(AlertaPlan::DemasiadosHuerfanos {
+            candidatos: 5,
+            total_mirrors: 6,
+            listado_github_vacio: false,
+        });
+        informe.errores_de_listado.push(ErrorListado {
+            dueno: id("jparga", "x").dueno,
+            mensaje: "fallo".to_string(),
+        });
+        assert_eq!(
+            informe.localizar(Idioma::Es),
+            "Sincronización de «jparga»: 1 alta(s), 0 pausado(s), 0 reanudado(s), \
+             0 ajuste(s) de intervalo, 0 omitido(s), 1 fallo(s), 1 listado(s) fallido(s), \
+             alerta: demasiados huérfanos, no se ha marcado ninguno."
+        );
+        assert_eq!(informe.localizar(Idioma::Es), informe.resumen());
+        assert_eq!(
+            informe.localizar(Idioma::En),
+            "Sync of \"jparga\": 1 creation(s), 0 paused, 0 resumed, 0 interval change(s), \
+             0 skipped, 1 failure(s), 1 failed listing(s), \
+             alert: too many orphans, none have been marked."
+        );
     }
 }

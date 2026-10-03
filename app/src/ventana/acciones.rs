@@ -117,7 +117,7 @@ pub async fn sincronizar(
                     inicio: informe.inicio,
                     fin: informe.fin,
                     resultado: resultado_texto.to_string(),
-                    resumen: informe.resumen(),
+                    resumen: informe.localizar(idioma),
                 })
             }
             Some(id) => {
@@ -289,7 +289,7 @@ pub async fn crear_cuenta(
         let app_progreso = app.clone();
         let mut progreso = move |paso: PasoAlta, transicion: EstadoPaso| {
             ultimo_paso_progreso.store(indice_paso(paso), std::sync::atomic::Ordering::SeqCst);
-            let payload = payload_progreso(paso, transicion);
+            let payload = payload_progreso(paso, transicion, idioma);
             if let Err(error) = app_progreso.emit("alta://progreso", payload) {
                 tracing::warn!(error = %error, "no se pudo emitir el progreso del alta");
             }

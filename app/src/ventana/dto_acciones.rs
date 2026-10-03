@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
 use gitmereba_core::cuentas::{Descubrimiento, EstadoPaso, PasoAlta};
+use gitmereba_core::idioma::{Idioma, Localizable};
 use gitmereba_core::modelo::{Cuenta, RepoOrigen};
 use gitmereba_core::sync::{FaseSync, ProgresoSync};
 
@@ -155,11 +156,11 @@ pub fn estado_paso_a_texto(estado: EstadoPaso) -> &'static str {
 }
 
 /// Construye el payload de un paso en curso o terminado.
-pub fn payload_progreso(paso: PasoAlta, estado: EstadoPaso) -> ProgresoAltaPayload {
+pub fn payload_progreso(paso: PasoAlta, estado: EstadoPaso, idioma: Idioma) -> ProgresoAltaPayload {
     ProgresoAltaPayload {
         paso: indice_paso(paso),
         total: TOTAL_PASOS_ALTA,
-        texto: paso.descripcion().to_string(),
+        texto: paso.localizar(idioma),
         estado: estado_paso_a_texto(estado).to_string(),
         mensaje: None,
     }
@@ -251,9 +252,17 @@ mod tests {
     }
 
     #[test]
+    fn payload_progreso_usa_el_idioma_pedido() {
+        let payload = payload_progreso(PasoAlta::Provisionar, EstadoPaso::Hecho, Idioma::En);
+        assert_eq!(payload.texto, "Provisioning Gitea");
+    }
+
+    #[test]
     fn payload_progreso_no_lleva_mensaje() {
-        let payload = payload_progreso(PasoAlta::AsegurarBinario, EstadoPaso::Iniciando);
+        let payload =
+            payload_progreso(PasoAlta::AsegurarBinario, EstadoPaso::Iniciando, Idioma::Es);
         assert_eq!(payload.paso, 5);
+        assert_eq!(payload.texto, "Comprobando el binario de Gitea");
         assert_eq!(payload.estado, "en-curso");
         assert!(payload.mensaje.is_none());
         let json = serde_json::to_value(&payload).expect("serializa");
