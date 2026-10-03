@@ -9,11 +9,7 @@ use std::path::{Path, PathBuf};
 /// vaciando a medida que cada vista se migra a `t()`; la lista vacía es el criterio de
 /// cierre. Un fichero de esta lista que ya está limpio hace fallar el test: hay que
 /// quitarlo.
-const PENDIENTES: &[&str] = &[
-    "ayuda.js",
-    "vistas/ajustes.js",
-    "vistas/lan.js",
-];
+const PENDIENTES: &[&str] = &["ayuda.js", "vistas/ajustes.js", "vistas/lan.js"];
 
 /// Nunca se revisan: `mock.js` son datos de ejemplo para previsualizar en un navegador y
 /// no forman parte de la ventana real.
