@@ -87,7 +87,8 @@ pub enum TextoCli {
     SinUsuariosLan,
     SinTokenAdmin,
     UsuarioCreado(String),
-    Contrasena(String),
+    /// Solo la etiqueta: la contraseña se añade al imprimir, sin guardarla en un valor `Debug`.
+    EtiquetaContrasena,
     NoSeVolveraMostrar,
     UsuarioEliminado(String),
     // `sync`.
@@ -197,7 +198,7 @@ fn es(t: &TextoCli) -> String {
         }
         T::SinTokenAdmin => "no hay token de administración de Gitea para esta cuenta".to_string(),
         T::UsuarioCreado(nombre) => format!("Usuario «{nombre}» creado."),
-        T::Contrasena(clave) => format!("Contraseña: {clave}"),
+        T::EtiquetaContrasena => "Contraseña:".to_string(),
         T::NoSeVolveraMostrar => "No se volverá a mostrar. Lee los mirrors y escribe en \
                                   «contingencia-*»; puede cambiarla desde la web de Gitea."
             .to_string(),
@@ -306,7 +307,7 @@ fn en(t: &TextoCli) -> String {
         }
         T::SinTokenAdmin => "there is no Gitea administration token for this account".to_string(),
         T::UsuarioCreado(nombre) => format!("User \"{nombre}\" created."),
-        T::Contrasena(clave) => format!("Password: {clave}"),
+        T::EtiquetaContrasena => "Password:".to_string(),
         T::NoSeVolveraMostrar => "It will not be shown again. The user can read the mirrors and \
                                   write to \"contingencia-*\"; the password can be changed from \
                                   the Gitea web interface."
@@ -405,7 +406,7 @@ mod tests {
             T::SinUsuariosLan,
             T::SinTokenAdmin,
             T::UsuarioCreado(cadena("x")),
-            T::Contrasena(cadena("x")),
+            T::EtiquetaContrasena,
             T::NoSeVolveraMostrar,
             T::UsuarioEliminado(cadena("x")),
             T::IndicaLoginOTodas,
