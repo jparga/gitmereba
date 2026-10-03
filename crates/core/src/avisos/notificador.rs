@@ -31,17 +31,18 @@ use std::sync::Mutex;
 use notify_rust::{Notification, Timeout, Urgency as UrgenciaNotifyRust};
 
 use super::error::ErrorAvisos;
-use super::modelo::{Notificacion, Urgencia};
+use super::modelo::{NotificacionLocalizada, Urgencia};
 
 /// Nombre de la app para todas las notificaciones de gitmereba.
 const NOMBRE_APP: &str = "gitmereba";
 
-/// Envía una [`Notificacion`] ya decidida por [`super::decidir`].
+/// Envía una [`NotificacionLocalizada`] (una [`super::Notificacion`] ya decidida por
+/// [`super::decidir`] y traducida con [`super::Notificacion::localizar`]).
 pub trait Notificador {
     /// Envía `n`. Un error aquí (p. ej. no hay servidor de notificaciones D-Bus en la
     /// sesión) no es fatal para quien llama: gitmereba sigue funcionando sin avisos de
     /// escritorio, solo se registra (`tracing::warn!`) y se continúa.
-    fn enviar(&self, n: &Notificacion) -> Result<(), ErrorAvisos>;
+    fn enviar(&self, n: &NotificacionLocalizada) -> Result<(), ErrorAvisos>;
 }
 
 /// Envía notificaciones reales al escritorio vía D-Bus
@@ -50,7 +51,7 @@ pub trait Notificador {
 pub struct NotificadorEscritorio;
 
 impl Notificador for NotificadorEscritorio {
-    fn enviar(&self, n: &Notificacion) -> Result<(), ErrorAvisos> {
+    fn enviar(&self, n: &NotificacionLocalizada) -> Result<(), ErrorAvisos> {
         let urgencia = match n.urgencia {
             Urgencia::Baja => UrgenciaNotifyRust::Low,
             Urgencia::Normal => UrgenciaNotifyRust::Normal,
@@ -83,7 +84,7 @@ impl Notificador for NotificadorEscritorio {
 /// [`crate::secretos::LlaveroEnMemoria`].
 #[derive(Default)]
 pub struct NotificadorMemoria {
-    enviadas: Mutex<Vec<Notificacion>>,
+    enviadas: Mutex<Vec<NotificacionLocalizada>>,
 }
 
 impl NotificadorMemoria {
@@ -92,7 +93,7 @@ impl NotificadorMemoria {
     }
 
     /// Copia de todo lo enviado hasta ahora, en el orden en que se envió.
-    pub fn enviadas(&self) -> Result<Vec<Notificacion>, ErrorAvisos> {
+    pub fn enviadas(&self) -> Result<Vec<NotificacionLocalizada>, ErrorAvisos> {
         self.enviadas
             .lock()
             .map(|guardia| guardia.clone())
@@ -103,7 +104,7 @@ impl NotificadorMemoria {
 }
 
 impl Notificador for NotificadorMemoria {
-    fn enviar(&self, n: &Notificacion) -> Result<(), ErrorAvisos> {
+    fn enviar(&self, n: &NotificacionLocalizada) -> Result<(), ErrorAvisos> {
         let mut guardia = self.enviadas.lock().map_err(|_| {
             ErrorAvisos::Notificador("mutex de NotificadorMemoria envenenado".to_string())
         })?;
@@ -116,8 +117,8 @@ impl Notificador for NotificadorMemoria {
 mod tests {
     use super::*;
 
-    fn notificacion() -> Notificacion {
-        Notificacion {
+    fn notificacion() -> NotificacionLocalizada {
+        NotificacionLocalizada {
             titulo: "título".to_string(),
             cuerpo: "cuerpo".to_string(),
             urgencia: Urgencia::Normal,
@@ -153,7 +154,7 @@ mod tests {
     #[test]
     #[ignore = "envía una notificación real"]
     fn envia_una_notificacion_real_al_escritorio() {
-        let notificacion = Notificacion {
+        let notificacion = NotificacionLocalizada {
             titulo: "gitmereba: prueba de notificación".to_string(),
             cuerpo: "Si ves esto, NotificadorEscritorio funciona.".to_string(),
             urgencia: Urgencia::Normal,

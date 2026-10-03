@@ -13,7 +13,7 @@ use crate::sync::{AlertaPlan, ResultadoAccion};
 use crate::verificacion::{Aviso as AvisoVerificacion, DIAS_AVISO_POR_DEFECTO, aviso_caducidad};
 
 use super::estado::{EntradaFallo, EstadoAvisos};
-use super::modelo::{EntradaAvisos, Notificacion, TipoFallo, Urgencia};
+use super::modelo::{CambioAviso, EntradaAvisos, Notificacion, TextoAviso, TipoFallo, Urgencia};
 use super::saneado::sanear_texto;
 
 /// Tras cuánto tiempo sin avisar se repite el aviso de un fallo de repo que persiste.
@@ -305,16 +305,17 @@ fn notificacion_fallo(
     mensajes: &BTreeMap<IdRepo, String>,
 ) -> Notificacion {
     let id_saneado = sanear_texto(&id.to_string(), LONGITUD_MAXIMA_FRAGMENTO);
-    let mut cuerpo = format!("El repositorio «{id_saneado}» tiene un fallo en «{login}».");
-    if let Some(mensaje) = mensajes.get(id) {
-        let detalle = sanear_texto(mensaje, LONGITUD_MAXIMA_FRAGMENTO);
-        if !detalle.is_empty() {
-            cuerpo.push_str(&format!(" Detalle: {detalle}."));
-        }
-    }
+    let detalle = mensajes
+        .get(id)
+        .map(|mensaje| sanear_texto(mensaje, LONGITUD_MAXIMA_FRAGMENTO))
+        .filter(|detalle| !detalle.is_empty());
     Notificacion {
-        titulo: "Fallo de sincronización".to_string(),
-        cuerpo,
+        titulo: TextoAviso::TituloFalloSincronizacion,
+        cuerpo: TextoAviso::FalloRepositorio {
+            login: login.to_string(),
+            repo: id_saneado.clone(),
+            detalle,
+        },
         urgencia: Urgencia::Normal,
         clave_dedupe: format!("fallo:{login}:{id_saneado}"),
     }
@@ -322,8 +323,11 @@ fn notificacion_fallo(
 
 fn notificacion_fallos_agregados(login: &str, n: usize) -> Notificacion {
     Notificacion {
-        titulo: "Varios repositorios con fallos".to_string(),
-        cuerpo: format!("{n} repositorios con fallos en «{login}»."),
+        titulo: TextoAviso::TituloVariosFallos,
+        cuerpo: TextoAviso::FallosAgregados {
+            login: login.to_string(),
+            n,
+        },
         urgencia: Urgencia::Normal,
         clave_dedupe: format!("fallos-agregados:{login}"),
     }
@@ -332,8 +336,11 @@ fn notificacion_fallos_agregados(login: &str, n: usize) -> Notificacion {
 fn notificacion_recuperado(login: &str, id: &IdRepo) -> Notificacion {
     let id_saneado = sanear_texto(&id.to_string(), LONGITUD_MAXIMA_FRAGMENTO);
     Notificacion {
-        titulo: "Repositorio recuperado".to_string(),
-        cuerpo: format!("El repositorio «{id_saneado}» ha vuelto a estar bien en «{login}»."),
+        titulo: TextoAviso::TituloRepositorioRecuperado,
+        cuerpo: TextoAviso::RepositorioRecuperado {
+            login: login.to_string(),
+            repo: id_saneado.clone(),
+        },
         urgencia: Urgencia::Baja,
         clave_dedupe: format!("recuperado:{login}:{id_saneado}"),
     }
@@ -341,8 +348,11 @@ fn notificacion_recuperado(login: &str, id: &IdRepo) -> Notificacion {
 
 fn notificacion_recuperados_agregados(login: &str, n: usize) -> Notificacion {
     Notificacion {
-        titulo: "Varios repositorios recuperados".to_string(),
-        cuerpo: format!("{n} repositorios han vuelto a estar bien en «{login}»."),
+        titulo: TextoAviso::TituloVariosRecuperados,
+        cuerpo: TextoAviso::RecuperadosAgregados {
+            login: login.to_string(),
+            n,
+        },
         urgencia: Urgencia::Baja,
         clave_dedupe: format!("recuperados-agregados:{login}"),
     }
@@ -355,18 +365,18 @@ fn notificacion_huerfanos(login: &str, alerta: &AlertaPlan) -> Notificacion {
         listado_github_vacio,
     } = alerta;
     let cuerpo = if *listado_github_vacio {
-        format!(
-            "GitHub devolvió una lista vacía de repositorios en «{login}»; no se ha \
-             marcado ningún huérfano por precaución."
-        )
+        TextoAviso::HuerfanosListaVacia {
+            login: login.to_string(),
+        }
     } else {
-        format!(
-            "{candidatos} de {total_mirrors} repositorios se marcarían huérfanos en \
-             «{login}»; no se ha aplicado por precaución."
-        )
+        TextoAviso::HuerfanosCandidatos {
+            login: login.to_string(),
+            candidatos: *candidatos,
+            total_mirrors: *total_mirrors,
+        }
     };
     Notificacion {
-        titulo: "Demasiados huérfanos".to_string(),
+        titulo: TextoAviso::TituloHuerfanos,
         cuerpo,
         urgencia: Urgencia::Critica,
         clave_dedupe: format!("plan-huerfanos:{login}"),
@@ -379,72 +389,57 @@ fn notificacion_huerfanos(login: &str, alerta: &AlertaPlan) -> Notificacion {
 fn notificacion_cambio_destructivo(login: &str, cambio: &CambioDetectado) -> Notificacion {
     let id_saneado = sanear_texto(&cambio.id.to_string(), LONGITUD_MAXIMA_FRAGMENTO);
     let marca_saneada = sanear_texto(&cambio.marca_protegida, LONGITUD_MAXIMA_FRAGMENTO);
-    let descripcion = cambio
-        .cambios
-        .iter()
-        .map(descripcion_cambio_destructivo)
-        .collect::<Vec<_>>()
-        .join("; ");
+    let cambios = cambio.cambios.iter().map(cambio_aviso).collect();
     Notificacion {
-        titulo: "Historia reescrita".to_string(),
-        cuerpo: format!(
-            "{descripcion} en «{id_saneado}» ({login}). La copia anterior está protegida \
-             en los snapshots."
-        ),
+        titulo: TextoAviso::TituloHistoriaReescrita,
+        cuerpo: TextoAviso::CambioDestructivo {
+            login: login.to_string(),
+            repo: id_saneado.clone(),
+            cambios,
+        },
         urgencia: Urgencia::Critica,
         clave_dedupe: format!("snapshots-cambio:{login}:{id_saneado}:{marca_saneada}"),
     }
 }
 
-fn descripcion_cambio_destructivo(cambio: &CambioDestructivo) -> String {
+fn cambio_aviso(cambio: &CambioDestructivo) -> CambioAviso {
+    let sanear = |texto: &str| sanear_texto(texto, LONGITUD_MAXIMA_FRAGMENTO);
     match cambio {
         CambioDestructivo::HistoriaReescrita { rama, .. } => {
-            format!(
-                "Historia reescrita (rama {})",
-                sanear_texto(rama, LONGITUD_MAXIMA_FRAGMENTO)
-            )
+            CambioAviso::HistoriaReescrita { rama: sanear(rama) }
         }
-        CambioDestructivo::RamaBorrada { rama } => {
-            format!(
-                "Rama {} borrada",
-                sanear_texto(rama, LONGITUD_MAXIMA_FRAGMENTO)
-            )
-        }
-        CambioDestructivo::TagBorrado { tag } => {
-            format!(
-                "Tag {} borrado",
-                sanear_texto(tag, LONGITUD_MAXIMA_FRAGMENTO)
-            )
-        }
-        CambioDestructivo::TagMovido { tag, .. } => {
-            format!(
-                "Tag {} movido",
-                sanear_texto(tag, LONGITUD_MAXIMA_FRAGMENTO)
-            )
-        }
+        CambioDestructivo::RamaBorrada { rama } => CambioAviso::RamaBorrada { rama: sanear(rama) },
+        CambioDestructivo::TagBorrado { tag } => CambioAviso::TagBorrado { tag: sanear(tag) },
+        CambioDestructivo::TagMovido { tag, .. } => CambioAviso::TagMovido { tag: sanear(tag) },
     }
 }
 
 fn notificacion_gitea_parado(login: &str) -> Notificacion {
     Notificacion {
-        titulo: "Gitea no responde".to_string(),
-        cuerpo: format!("El Gitea de «{login}» no responde; revisa «gitmereba doctor»."),
+        titulo: TextoAviso::TituloGiteaParado,
+        cuerpo: TextoAviso::GiteaParado {
+            login: login.to_string(),
+        },
         urgencia: Urgencia::Critica,
         clave_dedupe: format!("gitea-parado:{login}"),
     }
 }
 
 fn notificacion_token(login: &str, estado: EstadoToken) -> Notificacion {
+    let login_texto = login.to_string();
     match estado {
         EstadoToken::Caducado => Notificacion {
-            titulo: "Token de GitHub caducado".to_string(),
-            cuerpo: format!("El token de GitHub de «{login}» ha caducado; genera uno nuevo."),
+            titulo: TextoAviso::TituloTokenCaducado,
+            cuerpo: TextoAviso::TokenCaducado { login: login_texto },
             urgencia: Urgencia::Critica,
             clave_dedupe: format!("token-caducado:{login}"),
         },
         EstadoToken::CaducaPronto { dias } => Notificacion {
-            titulo: "Token de GitHub a punto de caducar".to_string(),
-            cuerpo: format!("El token de GitHub de «{login}» caduca en {dias} día(s)."),
+            titulo: TextoAviso::TituloTokenCaducaPronto,
+            cuerpo: TextoAviso::TokenCaducaPronto {
+                login: login_texto,
+                dias,
+            },
             urgencia: Urgencia::Normal,
             clave_dedupe: format!("token-caduca-pronto:{login}"),
         },
@@ -456,6 +451,7 @@ mod tests {
     use std::path::PathBuf;
 
     use crate::cuentas::InformeProteccion;
+    use crate::idioma::{Idioma, Localizable};
     use crate::modelo::{Alcance, Cuenta, Nombre};
     use crate::sync::{InformeSync, Plan, ResultadoRepo, TipoAccion};
     use crate::verificacion::{Diagnostico, InformeVerificacion};
@@ -608,7 +604,14 @@ mod tests {
 
         assert_eq!(notificaciones.len(), 1);
         assert_eq!(notificaciones[0].urgencia, Urgencia::Normal);
-        assert!(notificaciones[0].cuerpo.contains("jparga/repo1"));
+        assert_eq!(
+            notificaciones[0].cuerpo,
+            TextoAviso::FalloRepositorio {
+                login: "jparga".to_string(),
+                repo: "jparga/repo1".to_string(),
+                detalle: None,
+            }
+        );
         assert_eq!(estado.fallos.len(), 1);
         assert_eq!(estado.fallos[0].id, id("jparga", "repo1"));
         assert_eq!(estado.fallos[0].tipo, TipoFallo::Sincronizacion);
@@ -699,7 +702,10 @@ mod tests {
 
         assert_eq!(notificaciones.len(), 1);
         assert_eq!(notificaciones[0].urgencia, Urgencia::Baja);
-        assert!(notificaciones[0].titulo.contains("recuperado"));
+        assert_eq!(
+            notificaciones[0].titulo,
+            TextoAviso::TituloRepositorioRecuperado
+        );
         assert!(estado.fallos.is_empty());
     }
 
@@ -725,8 +731,13 @@ mod tests {
         let (notificaciones, estado) = decidir(&entrada, &EstadoAvisos::default(), AHORA);
 
         assert_eq!(notificaciones.len(), 1, "{notificaciones:?}");
-        assert!(notificaciones[0].cuerpo.contains('4'));
-        assert!(notificaciones[0].cuerpo.contains("jparga"));
+        assert_eq!(
+            notificaciones[0].cuerpo,
+            TextoAviso::FallosAgregados {
+                login: "jparga".to_string(),
+                n: 4
+            }
+        );
         // El estado, en cambio, registra los cuatro fallos individualmente.
         assert_eq!(estado.fallos.len(), 4);
     }
@@ -760,7 +771,10 @@ mod tests {
 
         assert_eq!(notificaciones.len(), 1);
         assert_eq!(notificaciones[0].urgencia, Urgencia::Critica);
-        assert!(notificaciones[0].cuerpo.contains('5'));
+        assert!(matches!(
+            notificaciones[0].cuerpo,
+            TextoAviso::HuerfanosCandidatos { candidatos: 5, .. }
+        ));
     }
 
     #[test]
@@ -778,7 +792,12 @@ mod tests {
 
         assert_eq!(primera.len(), 1);
         assert_eq!(segunda.len(), 1);
-        assert!(segunda[0].cuerpo.contains("vacía"));
+        assert_eq!(
+            segunda[0].cuerpo,
+            TextoAviso::HuerfanosListaVacia {
+                login: "jparga".to_string()
+            }
+        );
     }
 
     // --- Cambios destructivos en snapshots: siempre crítico, no se repite entre pasadas ---
@@ -809,8 +828,16 @@ mod tests {
 
         assert_eq!(notificaciones.len(), 1, "{notificaciones:?}");
         assert_eq!(notificaciones[0].urgencia, Urgencia::Critica);
-        assert!(notificaciones[0].cuerpo.contains("jparga/repo1"));
-        assert!(notificaciones[0].cuerpo.contains("protegida"));
+        assert_eq!(
+            notificaciones[0].cuerpo,
+            TextoAviso::CambioDestructivo {
+                login: "jparga".to_string(),
+                repo: "jparga/repo1".to_string(),
+                cambios: vec![CambioAviso::HistoriaReescrita {
+                    rama: "main".to_string()
+                }],
+            }
+        );
     }
 
     #[test]
@@ -877,7 +904,13 @@ mod tests {
 
         assert_eq!(notificaciones.len(), 1);
         assert_eq!(notificaciones[0].urgencia, Urgencia::Normal);
-        assert!(notificaciones[0].cuerpo.contains('3'));
+        assert_eq!(
+            notificaciones[0].cuerpo,
+            TextoAviso::TokenCaducaPronto {
+                login: "jparga".to_string(),
+                dias: 3
+            }
+        );
         assert_eq!(estado.ultimo_aviso_token, Some(AHORA));
     }
 
@@ -1031,7 +1064,10 @@ mod tests {
 
         // Solo se notifica el fallo nuevo de sincronización.
         assert_eq!(notificaciones.len(), 1);
-        assert!(notificaciones[0].cuerpo.contains("repo-sync"));
+        assert!(matches!(
+            &notificaciones[0].cuerpo,
+            TextoAviso::FalloRepositorio { repo, .. } if repo.contains("repo-sync")
+        ));
         // El fallo de verificación se conserva exactamente igual: ni reaviso ni
         // recuperación sin datos frescos de ese tipo.
         assert!(
@@ -1051,18 +1087,21 @@ mod tests {
         let mut verificacion = con_fallo_verificacion(verificacion_vacia("jparga"), "repo1");
         verificacion.avisos.push(AvisoVerificacion::ErrorRepo {
             id: id("jparga", "repo1"),
-            mensaje: "<b>inyección</b>\ncon salto de línea".to_string(),
+            mensaje: "<script>inyección</script>&\ncon salto de línea".to_string(),
         });
         let entrada = entrada_avisos("jparga", None, Some(verificacion), false);
 
         let (notificaciones, _estado) = decidir(&entrada, &EstadoAvisos::default(), AHORA);
 
         assert_eq!(notificaciones.len(), 1);
-        let cuerpo = &notificaciones[0].cuerpo;
-        assert!(!cuerpo.contains('<'));
-        assert!(!cuerpo.contains('>'));
-        assert!(!cuerpo.contains('\n'));
-        assert!(cuerpo.contains("inyección"));
+        for idioma in [Idioma::Es, Idioma::En] {
+            let cuerpo = notificaciones[0].cuerpo.localizar(idioma);
+            assert!(!cuerpo.contains('<'), "{idioma:?}: {cuerpo}");
+            assert!(!cuerpo.contains('>'), "{idioma:?}: {cuerpo}");
+            assert!(!cuerpo.contains('&'), "{idioma:?}: {cuerpo}");
+            assert!(!cuerpo.contains('\n'), "{idioma:?}: {cuerpo}");
+            assert!(cuerpo.contains("inyección"), "{idioma:?}: {cuerpo}");
+        }
     }
 
     #[test]

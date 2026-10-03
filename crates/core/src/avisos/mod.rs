@@ -19,5 +19,8 @@ pub use error::ErrorAvisos;
 pub use estado::{
     EntradaFallo, EstadoAvisos, cargar_estado, guardar_estado, nombre_fichero_estado, ruta_estado,
 };
-pub use modelo::{EntradaAvisos, Notificacion, TipoFallo, Urgencia};
+pub use modelo::{
+    CambioAviso, EntradaAvisos, Notificacion, NotificacionLocalizada, TextoAviso, TipoFallo,
+    Urgencia,
+};
 pub use notificador::{Notificador, NotificadorEscritorio, NotificadorMemoria};
