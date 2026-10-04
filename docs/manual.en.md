@@ -49,6 +49,7 @@ key.
 | **Contingency** | Work without GitHub and send the changes back afterwards. |
 | **Activity** | Sync history and audit log. |
 | **Settings** | Interval, scope, token, local network access, removal, Gitea update. |
+| **About** | From the window footer. Version, licence and links; each account's Gitea version; paths and environment. “Copy for a report”. |
 
 ### Signing in to Gitea
 
@@ -197,6 +198,7 @@ gitmereba doctor                  # checks the system and each account
 | Symptom | Try |
 |---|---|
 | I do not know what is failing | `gitmereba doctor`: it says which check fails and how to fix it |
+| I am about to open an issue | **About → Copy for a report** and paste it in: it carries no tokens or passwords |
 | “The GitHub token is invalid or has expired” | **Settings → Rotate token** |
 | “The system keyring is locked” | Unlock the system keyring (sign in to the desktop) |
 | A repository in **Failed**: “the mirror has never synced” | Its first clone was interrupted. Press **Sync** on its row: the empty copy is discarded and it is cloned again |
