@@ -2,6 +2,7 @@
 //! comandos del contrato con la interfaz (`ui/js/api.js`) como envoltorios finos sobre `gitmereba_core`.
 
 mod acciones;
+mod acerca;
 mod dto;
 mod dto_acciones;
 mod error;
@@ -46,6 +47,9 @@ pub fn abrir(rutas: Rutas) -> Result<(), tauri::Error> {
             acciones::abrir_gitea,
             acciones::actualizar_gitea,
             acciones::credenciales_gitea,
+            acerca::acerca_de,
+            acerca::version_gitea_cuenta,
+            acerca::abrir_enlace,
             lan::lan_estado,
             lan::lan_activar,
             lan::lan_desactivar,
