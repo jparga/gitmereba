@@ -199,7 +199,13 @@ pub(crate) fn texto(t: &TextoDoctor) -> String {
         }
         TextoDoctor::ConsejoRegenerarSecretos => "repite el alta para regenerarlos".to_string(),
         TextoDoctor::SnapshotsResumen { total, protegidas } => {
-            format!("{total} captura(s), {protegidas} protegida(s)")
+            let capturas = if *total == 1 { "captura" } else { "capturas" };
+            let protegida = if *protegidas == 1 {
+                "protegida"
+            } else {
+                "protegidas"
+            };
+            format!("{total} {capturas}, {protegidas} {protegida}")
         }
         TextoDoctor::ConsejoCapturasProtegidas => {
             "hay capturas protegidas por un cambio destructivo detectado en el \

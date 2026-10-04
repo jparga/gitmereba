@@ -852,8 +852,24 @@ mod tests {
                     total: 3,
                     protegidas: 1,
                 },
-                "3 captura(s), 1 protegida(s)",
-                "3 snapshot(s), 1 protected",
+                "3 capturas, 1 protegida",
+                "3 snapshots, 1 protected",
+            ),
+            caso_doctor(
+                T::SnapshotsResumen {
+                    total: 1,
+                    protegidas: 1,
+                },
+                "1 captura, 1 protegida",
+                "1 snapshot, 1 protected",
+            ),
+            caso_doctor(
+                T::SnapshotsResumen {
+                    total: 89,
+                    protegidas: 0,
+                },
+                "89 capturas, 0 protegidas",
+                "89 snapshots, 0 protected",
             ),
             caso_doctor(
                 T::ConsejoCapturasProtegidas,
