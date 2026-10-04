@@ -5,6 +5,7 @@ pub mod avisos;
 pub mod config;
 pub mod contingencia;
 pub mod cuentas;
+pub mod entorno;
 pub mod git;
 pub mod gitea;
 pub mod github;
