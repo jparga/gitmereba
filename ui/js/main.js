@@ -48,7 +48,7 @@ async function pintarVersionPie() {
     const { version } = await api.acercaDe();
     document.getElementById('pie-version').textContent = t('pie.version', { version });
   } catch {
-    // Sin versión: el enlace sigue llevando a «Acerca de», que mostrará el error.
+    // Sin versión: el enlace sigue llevando a «Acerca de», que muestra el error.
   }
 }
 

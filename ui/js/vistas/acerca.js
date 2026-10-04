@@ -15,6 +15,18 @@ const ETIQUETAS_VERSION = {
 };
 const CLASES_VERSION = { al_dia: 'ok', desfasada: 'warn', desconocida: 'muted', no_disponible: 'muted' };
 
+// Tope por cuenta en la interfaz: el backend ya espera como mucho 3 s a Gitea, pero el
+// llavero puede tardar más (p. ej. si está bloqueado); la fila no se queda en «…» para siempre.
+const ESPERA_VERSION_MS = 10_000;
+
+const NO_DISPONIBLE = { version: null, estado: 'no_disponible' };
+
+/** Versión de Gitea de una cuenta; nunca falla: un error o el tope dan «no disponible». */
+function consultarVersion(login) {
+  const tope = new Promise((resolver) => setTimeout(() => resolver(NO_DISPONIBLE), ESPERA_VERSION_MS));
+  return Promise.race([api.versionGiteaCuenta(login).catch(() => NO_DISPONIBLE), tope]);
+}
+
 const ENLACES = [
   ['repositorio', 'acerca.enlace.repositorio'],
   ['release', 'acerca.enlace.release'],
@@ -94,7 +106,13 @@ async function abrirEnlace(destino) {
 }
 
 export async function render(contenedor) {
-  const datos = await api.acercaDe();
+  let datos;
+  try {
+    datos = await api.acercaDe();
+  } catch (error) {
+    pintar(contenedor, h('h1', null, t('acerca.titulo')), h('div', { clase: 'banner show crit' }, t('acerca.error', { mensaje: error?.mensaje ?? error })));
+    return;
+  }
   const versiones = new Map();
 
   const tarjetaVersion = h(
@@ -155,6 +173,12 @@ export async function render(contenedor) {
 
   const tarjetaEntorno = h('div', { clase: 'card pad section' }, h('h2', null, t('acerca.entorno.titulo')), listaDefinicion(datosEntorno(datos)));
 
+  const botonCopiar = h(
+    'button',
+    { type: 'button', clase: 'btn', disabled: datos.cuentas.length > 0, onClick: () => copiarInforme(datos, versiones) },
+    t('acerca.copiar'),
+  );
+
   pintar(
     contenedor,
     h('h1', null, t('acerca.titulo')),
@@ -162,21 +186,20 @@ export async function render(contenedor) {
     tarjetaVersion,
     tarjetaGitea,
     tarjetaEntorno,
-    h(
-      'div',
-      { clase: 'row' },
-      h('button', { type: 'button', clase: 'btn', onClick: () => copiarInforme(datos, versiones) }, t('acerca.copiar')),
-    ),
+    h('div', { clase: 'row' }, botonCopiar),
   );
 
   // Cada cuenta se consulta por separado: una instancia parada no retrasa a las demás.
-  for (const cuenta of datos.cuentas) {
-    api
-      .versionGiteaCuenta(cuenta.login)
-      .catch(() => ({ version: null, estado: 'no_disponible' }))
-      .then((resultado) => {
+  // El informe se puede copiar cuando han respondido todas, para que no salga «…».
+  // Sin `await`: el router espera a `render` para colocar la ayuda.
+  Promise.all(
+    datos.cuentas.map((cuenta) =>
+      consultarVersion(cuenta.login).then((resultado) => {
         versiones.set(cuenta.login, resultado);
         celdas.get(cuenta.login)?.replaceChildren(celdaVersion(resultado));
-      });
-  }
+      }),
+    ),
+  ).then(() => {
+    botonCopiar.disabled = false;
+  });
 }
