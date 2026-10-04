@@ -12,6 +12,7 @@ const VISTAS = {
   actividad: () => import('./vistas/actividad.js'),
   ajustes: () => import('./vistas/ajustes.js'),
   alta: () => import('./vistas/alta.js'),
+  acerca: () => import('./vistas/acerca.js'),
 };
 
 function leerRuta() {

@@ -41,6 +41,17 @@ async function resolverIdioma() {
   }
 }
 
+/** Pone «gitmereba X.Y.Z ·» delante del enlace «Acerca de» del pie. Si el backend no
+ * responde, el enlace se queda solo. */
+async function pintarVersionPie() {
+  try {
+    const { version } = await api.acercaDe();
+    document.getElementById('pie-version').textContent = t('pie.version', { version });
+  } catch {
+    // Sin versión: el enlace sigue llevando a «Acerca de», que mostrará el error.
+  }
+}
+
 async function iniciar() {
   iniciarI18n(await resolverIdioma());
 
@@ -49,6 +60,7 @@ async function iniciar() {
   const enlaces = document.querySelectorAll('.nav-links a[data-ruta]');
   iniciarRouter(document.getElementById('vista'), enlaces);
 
+  pintarVersionPie();
   actualizarEstadoGithub();
   setInterval(actualizarEstadoGithub, 60_000);
 }

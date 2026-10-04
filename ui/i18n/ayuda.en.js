@@ -70,4 +70,12 @@ export default {
       'If something fails halfway, repeat the account setup: it carries on where it left off.',
     ],
   },
+  acerca: {
+    intro: 'Which version you run and in which environment: the first thing needed to report a problem.',
+    puntos: [
+      '“Version”: the gitmereba version, its licence and links to the repository, the release notes, the security policy and the trademarks. They open in your browser.',
+      '“Gitea”: the version bundled with this gitmereba release and the one each account uses. “Outdated” means that account is behind: update it in Settings with “Update (verified)”. If its Gitea is stopped, it shows “not available”.',
+      '“Copy for a report” copies everything you see as plain text, ready to paste into an issue. It never includes tokens or passwords, and paths in your home folder appear as ~.',
+    ],
+  },
 };

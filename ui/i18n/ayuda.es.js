@@ -69,4 +69,12 @@ export default {
       'Si algo falla a mitad, repite el alta: continúa donde se quedó.',
     ],
   },
+  acerca: {
+    intro: 'Qué versión usas y en qué entorno: lo primero que hace falta para informar de un problema.',
+    puntos: [
+      '«Versión»: la versión de gitmereba, su licencia y los enlaces al repositorio, a las notas de esta versión, a la política de seguridad y a las marcas. Se abren en tu navegador.',
+      '«Gitea»: la versión que trae esta versión de gitmereba y la que usa cada cuenta. «Desfasada» significa que esa cuenta va por detrás: actualízala en Ajustes con «Actualizar (verificado)». Si su Gitea está parado, sale «no disponible».',
+      '«Copiar para informe» copia todo lo que ves en texto plano, listo para pegar en una incidencia. Nunca incluye tokens ni contraseñas, y las rutas de tu carpeta personal aparecen como ~.',
+    ],
+  },
 };

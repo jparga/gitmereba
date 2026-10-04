@@ -523,6 +523,34 @@ export async function invocar(comando, args = {}) {
     case 'abrir_gitea':
       return { ok: true };
 
+    case 'acerca_de':
+      return {
+        version: '0.8.0',
+        licencia: 'GPL-3.0-or-later',
+        version_gitea_incluida: '1.27.3',
+        rutas: { datos: '~/.local/share/gitmereba', config: '~/.config/gitmereba', systemd: '~/.config/systemd/user' },
+        ejecutable: '/usr/bin/gitmereba',
+        idioma: idiomaResuelto(),
+        sistema: 'Ubuntu 26.04 LTS',
+        cuentas: Object.keys(CUENTAS)
+          .sort()
+          .map((login) => ({ login, carpeta: `~/gitmereba-${login}` })),
+      };
+
+    case 'version_gitea_cuenta': {
+      // La primera cuenta está al día, la segunda desfasada y el resto paradas.
+      const posicion = Object.keys(CUENTAS).sort().indexOf(args.login);
+      if (posicion === 0) return { version: '1.27.3', estado: 'al_dia' };
+      if (posicion === 1) return { version: '1.26.1', estado: 'desfasada' };
+      return { version: null, estado: 'no_disponible' };
+    }
+
+    case 'abrir_enlace':
+      if (!['repositorio', 'release', 'seguridad', 'marcas'].includes(args.destino)) {
+        throw { codigo: 'datos_invalidos', mensaje: tx('enlace desconocido', 'unknown link') };
+      }
+      return { ok: true };
+
     case 'credenciales_gitea':
       return { usuario: 'gitmereba-admin', password: 'ejemplo-Xk3v9QpL2mZt7RwB' };
 
