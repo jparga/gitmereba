@@ -148,7 +148,7 @@ español. Se agradecen contribuciones, también traducciones.
 
 ## Estado
 
-Pre-1.0 (versión 0.7.1), en uso diario por el autor. Espera cambios. Ver
+Pre-1.0 (versión 0.8.0), en uso diario por el autor. Espera cambios. Ver
 [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Contribuir, seguridad, conducta

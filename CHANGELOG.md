@@ -6,6 +6,20 @@ Todos los cambios relevantes de gitmereba. Formato basado en
 
 ## [Sin publicar]
 
+## [0.8.0] - 2026-10-04
+
+### Añadido
+
+- **Versión en el pie y pantalla «Acerca de».** El pie de la ventana muestra la versión y lleva a
+  «Acerca de», con la licencia, enlaces al repositorio, a las notas de la versión, a la política de
+  seguridad y a las marcas; la versión de Gitea incluida y la que usa cada cuenta (marca las
+  desfasadas); y las rutas, el ejecutable, el idioma y el sistema. «Copiar para informe» lo copia
+  todo en texto plano para una incidencia, sin secretos y con las rutas personales como `~`.
+
+### Corregido
+
+- `doctor` escribe el resumen de capturas con plural real («1 captura», «89 capturas»).
+
 ## [0.7.1] - 2026-10-03
 
 ### Corregido
@@ -53,7 +67,8 @@ Primera versión pública, bajo la licencia GPL-3.0-or-later.
   ejecutan en la CI.
 - **Paquete `.deb`** y `.tar.gz`, con `SHA256SUMS` y atestación de procedencia.
 
-[Sin publicar]: https://github.com/jparga/gitmereba/compare/v0.7.1...HEAD
+[Sin publicar]: https://github.com/jparga/gitmereba/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/jparga/gitmereba/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/jparga/gitmereba/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/jparga/gitmereba/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/jparga/gitmereba/releases/tag/v0.6.0

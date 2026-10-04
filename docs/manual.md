@@ -49,6 +49,7 @@ la tecla **F1**.
 | **Contingencia** | Trabajar sin GitHub y devolver los cambios después. |
 | **Actividad** | Historial de sincronizaciones y registro de auditoría. |
 | **Ajustes** | Intervalo, alcance, token, acceso desde la red local, baja, actualización de Gitea. |
+| **Acerca de** | Desde el pie de la ventana. Versión, licencia y enlaces; versión de Gitea de cada cuenta; rutas y entorno. «Copiar para informe». |
 
 ### Entrar en Gitea
 
@@ -192,6 +193,7 @@ gitmereba doctor                  # comprueba el sistema y cada cuenta
 | Síntoma | Prueba |
 |---|---|
 | No sé qué falla | `gitmereba doctor`: dice qué comprobación falla y cómo arreglarla |
+| Voy a abrir una incidencia | **Acerca de → Copiar para informe** y pégalo en ella: no lleva tokens ni contraseñas |
 | «Token no válido o caducado» | **Ajustes → Rotar token** |
 | «El llavero está bloqueado» | Desbloquea el llavero del sistema (inicia sesión en el escritorio) |
 | Un repositorio en **Fallo**: «no ha sincronizado nunca» | Se cortó su primer clonado. Pulsa **Sincronizar** en su fila: se descarta la copia vacía y se vuelve a clonar |
