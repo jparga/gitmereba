@@ -202,7 +202,8 @@ pub(crate) fn texto(t: &TextoDoctor) -> String {
             "repeat the account setup to regenerate them".to_string()
         }
         TextoDoctor::SnapshotsResumen { total, protegidas } => {
-            format!("{total} snapshot(s), {protegidas} protected")
+            let snapshots = if *total == 1 { "snapshot" } else { "snapshots" };
+            format!("{total} {snapshots}, {protegidas} protected")
         }
         TextoDoctor::ConsejoCapturasProtegidas => {
             "there are snapshots protected by a destructive change detected at the origin \
