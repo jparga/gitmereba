@@ -247,6 +247,14 @@ td.repo-nombre, td .mono { white-space: nowrap; }
 .foot .foot-inner { display: block; padding: 0; }
 .foot .foot-brand { display: flex; align-items: baseline; gap: 1rem; max-width: none; }
 .foot .foot-brand p { margin: 0; font-size: var(--fs-xs); color: var(--nav-fg-dim); }
+.foot .foot-version { margin-left: auto; white-space: nowrap; }
+
+/* «Acerca de» */
+.acerca-version { font-size: 1.3rem; }
+.acerca-version .wordmark { font-family: var(--font-brand); letter-spacing: .06em; }
+.acerca-datos { display: grid; grid-template-columns: max-content 1fr; gap: .35rem 1rem; margin: 0; }
+.acerca-datos dt { color: var(--muted); }
+.acerca-datos dd { margin: 0; overflow-wrap: anywhere; }
 
 /* La app es de escritorio: algo más de ancho útil que la web de Mereba. */
 :root { --maxw: 1200px; }
@@ -287,3 +295,10 @@ td.repo-nombre, td .mono { white-space: nowrap; }
 
 /* Etiqueta junto al nombre de un repositorio (p. ej. «Archivado»). */
 .etiqueta-repo { margin-left: .5rem; }
+
+@media (max-width: 640px) {
+  .foot .foot-brand { flex-wrap: wrap; }
+  .foot .foot-version { margin-left: 0; }
+  .acerca-datos { grid-template-columns: 1fr; gap: .1rem; }
+  .acerca-datos dd { margin-bottom: .5rem; }
+}

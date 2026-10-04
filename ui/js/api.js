@@ -35,6 +35,9 @@ export function suscribirProgresoSync(callback) {
 }
 
 export const api = {
+  acercaDe: () => llamar('acerca_de'),
+  versionGiteaCuenta: (login) => llamar('version_gitea_cuenta', { login }),
+  abrirEnlace: (destino) => llamar('abrir_enlace', { destino }),
   listarCuentas: () => llamar('listar_cuentas'),
   resumenCuenta: (login) => llamar('resumen_cuenta', { login }),
   listarRepos: (login) => llamar('listar_repos', { login }),
