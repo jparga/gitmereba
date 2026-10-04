@@ -572,31 +572,33 @@ pub async fn abrir_gitea(
     en_hilo(idioma, move || async move {
         let recursos = Recursos::abrir(&rutas)?;
         let (cuenta, _rutas_cuenta) = recursos.cuenta(login.as_str())?;
-        let url = cuenta.url_publica();
-
-        // Sin shell, argumentos como lista, sin esperar a que termine y sin heredar
-        // stdin: `xdg-open` decide el navegador por defecto del sistema.
-        std::process::Command::new("xdg-open")
-            .arg(&url)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .map_err(|error| {
-                ErrorUi::externo(
-                    "interno",
-                    Some(&texto(
-                        idioma,
-                        "no se pudo abrir el navegador",
-                        "could not open the browser",
-                    )),
-                    &error,
-                )
-            })?;
-
+        abrir_en_navegador(&cuenta.url_publica(), idioma)?;
         Ok(RespuestaOk::si())
     })
     .await
+}
+
+/// Abre `url` en el navegador por defecto del sistema. Sin shell, argumentos como lista,
+/// sin esperar a que termine y sin heredar stdin: `xdg-open` decide el navegador.
+pub(super) fn abrir_en_navegador(url: &str, idioma: Idioma) -> Result<(), ErrorUi> {
+    std::process::Command::new("xdg-open")
+        .arg(url)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|error| {
+            ErrorUi::externo(
+                "interno",
+                Some(&texto(
+                    idioma,
+                    "no se pudo abrir el navegador",
+                    "could not open the browser",
+                )),
+                &error,
+            )
+        })?;
+    Ok(())
 }
 
 #[tauri::command]
