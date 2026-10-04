@@ -304,6 +304,7 @@ export default {
   'ayuda.titulo': 'How does this screen work?',
   'ayuda.pie': 'Press F1 to open or close this help. The full manual is in docs/manual.en.md.',
   'acerca.nombre': 'gitmereba',
+  'acerca.error': 'Could not read the information: {mensaje}',
   'acerca.titulo': 'About',
   'acerca.lead': 'Version of gitmereba, of Gitea and of the environment. Handy when reporting a problem.',
   'acerca.version.titulo': 'Version',
