@@ -343,6 +343,18 @@ mod tests {
                 "the destination folder is not valid: the destination must be empty or not exist",
             ),
             (
+                ErrorCuentas::MovimientoInterrumpido {
+                    login: nombre("ana"),
+                    origen: PathBuf::from("/a"),
+                    destino: PathBuf::from("/b"),
+                },
+                "there is an unfinished folder move of “ana” (from /a to /b): run “gitmereba doctor” and follow the manual's instructions",
+            ),
+            (
+                ErrorCuentas::CuentaOcupada(nombre("ana")),
+                "the account “ana” has another operation in progress: wait for it to finish",
+            ),
+            (
                 ErrorCuentas::SincronizacionEnCurso(nombre("ana")),
                 "a sync of “ana” is in progress: wait for it to finish and try again",
             ),

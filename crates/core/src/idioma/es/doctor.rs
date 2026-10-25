@@ -23,6 +23,7 @@ pub(crate) fn nombre(n: &NombreComprobacion) -> String {
                 ParteCuenta::Secretos => "secretos",
                 ParteCuenta::Snapshots => "snapshots",
                 ParteCuenta::Temporizador => "temporizador",
+                ParteCuenta::Movimiento => "movimiento",
             };
             format!("cuenta:{login}:{parte}")
         }
@@ -222,6 +223,42 @@ pub(crate) fn texto(t: &TextoDoctor) -> String {
         TextoDoctor::ConsejoPermisosSnapshots => {
             "comprueba los permisos de la carpeta «snapshots/» de la cuenta".to_string()
         }
+        TextoDoctor::MovimientoInterrumpido {
+            origen,
+            destino,
+            modo,
+        } => format!(
+            "hay un movimiento de carpeta sin terminar: de {} a {} (modo: {modo})",
+            origen.display(),
+            destino.display()
+        ),
+        TextoDoctor::ConsejoMovimientoInterrumpido {
+            login,
+            origen,
+            destino,
+        } => {
+            let parcial = format!("{}.gitmereba-parcial", destino.display());
+            format!(
+                "no se ha perdido nada si no has borrado nada tú: los datos están completos en {origen} \
+             o, si esa carpeta ya no existe, en {destino}. Comprueba cuál contiene \
+             «gitea/data/gitea.db». Si la buena es {origen}, borra {destino} y la carpeta \
+             «{destino_parcial}» si existe; si es {destino}, actualiza a mano «carpeta» en \
+             «gitmereba.toml» y en «cuentas.toml». Después borra el fichero «mover-en-curso-{login}.toml» \
+             de la carpeta de datos y reinicia con «systemctl --user restart gitmereba-gitea-{login}» \
+             (manual: «Mover la carpeta de una cuenta»)",
+                origen = origen.display(),
+                destino = destino.display(),
+                destino_parcial = parcial,
+            )
+        }
+        TextoDoctor::MarcaMovimientoIlegible { error } => format!(
+            "no se pudo leer la marca de un movimiento de carpeta en curso: {}",
+            error.es
+        ),
+        TextoDoctor::ConsejoMarcaMovimientoIlegible { ruta } => format!(
+            "revisa «{}» y consulta el manual («Mover la carpeta de una cuenta»)",
+            ruta.display()
+        ),
         TextoDoctor::TemporizadorNoInstalado => {
             "no hay temporizador de sincronización instalado".to_string()
         }

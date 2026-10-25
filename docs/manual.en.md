@@ -233,7 +233,30 @@ is empty, owned by you, and it cannot be inside another account's folder or the 
   the old folder, running) and you are told why.
 - If everything is in the new folder but the old one cannot be deleted, you are told which path
   is left to delete by hand.
+- It will not move to a destination with whitespace at the start or end of a path component, nor
+  to a mount point (create a subfolder inside that disk and choose it).
+- While it runs, no other operation (sync, contingency, LAN access, removal) can touch that
+  account, neither from another window nor from the timer.
 
+### If a move is interrupted
+
+While a folder is being moved, gitmereba leaves a file `mover-en-curso-<username>.toml` in the
+data folder (`~/.local/share/gitmereba/`) with the source, the destination and the mode, and
+the window refuses to close. It is deleted by itself when the move ends or is fully undone. If
+the computer is switched off or the process dies midway, the file stays,
+`gitmereba doctor` flags it as a failure and gitmereba refuses to start another move of that
+account. It does not recover by itself: you have to decide which folder is the good one.
+
+1. With Gitea stopped (`systemctl --user stop gitmereba-gitea-<username>`), check which of the
+   two folders in the file contains `gitea/data/gitea.db`. If the source no longer exists, the
+   data is in the destination; otherwise it is still in the source.
+2. If the good one is the **old** one: delete the new folder and `<destination>.gitmereba-parcial`
+   if it exists. The account still points to the old folder.
+3. If the good one is the **new** one: edit `carpeta` in its `gitmereba.toml` and in
+   `cuentas.toml` (`~/.local/share/gitmereba/`), and open **Settings** once so the systemd units
+   are rewritten.
+4. Delete the file `mover-en-curso-<username>.toml` and start again with
+   `systemctl --user restart gitmereba-gitea-<username>`. Check with `gitmereba doctor`.
 
 ## 12. Language
 

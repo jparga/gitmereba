@@ -11,6 +11,14 @@ pub(crate) fn motivo_destino(motivo: &MotivoDestino) -> String {
             "la ruta contiene un carácter no permitido ({})",
             caracter.escape_debug()
         ),
+        MotivoDestino::ComponenteConEspacios => {
+            "ningún componente de la ruta puede empezar ni acabar en espacio en blanco"
+                .to_string()
+        }
+        MotivoDestino::EsPuntoDeMontaje => {
+            "el destino es un punto de montaje: crea una subcarpeta dentro de ese disco y elígela como destino"
+                .to_string()
+        }
         MotivoDestino::Protegida => {
             "no puede ser la raíz, el HOME ni un ancestro del HOME".to_string()
         }

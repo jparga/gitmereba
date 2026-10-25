@@ -2,6 +2,7 @@
 
 use std::collections::HashSet;
 use std::future::Future;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use gitmereba_core::almacen::Almacen;
@@ -24,6 +25,21 @@ pub struct EstadoApp {
     /// carpeta...). Solo cubre esta ventana; el temporizador de systemd se comprueba aparte
     /// (`Lanzador::sincronizacion_en_curso`).
     ocupadas: Arc<Mutex<HashSet<String>>>,
+    /// Cuántos movimientos de carpeta hay en curso: mientras sea > 0 la ventana no se cierra.
+    moviendo: Arc<AtomicUsize>,
+}
+
+/// Mientras exista, la ventana se niega a cerrarse: cerrar a mitad de un movimiento de
+/// carpeta dejaría los datos partidos entre dos sitios.
+#[derive(Debug)]
+pub struct GuardaMovimiento {
+    moviendo: Arc<AtomicUsize>,
+}
+
+impl Drop for GuardaMovimiento {
+    fn drop(&mut self) {
+        self.moviendo.fetch_sub(1, Ordering::SeqCst);
+    }
 }
 
 /// Marca de «esta cuenta está ocupada»: se libera al soltarla.
@@ -47,7 +63,21 @@ impl EstadoApp {
         Self {
             rutas,
             ocupadas: Arc::default(),
+            moviendo: Arc::default(),
         }
+    }
+
+    /// Anota que empieza un movimiento de carpeta.
+    pub fn iniciar_movimiento(&self) -> GuardaMovimiento {
+        self.moviendo.fetch_add(1, Ordering::SeqCst);
+        GuardaMovimiento {
+            moviendo: Arc::clone(&self.moviendo),
+        }
+    }
+
+    /// `true` si hay un movimiento de carpeta en curso.
+    pub fn hay_movimiento(&self) -> bool {
+        self.moviendo.load(Ordering::SeqCst) > 0
     }
 
     /// Reserva la cuenta `login` para una operación que no admite otra a la vez, o
@@ -153,6 +183,16 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn la_ventana_no_se_puede_cerrar_mientras_haya_un_movimiento() {
+        let estado = EstadoApp::nuevo(Rutas::con_raiz("/tmp/gitmereba-prueba-cierre"));
+        assert!(!estado.hay_movimiento());
+        let guarda = estado.iniciar_movimiento();
+        assert!(estado.hay_movimiento());
+        drop(guarda);
+        assert!(!estado.hay_movimiento());
+    }
 
     #[test]
     fn una_cuenta_solo_se_reserva_una_vez_hasta_soltarla() {

@@ -61,6 +61,19 @@ pub enum ErrorCuentas {
     /// La carpeta de destino de `mover_carpeta` no sirve.
     #[error("la carpeta de destino no es válida: {}", .0.localizar(Idioma::Es))]
     DestinoNoValido(MotivoDestino),
+    /// Quedó una marca de un movimiento de carpeta interrumpido: hay que revisarlo a mano.
+    #[error(
+        "hay un movimiento de carpeta de «{login}» sin terminar (de {} a {}): ejecuta «gitmereba doctor» y sigue las instrucciones del manual",
+        origen.display(), destino.display()
+    )]
+    MovimientoInterrumpido {
+        login: Nombre,
+        origen: PathBuf,
+        destino: PathBuf,
+    },
+    /// Otro proceso (o esta misma ventana) está operando sobre la cuenta.
+    #[error("la cuenta «{0}» tiene otra operación en curso: espera a que termine")]
+    CuentaOcupada(Nombre),
     /// Hay una sincronización de la cuenta en marcha: mover la carpeta la rompería.
     #[error("hay una sincronización de «{0}» en curso: espera a que termine y vuelve a intentarlo")]
     SincronizacionEnCurso(Nombre),
@@ -105,6 +118,8 @@ impl ErrorCuentas {
             ErrorCuentas::CarpetaNoValidaParaBorrar(..) => "carpeta-no-valida-para-borrar",
             ErrorCuentas::RutaProtegida(_) => "ruta-protegida",
             ErrorCuentas::DestinoNoValido(_) => "destino-no-valido",
+            ErrorCuentas::MovimientoInterrumpido { .. } => "movimiento-interrumpido",
+            ErrorCuentas::CuentaOcupada(_) => "cuenta-ocupada",
             ErrorCuentas::SincronizacionEnCurso(_) => "sincronizacion-en-curso",
             ErrorCuentas::Copia(_) => "copia-no-valida",
             ErrorCuentas::Io(_) => "io",

@@ -15,6 +15,7 @@ use gitmereba_core::config::{self, Rutas, RutasCuenta};
 use gitmereba_core::cuentas;
 
 use estado::EstadoApp;
+use tauri::{Emitter, Manager};
 
 /// Abre la ventana principal y bloquea hasta que se cierra.
 pub fn abrir(rutas: Rutas) -> Result<(), tauri::Error> {
@@ -22,6 +23,17 @@ pub fn abrir(rutas: Rutas) -> Result<(), tauri::Error> {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(EstadoApp::nuevo(rutas))
+        .on_window_event(|ventana, evento| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = evento
+                && ventana.state::<EstadoApp>().hay_movimiento()
+            {
+                // Cerrar a mitad de un movimiento de carpeta dejaría los datos partidos.
+                api.prevent_close();
+                if let Err(error) = ventana.emit("carpeta://cierre-bloqueado", ()) {
+                    tracing::warn!(error = %error, "no se pudo avisar de que la ventana no se cierra");
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             idioma::idioma,
             idioma::fijar_idioma,

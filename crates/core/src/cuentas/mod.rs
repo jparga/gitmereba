@@ -8,6 +8,7 @@ mod ajustes;
 mod alta;
 mod aprovisionador;
 mod baja;
+mod cerrojo;
 mod comun;
 mod contexto;
 mod doctor;
@@ -17,6 +18,7 @@ mod estado;
 mod lan;
 mod lanzador;
 mod listar;
+mod marca_mover;
 mod mover;
 mod mover_copia;
 mod mover_destino;
@@ -37,6 +39,7 @@ pub use ajustes::actualizar_ajustes;
 pub use alta::alta;
 pub use aprovisionador::{Aprovisionador, AprovisionadorReal};
 pub use baja::baja;
+pub use cerrojo::CerrojoCuenta;
 pub use comun::cliente_gitea_de_cuenta;
 pub use contexto::Contexto;
 pub use doctor::{Comprobacion, InformeDoctor, NivelComprobacion, comprobar_idioma, doctor};
@@ -46,6 +49,7 @@ pub use estado::{ConteoRepos, EstadoCuenta, estado};
 pub use lan::{InformeLan, estado_lan, exponer_lan, ocultar_lan};
 pub use lanzador::{Lanzador, LanzadorPrimerPlano, LanzadorSystemd, ParametrosLanzamiento};
 pub use listar::listar;
+pub use marca_mover::{MarcaMover, leer_marca, marcas_pendientes};
 pub use mover::{
     PrevisualizacionMover, RenombradoReal, Renombrador, mover_carpeta, mover_carpeta_con,
     previsualizar_mover,

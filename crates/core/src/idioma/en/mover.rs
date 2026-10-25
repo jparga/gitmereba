@@ -11,6 +11,13 @@ pub(crate) fn motivo_destino(motivo: &MotivoDestino) -> String {
             "the path contains a character that is not allowed ({})",
             caracter.escape_debug()
         ),
+        MotivoDestino::ComponenteConEspacios => {
+            "no component of the path can start or end with whitespace".to_string()
+        }
+        MotivoDestino::EsPuntoDeMontaje => {
+            "the destination is a mount point: create a subfolder inside that disk and choose it as the destination"
+                .to_string()
+        }
         MotivoDestino::Protegida => {
             "it cannot be the root, the HOME or an ancestor of the HOME".to_string()
         }

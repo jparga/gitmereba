@@ -932,6 +932,29 @@ mod tests {
                 "check the permissions of the account's “snapshots/” folder",
             ),
             caso_doctor(
+                T::MovimientoInterrumpido {
+                    origen: PathBuf::from("/a"),
+                    destino: PathBuf::from("/b"),
+                    modo: "copia".to_string(),
+                },
+                "hay un movimiento de carpeta sin terminar: de /a a /b (modo: copia)",
+                "there is an unfinished folder move: from /a to /b (mode: copia)",
+            ),
+            caso_doctor(
+                T::MarcaMovimientoIlegible {
+                    error: TextoExterno::literal("x"),
+                },
+                "no se pudo leer la marca de un movimiento de carpeta en curso: x",
+                "could not read the marker of a folder move in progress: x",
+            ),
+            caso_doctor(
+                T::ConsejoMarcaMovimientoIlegible {
+                    ruta: PathBuf::from("/m"),
+                },
+                "revisa «/m» y consulta el manual («Mover la carpeta de una cuenta»)",
+                "check “/m” and see the manual (“Moving an account's folder”)",
+            ),
+            caso_doctor(
                 T::TemporizadorNoInstalado,
                 "no hay temporizador de sincronización instalado",
                 "no sync timer is installed",
@@ -1106,6 +1129,11 @@ mod tests {
                 "cuenta:jparga:temporizador",
                 "account:jparga:timer",
             ),
+            (
+                cuenta(ParteCuenta::Movimiento),
+                "cuenta:jparga:movimiento",
+                "account:jparga:move",
+            ),
         ];
         for (nombre, es, en) in casos {
             assert_eq!(nombre.localizar(Idioma::Es), es, "{nombre:?}");
@@ -1122,6 +1150,8 @@ mod tests {
             MotivoDestino::ConPuntoPunto,
             MotivoDestino::NoUtf8,
             MotivoDestino::CaracterNoPermitido { caracter: '\n' },
+            MotivoDestino::ComponenteConEspacios,
+            MotivoDestino::EsPuntoDeMontaje,
             MotivoDestino::Protegida,
             MotivoDestino::DentroDeDatosDeLaApp,
             MotivoDestino::SinPadre,

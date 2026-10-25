@@ -7,6 +7,7 @@ use crate::instancia;
 use crate::modelo::Nombre;
 use crate::secretos::Llavero;
 
+use super::cerrojo::CerrojoCuenta;
 use super::contexto::Contexto;
 use super::error::ErrorCuentas;
 use super::lanzador::Lanzador;
@@ -27,6 +28,7 @@ pub async fn baja<L: Llavero, Ln: Lanzador>(
     login: &Nombre,
     borrar_datos: bool,
 ) -> Result<(), ErrorCuentas> {
+    let _cerrojo = CerrojoCuenta::tomar(contexto.rutas, login)?;
     let mut indice = config::leer_indice_cuentas(contexto.rutas)?;
     let entrada = indice
         .cuentas

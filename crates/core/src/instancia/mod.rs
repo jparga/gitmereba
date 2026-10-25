@@ -17,7 +17,7 @@ mod usuarios;
 
 pub use app_ini::{
     ParametrosAppIni, ParametrosLanAppIni, SecretosAppIni, escribir_app_ini, generar_app_ini,
-    leer_secretos_app_ini, regenerar_app_ini_conservando_secretos,
+    leer_secretos_app_ini, regenerar_app_ini_conservando_secretos, verificar_rutas_app_ini,
 };
 pub use binario::{SHA256_GITEA_1_27_3_LINUX_AMD64, VERSION_GITEA, asegurar_binario};
 pub use certificado::{

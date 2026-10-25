@@ -36,6 +36,20 @@ pub(super) fn validar_destino(
     origen: &Path,
     destino: &Path,
 ) -> Result<PathBuf, ErrorCuentas> {
+    validar_destino_con(rutas, indice, login, origen, destino, &|ruta| {
+        std::fs::metadata(ruta).map(|metadatos| metadatos.dev())
+    })
+}
+
+/// Como [`validar_destino`], con el número de dispositivo de una ruta inyectable.
+fn validar_destino_con(
+    rutas: &Rutas,
+    indice: &IndiceCuentas,
+    login: &Nombre,
+    origen: &Path,
+    destino: &Path,
+    dispositivo: &dyn Fn(&Path) -> std::io::Result<u64>,
+) -> Result<PathBuf, ErrorCuentas> {
     fn no_valido(motivo: MotivoDestino) -> ErrorCuentas {
         ErrorCuentas::DestinoNoValido(motivo)
     }
@@ -66,6 +80,14 @@ pub(super) fn validar_destino(
         .any(|componente| matches!(componente, Component::ParentDir))
     {
         return Err(no_valido(MotivoDestino::ConPuntoPunto));
+    }
+    // Gitea recorta los espacios de los valores de `app.ini`: un componente así acabaría
+    // en otra ruta distinta de la que se creó.
+    if texto
+        .split('/')
+        .any(|componente| componente.trim() != componente)
+    {
+        return Err(no_valido(MotivoDestino::ComponenteConEspacios));
     }
     if let Some(caracter) = texto
         .chars()
@@ -117,6 +139,13 @@ pub(super) fn validar_destino(
             }
             if !tipo.is_dir() {
                 return Err(no_valido(MotivoDestino::NoEsDirectorio));
+            }
+            // Un punto de montaje no se puede reemplazar con `rename`: fallaría al final,
+            // tras copiarlo todo.
+            if dispositivo(&destino).map_err(|e| io(&e))?
+                != dispositivo(&padre).map_err(|e| io(&e))?
+            {
+                return Err(no_valido(MotivoDestino::EsPuntoDeMontaje));
             }
             let vacio = std::fs::read_dir(&destino)
                 .map_err(|e| io(&e))?
@@ -294,6 +323,52 @@ mod tests {
                 MotivoDestino::CaracterNoPermitido { caracter }
             );
         }
+    }
+
+    #[test]
+    fn rechaza_un_componente_que_empieza_o_acaba_en_espacio_en_blanco() {
+        let e = escenario();
+        for nombre in ["cuenta ", " cuenta", "\u{a0}cuenta", "a /b"] {
+            let destino = e.raiz.join(nombre);
+            assert_eq!(
+                motivo(validar(&e, &destino)),
+                MotivoDestino::ComponenteConEspacios,
+                "{nombre:?}"
+            );
+        }
+        // Un espacio en medio es válido.
+        assert!(validar(&e, &e.raiz.join("mi cuenta")).is_ok());
+    }
+
+    #[test]
+    fn rechaza_un_destino_que_es_un_punto_de_montaje() {
+        let e = escenario();
+        let destino = e.raiz.join("montaje");
+        std::fs::create_dir(&destino).expect("crear");
+        // Se simula que el destino está en otro dispositivo que su padre.
+        let dev = |ruta: &Path| Ok(if ruta == destino { 2 } else { 1 });
+        let resultado = validar_destino_con(
+            &e.rutas,
+            &e.indice,
+            &nombre("jparga"),
+            &e.propia,
+            &destino,
+            &dev,
+        );
+        assert_eq!(motivo(resultado), MotivoDestino::EsPuntoDeMontaje);
+        // En el mismo dispositivo que el padre, vale.
+        let mismo = |_: &Path| Ok(1);
+        assert!(
+            validar_destino_con(
+                &e.rutas,
+                &e.indice,
+                &nombre("jparga"),
+                &e.propia,
+                &destino,
+                &mismo
+            )
+            .is_ok()
+        );
     }
 
     #[test]

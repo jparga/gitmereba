@@ -14,6 +14,7 @@ use crate::instancia::{self, ParametrosCertificado, ParametrosLanAppIni};
 use crate::modelo::{AccesoLan, Cuenta, Nombre, NombreHostInterno, host_lan_por_defecto};
 use crate::secretos::Llavero;
 
+use super::cerrojo::CerrojoCuenta;
 use super::comun::{cargar_cuenta, ruta_binario_cacheado, usuario_actual};
 use super::contexto::Contexto;
 use super::error::ErrorCuentas;
@@ -51,6 +52,7 @@ pub async fn exponer_lan<L: Llavero, Ln: Lanzador>(
     login: &Nombre,
     host: Option<NombreHostInterno>,
 ) -> Result<InformeLan, ErrorCuentas> {
+    let _cerrojo = CerrojoCuenta::tomar(contexto.rutas, login)?;
     let mut cuenta = cargar_cuenta(contexto.rutas, login)?;
     let rutas_cuenta = RutasCuenta::nueva(&cuenta.carpeta);
     let host = host.unwrap_or_else(|| host_lan_por_defecto(login));
@@ -114,6 +116,7 @@ pub async fn ocultar_lan<L: Llavero, Ln: Lanzador>(
     lanzador: &Ln,
     login: &Nombre,
 ) -> Result<InformeLan, ErrorCuentas> {
+    let _cerrojo = CerrojoCuenta::tomar(contexto.rutas, login)?;
     let mut cuenta = cargar_cuenta(contexto.rutas, login)?;
     let rutas_cuenta = RutasCuenta::nueva(&cuenta.carpeta);
     let binario = ruta_binario_cacheado(contexto.rutas);

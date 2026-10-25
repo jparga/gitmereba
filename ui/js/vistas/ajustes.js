@@ -1,4 +1,4 @@
-import { api, suscribirProgresoMover } from '../api.js';
+import { api, suscribirCierreBloqueado, suscribirProgresoMover } from '../api.js';
 import { h, pintar, avisar, ocupar, barraProgreso } from '../dom.js';
 import { crearConmutadorTema } from '../tema.js';
 import { navegar } from '../router.js';
@@ -203,7 +203,9 @@ async function panelCuenta(contenedor, login, recargarCuentas) {
           // El botón se guarda antes de cualquier `await`: `evento.currentTarget` ya no vale después.
           const liberar = cambiaCarpeta ? ocupar(botonGuardar, t('ajustes.mover.moviendo')) : null;
           let desuscribir = null;
+          let desuscribirCierre = null;
           if (cambiaCarpeta) {
+            desuscribirCierre = await suscribirCierreBloqueado(() => avisar(t('ajustes.mover.no_cerrar'), 'warn'));
             pintar(zonaProgresoMover, barraProgreso(t('ajustes.mover.preparando')));
             desuscribir = await suscribirProgresoMover((progreso) => {
               if (progreso.login !== login) return;
@@ -265,6 +267,7 @@ async function panelCuenta(contenedor, login, recargarCuentas) {
             }
           } finally {
             if (desuscribir) desuscribir();
+            if (desuscribirCierre) desuscribirCierre();
             pintar(zonaProgresoMover);
             if (liberar) liberar();
           }

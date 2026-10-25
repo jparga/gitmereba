@@ -103,6 +103,7 @@ pub enum TextoCli {
     CuentaNoExiste(String),
     RepoSincronizacionPedida(String),
     RepoReclonar(String),
+    SincronizacionOmitida(String),
 }
 
 impl TextoCli {
@@ -175,6 +176,9 @@ fn es(t: &TextoCli) -> String {
         T::ConfirmarBaja(login) => format!("Escribe «{login}» para confirmar la baja: "),
         T::BajaCancelada => "Baja cancelada.".to_string(),
         T::CuentaBaja(login) => format!("Cuenta «{login}» dada de baja."),
+        T::SincronizacionOmitida(login) => format!(
+            "La cuenta «{login}» tiene otra operación en curso: se omite esta sincronización."
+        ),
         T::ConfirmarMover(login, origen, destino) => format!(
             "Se parará Gitea de «{login}», se moverá su carpeta de {origen} a {destino} y se \
              borrará la antigua.\nEscribe «{login}» para confirmar: "
@@ -288,6 +292,9 @@ fn en(t: &TextoCli) -> String {
         T::ConfirmarBaja(login) => format!("Type “{login}” to confirm the removal: "),
         T::BajaCancelada => "Removal cancelled.".to_string(),
         T::CuentaBaja(login) => format!("Account “{login}” removed."),
+        T::SincronizacionOmitida(login) => format!(
+            "The account “{login}” has another operation in progress: this sync is skipped."
+        ),
         T::ConfirmarMover(login, origen, destino) => format!(
             "Gitea for “{login}” will be stopped, its folder will be moved from {origen} to \
              {destino} and the old one will be deleted.\nType “{login}” to confirm: "
@@ -399,6 +406,7 @@ mod tests {
             T::ConfirmarBaja(cadena("x")),
             T::BajaCancelada,
             T::CuentaBaja(cadena("x")),
+            T::SincronizacionOmitida(cadena("x")),
             T::ConfirmarMover(cadena("x"), cadena("y"), cadena("z")),
             T::MovimientoCancelado,
             T::CuentaMovida(cadena("x"), cadena("y")),
