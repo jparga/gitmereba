@@ -6,6 +6,17 @@ Todos los cambios relevantes de gitmereba. Formato basado en
 
 ## [Sin publicar]
 
+## [0.8.1] - 2026-10-25
+
+### Seguridad
+
+- Actualizadas dependencias con avisos de seguridad: `rustls` 0.23.46 (exposición de secretos TLS
+  en `Debug`, degradación del intercambio de claves, datos enviados tras un rechazo de ECH y
+  descompresión de certificados sin límite), `rustls-webpki` 0.103.16 (intermedios desconfiados
+  aceptados), `ctutils` 0.4.5 (comparaciones en tiempo no constante) y `tokio` 1.54.1
+  (`AsyncFd::new` incumplía la seguridad de E/S) y `webpki-root-certs` 1.0.11 (raíces que daban
+  por buenos intermedios emSign desconfiados).
+
 ## [0.8.0] - 2026-10-04
 
 ### Añadido
@@ -67,7 +78,8 @@ Primera versión pública, bajo la licencia GPL-3.0-or-later.
   ejecutan en la CI.
 - **Paquete `.deb`** y `.tar.gz`, con `SHA256SUMS` y atestación de procedencia.
 
-[Sin publicar]: https://github.com/jparga/gitmereba/compare/v0.8.0...HEAD
+[Sin publicar]: https://github.com/jparga/gitmereba/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/jparga/gitmereba/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/jparga/gitmereba/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/jparga/gitmereba/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/jparga/gitmereba/compare/v0.6.0...v0.7.0
