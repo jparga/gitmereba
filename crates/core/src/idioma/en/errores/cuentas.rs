@@ -43,6 +43,21 @@ pub(crate) fn texto(e: &ErrorCuentas) -> String {
             "“{}” will not be deleted: it is a protected path (root, HOME or one of its ancestors)",
             ruta.display()
         ),
+        ErrorCuentas::DestinoNoValido(motivo) => {
+            format!(
+                "the destination folder is not valid: {}",
+                motivo.localizar(Idioma::En)
+            )
+        }
+        ErrorCuentas::SincronizacionEnCurso(login) => {
+            format!("a sync of “{login}” is in progress: wait for it to finish and try again")
+        }
+        ErrorCuentas::Copia(problema) => {
+            format!(
+                "the copy of the folder is not correct: {}",
+                problema.localizar(Idioma::En)
+            )
+        }
         ErrorCuentas::Io(detalle) => format!("I/O error: {detalle}"),
         ErrorCuentas::Interno(detalle) => format!("internal error: {detalle}"),
         ErrorCuentas::Github(interno) => format!("GitHub: {}", interno.localizar(Idioma::En)),

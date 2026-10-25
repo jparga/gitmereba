@@ -7,6 +7,7 @@ mod binario;
 mod certificado;
 mod error;
 mod fichero;
+mod hooks;
 mod proceso;
 mod provision;
 mod puerto;
@@ -23,15 +24,17 @@ pub use certificado::{
     ParametrosCertificado, ResultadoCertificado, asegurar_certificado, huella_sha256,
 };
 pub use error::ErrorInstancia;
+pub use hooks::regenerar_hooks;
 pub use provision::{NOMBRE_ADMIN_GITEA, ParametrosProvision, ResultadoProvision, provisionar};
 pub use puerto::puerto_libre;
 pub use servicio::{
-    ParametrosUnidad, ProcesoGitea, arrancar, estado, generar_unidad, instalar_unidad,
-    nombre_unidad, parar,
+    ParametrosUnidad, ProcesoGitea, arrancar, escribir_unidad, esperar_salud, estado,
+    generar_unidad, instalar_unidad, nombre_unidad, parar,
 };
 pub use temporizador::{
     ParametrosTemporizador, borrar_unidades, deshabilitar_temporizador, entorno_gestor_systemd,
-    generar_servicio_sync, generar_timer_sync, habilitar_temporizador, instalar_temporizador,
-    nombre_servicio_sync, nombre_timer_sync, reiniciar_temporizador,
+    escribir_temporizador, generar_servicio_sync, generar_timer_sync, habilitar_temporizador,
+    instalar_temporizador, nombre_servicio_sync, nombre_timer_sync, reiniciar_temporizador,
+    servicio_sync_activo,
 };
 pub use usuarios::{UsuarioGitea, borrar_usuario, crear_usuario, listar_usuarios};

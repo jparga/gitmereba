@@ -52,6 +52,7 @@ export default {
     puntos: [
       'Intervalo: cada cuánto se sincroniza la cuenta (mínimo 10 minutos). Funciona aunque esta ventana esté cerrada.',
       'Forks y organizaciones: qué se clona además de los repositorios propios. Tras activar «Incluir forks», marca en Repositorios los que quieras y sincroniza.',
+      '«Carpeta de la cuenta»: puedes elegir otra. Al guardar, se para Gitea, se mueve todo (en el mismo disco es instantáneo; en otro disco se copia, se verifica y solo entonces se borra la antigua) y se vuelve a arrancar. Si algo falla antes del final, la cuenta queda como estaba.',
       '«Rotar token» sustituye el token de GitHub. Se guarda en el llavero del sistema, nunca en ficheros.',
       '«Acceso desde la red local» comparte el Gitea de la cuenta con otros equipos de tu red, siempre por HTTPS. Está apagado por defecto; sigue los tres pasos que muestra al activarlo.',
       '«Usuarios de la LAN» crea personas que entran con su propio usuario en vez del administrador: leen todos los mirrors y solo pueden escribir en los repositorios de contingencia. La contraseña la genera Gitea y se muestra una única vez al crear el usuario: cópiala entonces, porque gitmereba no la guarda. Si alguien la pierde, elimina su usuario y créalo de nuevo.',

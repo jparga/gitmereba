@@ -408,6 +408,8 @@ pub struct LanzadorDoble {
     pub arrancadas: Mutex<Vec<Nombre>>,
     pub paradas: Mutex<Vec<Nombre>>,
     pub fallar_arrancar: Mutex<bool>,
+    /// Lo que responde `sincronizacion_en_curso`.
+    pub sincronizacion_en_curso: Mutex<bool>,
 }
 
 impl LanzadorDoble {
@@ -438,6 +440,10 @@ impl Lanzador for LanzadorDoble {
     async fn parar(&self, _rutas: &Rutas, login: &Nombre) -> Result<(), ErrorCuentas> {
         self.paradas.lock().unwrap().push(login.clone());
         Ok(())
+    }
+
+    async fn sincronizacion_en_curso(&self, _login: &Nombre) -> Result<bool, ErrorCuentas> {
+        Ok(*self.sincronizacion_en_curso.lock().unwrap())
     }
 }
 

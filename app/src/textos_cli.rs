@@ -63,6 +63,11 @@ pub enum TextoCli {
     ConfirmarBaja(String),
     BajaCancelada,
     CuentaBaja(String),
+    /// Login, carpeta actual y carpeta nueva.
+    ConfirmarMover(String, String, String),
+    MovimientoCancelado,
+    /// Login y carpeta nueva.
+    CuentaMovida(String, String),
     IdentidadConfirmada(String),
     TokenCaduca(String),
     TokenSinCaducidad,
@@ -170,6 +175,12 @@ fn es(t: &TextoCli) -> String {
         T::ConfirmarBaja(login) => format!("Escribe «{login}» para confirmar la baja: "),
         T::BajaCancelada => "Baja cancelada.".to_string(),
         T::CuentaBaja(login) => format!("Cuenta «{login}» dada de baja."),
+        T::ConfirmarMover(login, origen, destino) => format!(
+            "Se parará Gitea de «{login}», se moverá su carpeta de {origen} a {destino} y se \
+             borrará la antigua.\nEscribe «{login}» para confirmar: "
+        ),
+        T::MovimientoCancelado => "Movimiento cancelado.".to_string(),
+        T::CuentaMovida(login, destino) => format!("Cuenta «{login}» movida a {destino}."),
         T::IdentidadConfirmada(login) => format!("Identidad confirmada: {login}"),
         T::TokenCaduca(fecha) => format!("El token caduca: {fecha}"),
         T::TokenSinCaducidad => "El token no informa de fecha de caducidad.".to_string(),
@@ -277,6 +288,12 @@ fn en(t: &TextoCli) -> String {
         T::ConfirmarBaja(login) => format!("Type “{login}” to confirm the removal: "),
         T::BajaCancelada => "Removal cancelled.".to_string(),
         T::CuentaBaja(login) => format!("Account “{login}” removed."),
+        T::ConfirmarMover(login, origen, destino) => format!(
+            "Gitea for “{login}” will be stopped, its folder will be moved from {origen} to \
+             {destino} and the old one will be deleted.\nType “{login}” to confirm: "
+        ),
+        T::MovimientoCancelado => "Move cancelled.".to_string(),
+        T::CuentaMovida(login, destino) => format!("Account “{login}” moved to {destino}."),
         T::IdentidadConfirmada(login) => format!("Identity confirmed: {login}"),
         T::TokenCaduca(fecha) => format!("The token expires: {fecha}"),
         T::TokenSinCaducidad => "The token does not report an expiry date.".to_string(),
@@ -382,6 +399,9 @@ mod tests {
             T::ConfirmarBaja(cadena("x")),
             T::BajaCancelada,
             T::CuentaBaja(cadena("x")),
+            T::ConfirmarMover(cadena("x"), cadena("y"), cadena("z")),
+            T::MovimientoCancelado,
+            T::CuentaMovida(cadena("x"), cadena("y")),
             T::IdentidadConfirmada(cadena("x")),
             T::TokenCaduca(cadena("x")),
             T::TokenSinCaducidad,

@@ -53,6 +53,7 @@ export default {
     puntos: [
       '“Sync interval (minutes)”: how often the account is synced (minimum 10 minutes). It works even when this window is closed.',
       'Forks and organisations: what is cloned besides your own repositories. After turning on “Include forks”, tick the ones you want in “Repositories” and sync.',
+      '“Account folder”: you can pick another one. When you save, Gitea is stopped, everything is moved (on the same disk it is instant; to another disk it is copied, verified and only then is the old one deleted) and Gitea is started again. If something fails before the end, the account stays as it was.',
       '“Rotate token” replaces the GitHub token. It is stored in the system keyring, never in files.',
       '“Local network access” shares the account’s Gitea with other computers on your network, always over HTTPS. It is off by default; follow the three steps it shows when you turn it on.',
       '“LAN users” creates people who sign in with their own username instead of the administrator: they can read all the mirrors and write only to the contingency repositories. Gitea generates the password and shows it only once, when the user is created: copy it then, because gitmereba does not store it. If someone loses it, delete their user and create it again.',

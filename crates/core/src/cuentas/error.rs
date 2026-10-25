@@ -6,10 +6,13 @@ use crate::almacen::ErrorAlmacen;
 use crate::config::ErrorConfig;
 use crate::gitea::ErrorGitea;
 use crate::github::ErrorGithub;
+use crate::idioma::{Idioma, Localizable};
 use crate::instancia::ErrorInstancia;
 use crate::modelo::{IdRepo, Nombre};
 use crate::secretos::ErrorLlavero;
 use crate::sync::ErrorSync;
+
+use super::mover_textos::{MotivoDestino, ProblemaCopia};
 
 /// Fallos de la orquestación de cuentas. Nunca contiene secretos: los tipos de error de
 /// los demás módulos ya lo garantizan y aquí no se añade ningún dato nuevo que pueda
@@ -55,6 +58,15 @@ pub enum ErrorCuentas {
     /// La carpeta a borrar es la raíz, el HOME o un ancestro del HOME.
     #[error("no se borra «{0}»: es una ruta protegida (raíz, HOME o un ancestro suyo)")]
     RutaProtegida(PathBuf),
+    /// La carpeta de destino de `mover_carpeta` no sirve.
+    #[error("la carpeta de destino no es válida: {}", .0.localizar(Idioma::Es))]
+    DestinoNoValido(MotivoDestino),
+    /// Hay una sincronización de la cuenta en marcha: mover la carpeta la rompería.
+    #[error("hay una sincronización de «{0}» en curso: espera a que termine y vuelve a intentarlo")]
+    SincronizacionEnCurso(Nombre),
+    /// La copia a otro sistema de ficheros no se puede hacer o no pasa la verificación.
+    #[error("la copia de la carpeta no es correcta: {}", .0.localizar(Idioma::Es))]
+    Copia(ProblemaCopia),
     #[error("error de E/S: {0}")]
     Io(String),
     #[error("error interno: {0}")]
@@ -92,6 +104,9 @@ impl ErrorCuentas {
             ErrorCuentas::UsuarioLanNoExiste(_) => "usuario-no-existe",
             ErrorCuentas::CarpetaNoValidaParaBorrar(..) => "carpeta-no-valida-para-borrar",
             ErrorCuentas::RutaProtegida(_) => "ruta-protegida",
+            ErrorCuentas::DestinoNoValido(_) => "destino-no-valido",
+            ErrorCuentas::SincronizacionEnCurso(_) => "sincronizacion-en-curso",
+            ErrorCuentas::Copia(_) => "copia-no-valida",
             ErrorCuentas::Io(_) => "io",
             ErrorCuentas::Interno(_) => "interno",
             ErrorCuentas::Github(ErrorGithub::TokenInvalido) => "token-invalido",

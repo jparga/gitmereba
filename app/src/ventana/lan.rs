@@ -91,7 +91,9 @@ pub async fn lan_activar(
     tracing::debug!(comando = "lan_activar");
     let rutas = estado.rutas.clone();
     let idioma = estado.idioma();
+    let reserva = estado.reservar(&login, idioma)?;
     en_hilo(idioma, move || async move {
+        let _reserva = reserva;
         let login = login_valido(&login, idioma)?;
         let host = host
             .map(|texto| NombreHostInterno::nuevo(texto.trim()))
@@ -121,7 +123,9 @@ pub async fn lan_desactivar(
     tracing::debug!(comando = "lan_desactivar");
     let rutas = estado.rutas.clone();
     let idioma = estado.idioma();
+    let reserva = estado.reservar(&login, idioma)?;
     en_hilo(idioma, move || async move {
+        let _reserva = reserva;
         let login = login_valido(&login, idioma)?;
         let recursos = Recursos::abrir(&rutas)?;
         recursos.cuenta(login.as_str())?;

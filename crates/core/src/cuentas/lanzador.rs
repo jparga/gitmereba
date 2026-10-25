@@ -48,6 +48,13 @@ pub trait Lanzador {
     ) -> Result<(), ErrorCuentas>;
 
     async fn parar(&self, rutas: &Rutas, login: &Nombre) -> Result<(), ErrorCuentas>;
+
+    /// `true` si hay una sincronización periódica de `login` ejecutándose ahora mismo
+    /// (la unidad oneshot que lanza el temporizador). Por defecto `false`: solo
+    /// [`LanzadorSystemd`] tiene temporizador.
+    async fn sincronizacion_en_curso(&self, _login: &Nombre) -> Result<bool, ErrorCuentas> {
+        Ok(false)
+    }
 }
 
 /// Instala la unidad `systemd --user` de la cuenta y la arranca, junto con el timer de
@@ -78,6 +85,12 @@ impl Lanzador for LanzadorSystemd {
 
         self.instalar_y_habilitar_temporizador(rutas, parametros)
             .await
+    }
+
+    async fn sincronizacion_en_curso(&self, login: &Nombre) -> Result<bool, ErrorCuentas> {
+        instancia::servicio_sync_activo(login)
+            .await
+            .map_err(ErrorCuentas::from)
     }
 
     async fn parar(&self, _rutas: &Rutas, login: &Nombre) -> Result<(), ErrorCuentas> {

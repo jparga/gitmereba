@@ -6,6 +6,19 @@ Todos los cambios relevantes de gitmereba. Formato basado en
 
 ## [Sin publicar]
 
+### Añadido
+
+- **Mover la carpeta de una cuenta**, desde **Ajustes → Carpeta de la cuenta** o con
+  `gitmereba cuenta mover <usuario> <carpeta>`. Se para Gitea, se mueve todo (renombrado en el
+  mismo disco; copia con progreso en otro, verificada con las sumas SHA-256 de la base de datos y
+  de la configuración y `git fsck` de cada repositorio y de las copias antes de borrar nada),
+  se repuntan `gitmereba.toml`, `app.ini`, las unidades de systemd y los hooks de git de Gitea, y
+  se arranca Gitea en la carpeta nueva. La carpeta antigua se borra al final. Hasta escribir el
+  índice de cuentas, cualquier fallo deja la cuenta funcionando donde estaba. El destino debe ser
+  una ruta absoluta vacía o inexistente, y no puede solaparse con la carpeta de ninguna cuenta.
+- Mientras una cuenta sincroniza, activa una contingencia, se reconcilia, cambia su acceso LAN
+  o se mueve desde la ventana, ya no se admite otra de esas operaciones a la vez sobre ella.
+
 ## [0.9.0] - 2026-10-25
 
 ### Añadido

@@ -34,6 +34,16 @@ export function suscribirProgresoSync(callback) {
   return mock.suscribirProgresoSync(callback);
 }
 
+/** Se suscribe a los eventos de progreso del movimiento de carpeta (`ajustes_guardar` con
+ * otra carpeta). Devuelve una promesa con la función para darse de baja. */
+export function suscribirProgresoMover(callback) {
+  const listen = globalThis.__TAURI__?.event?.listen;
+  if (listen) {
+    return listen('carpeta://progreso', (evento) => callback(evento.payload));
+  }
+  return mock.suscribirProgresoMover(callback);
+}
+
 export const api = {
   acercaDe: () => llamar('acerca_de'),
   versionGiteaCuenta: (login) => llamar('version_gitea_cuenta', { login }),

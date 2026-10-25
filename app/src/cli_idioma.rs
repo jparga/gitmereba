@@ -59,6 +59,19 @@ const CATALOGO_EN: &[(&str, &str)] = &[
         "Does not ask for confirmation by typing the login",
     ),
     (
+        "cuenta.mover",
+        "Moves an account's folder to another one and deletes the old one",
+    ),
+    ("cuenta.mover.login", "Login of the account to move"),
+    (
+        "cuenta.mover.carpeta",
+        "New folder (absolute path; it does not exist or is empty)",
+    ),
+    (
+        "cuenta.mover.si",
+        "Does not ask for confirmation by typing the login",
+    ),
+    (
         "cuenta.lan",
         "Enables, disables or shows access to the account from the LAN over HTTPS",
     ),
@@ -135,6 +148,7 @@ const CATALOGO_EN: &[(&str, &str)] = &[
 const VALORES_EN: &[(&str, &str)] = &[
     ("cuenta.add.carpeta", "FOLDER"),
     ("cuenta.add.intervalo", "INTERVAL"),
+    ("cuenta.mover.carpeta", "FOLDER"),
     ("cuenta.usuario.crear", "NAME"),
     ("cuenta.usuario.eliminar", "NAME"),
     ("sync.repo", "OWNER/NAME"),

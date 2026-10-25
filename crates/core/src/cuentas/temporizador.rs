@@ -16,7 +16,11 @@ use crate::modelo::Cuenta;
 
 use super::error::ErrorCuentas;
 
-fn textos_esperados(rutas: &Rutas, cuenta: &Cuenta, ruta_ejecutable: &Path) -> (String, String) {
+pub(super) fn textos_esperados(
+    rutas: &Rutas,
+    cuenta: &Cuenta,
+    ruta_ejecutable: &Path,
+) -> (String, String) {
     let parametros = ParametrosTemporizador {
         login: &cuenta.login,
         ruta_ejecutable,
