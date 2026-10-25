@@ -6,15 +6,28 @@ Todos los cambios relevantes de gitmereba. Formato basado en
 
 ## [Sin publicar]
 
+## [0.9.0] - 2026-10-25
+
 ### Añadido
 
 - **AppImage.** Cada versión incluye un `.AppImage` (x86_64) además del `.deb` y el `.tar.gz`:
   lleva GTK y WebKitGTK dentro y se ejecuta sin instalar. `scripts/empaquetar.sh --appimage` lo
   construye con `linuxdeploy`, su plugin gtk, `appimagetool` y el runtime type2, en versiones
   concretas con SHA-256 fijado. Los temporizadores de systemd apuntan al propio fichero
-  `.AppImage` y no al montaje temporal, y extraen el AppImage en un directorio privado (0700) en vez del `/tmp` compartido.
-  Dentro de un AppImage la ventana no se abre si no puede fijar su directorio de trabajo con
-  seguridad: WebKitGTK localiza sus procesos auxiliares por una ruta relativa a él.
+  `.AppImage` y no al montaje temporal, y extraen el AppImage en un directorio privado (0700) en
+  vez del `/tmp` compartido. Dentro de un AppImage la ventana no se abre si no puede fijar su
+  directorio de trabajo con seguridad: WebKitGTK localiza sus procesos auxiliares por una ruta
+  relativa a él.
+
+### Seguridad
+
+- La navegación de la ventana solo acepta rutas propias: `#/constructor` o `#/__proto__` ya no
+  resuelven a funciones heredadas de `Object`.
+
+### Cambiado
+
+- Dependencias al día: Tauri 2.12.2, `tauri-plugin-dialog` 2.8.3, `serde_json`, `sha2`, `zeroize`
+  y `notify-rust`.
 
 ## [0.8.1] - 2026-10-25
 
@@ -88,7 +101,8 @@ Primera versión pública, bajo la licencia GPL-3.0-or-later.
   ejecutan en la CI.
 - **Paquete `.deb`** y `.tar.gz`, con `SHA256SUMS` y atestación de procedencia.
 
-[Sin publicar]: https://github.com/jparga/gitmereba/compare/v0.8.1...HEAD
+[Sin publicar]: https://github.com/jparga/gitmereba/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/jparga/gitmereba/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/jparga/gitmereba/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/jparga/gitmereba/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/jparga/gitmereba/compare/v0.7.0...v0.7.1
