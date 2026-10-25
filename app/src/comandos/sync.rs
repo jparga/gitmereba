@@ -91,6 +91,17 @@ pub async fn ejecutar(args: SyncArgs, rutas: &Rutas) -> u8 {
                     proteccion: None,
                 })
             }
+            // Otra operación (otra sincronización, un movimiento de carpeta...) tiene la
+            // cuenta: no es un fallo, se deja para la próxima pasada del temporizador.
+            Err(ErrorCuentas::CuentaOcupada(login_ocupado)) => {
+                tracing::info!(login = %login_ocupado, "la cuenta tiene otra operación en curso: se omite esta sincronización");
+                let mut stdout = std::io::stdout().lock();
+                salida::linea(
+                    &mut stdout,
+                    &TextoCli::SincronizacionOmitida(login_ocupado.to_string()).texto(idioma),
+                );
+                None
+            }
             Err(error) => {
                 emitir_error(idioma, &error);
                 hubo_error = true;

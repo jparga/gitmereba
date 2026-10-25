@@ -430,6 +430,16 @@ impl Fixture {
     async fn comprobar_operativa_en(&self, carpeta: &Path, otra: &Path) {
         let cuenta = config::leer_cuenta(&RutasCuenta::nueva(carpeta)).expect("gitmereba.toml");
         assert_eq!(cuenta.carpeta, carpeta);
+        assert!(
+            cuentas::leer_marca(&self.rutas, &self.login)
+                .expect("marca")
+                .is_none(),
+            "no debe quedar la marca de movimiento en curso"
+        );
+        assert!(
+            cuentas::CerrojoCuenta::tomar(&self.rutas, &self.login).is_ok(),
+            "el cerrojo debe haberse liberado"
+        );
         let indice = config::leer_indice_cuentas(&self.rutas).expect("índice");
         assert_eq!(indice.cuentas[self.login.as_str()].carpeta, carpeta);
 

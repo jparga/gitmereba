@@ -23,6 +23,7 @@ pub(crate) fn nombre(n: &NombreComprobacion) -> String {
                 ParteCuenta::Secretos => "secrets",
                 ParteCuenta::Snapshots => "snapshots",
                 ParteCuenta::Temporizador => "timer",
+                ParteCuenta::Movimiento => "move",
             };
             format!("account:{login}:{parte}")
         }
@@ -217,6 +218,42 @@ pub(crate) fn texto(t: &TextoDoctor) -> String {
         TextoDoctor::ConsejoPermisosSnapshots => {
             "check the permissions of the account's “snapshots/” folder".to_string()
         }
+        TextoDoctor::MovimientoInterrumpido {
+            origen,
+            destino,
+            modo,
+        } => format!(
+            "there is an unfinished folder move: from {} to {} (mode: {modo})",
+            origen.display(),
+            destino.display()
+        ),
+        TextoDoctor::ConsejoMovimientoInterrumpido {
+            login,
+            origen,
+            destino,
+        } => {
+            let parcial = format!("{}.gitmereba-parcial", destino.display());
+            format!(
+                "nothing is lost unless you deleted something yourself: the data is complete in {origen} \
+             or, if that folder no longer exists, in {destino}. Check which one contains \
+             “gitea/data/gitea.db”. If the good one is {origen}, delete {destino} and the folder \
+             “{destino_parcial}” if it exists; if it is {destino}, edit “carpeta” by hand in \
+             “gitmereba.toml” and in “cuentas.toml”. Then delete the file “mover-en-curso-{login}.toml” \
+             from the data folder and restart with “systemctl --user restart gitmereba-gitea-{login}” \
+             (manual: “Moving an account's folder”)",
+                origen = origen.display(),
+                destino = destino.display(),
+                destino_parcial = parcial,
+            )
+        }
+        TextoDoctor::MarcaMovimientoIlegible { error } => format!(
+            "could not read the marker of a folder move in progress: {}",
+            error.en
+        ),
+        TextoDoctor::ConsejoMarcaMovimientoIlegible { ruta } => format!(
+            "check “{}” and see the manual (“Moving an account's folder”)",
+            ruta.display()
+        ),
         TextoDoctor::TemporizadorNoInstalado => "no sync timer is installed".to_string(),
         TextoDoctor::ConsejoAbrirVentanaInstala => {
             "open the gitmereba window once: it installs itself; until then it only syncs \

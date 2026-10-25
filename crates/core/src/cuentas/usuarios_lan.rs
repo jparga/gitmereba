@@ -17,6 +17,7 @@ use crate::instancia::{self, NOMBRE_ADMIN_GITEA};
 use crate::modelo::Nombre;
 use crate::secretos::{Llavero, Secreto};
 
+use super::cerrojo::CerrojoCuenta;
 use super::comun::{cargar_cuenta, ruta_binario_cacheado};
 use super::contexto::Contexto;
 use super::error::ErrorCuentas;
@@ -139,6 +140,7 @@ pub async fn crear_usuario_lan<L: Llavero, T: ApiGitea>(
         return Err(ErrorCuentas::UsuarioLanNoValido(nombre.clone()));
     }
 
+    let _cerrojo = CerrojoCuenta::tomar(contexto.rutas, login)?;
     let cuenta = cargar_cuenta(contexto.rutas, login)?;
     let rutas_cuenta = RutasCuenta::nueva(&cuenta.carpeta);
     let binario = ruta_binario_cacheado(contexto.rutas);
@@ -223,6 +225,7 @@ pub async fn eliminar_usuario_lan<L: Llavero, T: ApiGitea>(
         return Err(ErrorCuentas::UsuarioLanNoValido(nombre.clone()));
     }
 
+    let _cerrojo = CerrojoCuenta::tomar(contexto.rutas, login)?;
     let cuenta = cargar_cuenta(contexto.rutas, login)?;
     let rutas_cuenta = RutasCuenta::nueva(&cuenta.carpeta);
     let binario = ruta_binario_cacheado(contexto.rutas);

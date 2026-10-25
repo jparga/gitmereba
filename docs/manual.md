@@ -229,6 +229,30 @@ revés).
   estaba (en la carpeta antigua, funcionando) y se te dice el motivo.
 - Si ya está todo en la carpeta nueva pero no se puede borrar la antigua, se te avisa de qué
   ruta queda por borrar a mano.
+- No se mueve a un destino con espacios al principio o al final de un componente ni a un punto
+  de montaje (crea una subcarpeta dentro de ese disco y elígela).
+- Mientras dura, ninguna otra operación (sincronización, contingencia, acceso LAN, baja) puede
+  tocar esa cuenta, ni desde otra ventana ni desde el temporizador.
+
+### Si un movimiento se interrumpe
+
+Mientras se mueve una carpeta, gitmereba deja en la carpeta de datos
+(`~/.local/share/gitmereba/`) un fichero `mover-en-curso-<usuario>.toml` con el origen, el
+destino y el modo, y la ventana no se deja cerrar. Se borra solo al terminar o al deshacerlo
+todo. Si el equipo se apaga o el proceso muere a mitad, el fichero se queda,
+`gitmereba doctor` lo marca como fallo y gitmereba se niega a empezar otro movimiento de esa
+cuenta. No se recupera solo: tienes que decidir qué carpeta es la buena.
+
+1. Con Gitea parado (`systemctl --user stop gitmereba-gitea-<usuario>`), mira cuál de las dos
+   carpetas del fichero contiene `gitea/data/gitea.db`. Si ya no existe el origen, los datos
+   están en el destino; si no, siguen en el origen.
+2. Si la buena es la **antigua**: borra la carpeta nueva y la `<destino>.gitmereba-parcial` si
+   existe. La cuenta sigue apuntando a la carpeta antigua.
+3. Si la buena es la **nueva**: edita `carpeta` en su `gitmereba.toml` y en `cuentas.toml`
+   (`~/.local/share/gitmereba/`), y abre **Ajustes** una vez para que se reescriban las
+   unidades de systemd.
+4. Borra el fichero `mover-en-curso-<usuario>.toml` y arranca de nuevo con
+   `systemctl --user restart gitmereba-gitea-<usuario>`. Comprueba con `gitmereba doctor`.
 
 ## 12. Idioma
 

@@ -43,7 +43,11 @@ pub async fn excluir_repo(
     tracing::debug!(comando = "excluir_repo");
     let rutas = estado.rutas.clone();
     let idioma = estado.idioma();
+    let reserva = estado.reservar(&login, idioma)?;
     en_hilo(idioma, move || async move {
+        let _reserva = reserva;
+        let _cerrojo = cuentas::CerrojoCuenta::tomar(&rutas, &nombre_de(&login, idioma)?)
+            .map_err(|error| ErrorUi::de(&error, idioma))?;
         let recursos = Recursos::abrir(&rutas)?;
         let (cuenta, rutas_cuenta) = recursos.cuenta(login.as_str())?;
         cuentas::excluir_repo(&recursos.almacen, &rutas_cuenta, &cuenta, &id, excluido)
@@ -72,6 +76,8 @@ pub async fn sincronizar(
 
         match id {
             None => {
+                let _cerrojo = cuentas::CerrojoCuenta::tomar(&rutas, &nombre_de(&login, idioma)?)
+                    .map_err(|error| ErrorUi::de(&error, idioma))?;
                 // Construidos aquí (en vez de con el envoltorio `cuentas::sincronizar_y_verificar`,
                 // que no acepta progreso) porque necesitamos pasar el cierre de avance hasta
                 // `sync::ejecutar_con_progreso`; mismo patrón que `activar_contingencia` un poco
@@ -335,6 +341,8 @@ pub async fn activar_contingencia(
     let reserva = estado.reservar(&login, idioma)?;
     en_hilo(idioma, move || async move {
         let _reserva = reserva;
+        let _cerrojo = cuentas::CerrojoCuenta::tomar(&rutas, &nombre_de(&login, idioma)?)
+            .map_err(|error| ErrorUi::de(&error, idioma))?;
         let recursos = Recursos::abrir(&rutas)?;
         let (cuenta, rutas_cuenta) = recursos.cuenta(login.as_str())?;
         let token_gitea = token_gitea_de(&recursos, &cuenta.login)?;
@@ -384,6 +392,8 @@ pub async fn reconciliar(
     let reserva = estado.reservar(&login, idioma)?;
     en_hilo(idioma, move || async move {
         let _reserva = reserva;
+        let _cerrojo = cuentas::CerrojoCuenta::tomar(&rutas, &nombre_de(&login, idioma)?)
+            .map_err(|error| ErrorUi::de(&error, idioma))?;
         let recursos = Recursos::abrir(&rutas)?;
         let (cuenta, rutas_cuenta) = recursos.cuenta(login.as_str())?;
 
@@ -479,6 +489,9 @@ pub async fn ajustes_guardar(
     // Mover la carpeta no puede coincidir con una sincronización de la ventana ni con otro
     // movimiento; el temporizador de systemd lo comprueba `mover_carpeta` por su cuenta.
     let reserva = estado.reservar(&login, idioma)?;
+    // La guarda se crea ya: así no hay hueco entre el clic y el movimiento. Si la carpeta
+    // no cambia, se suelta enseguida.
+    let guarda_movimiento = estado.iniciar_movimiento();
     en_hilo(idioma, move || async move {
         let _reserva = reserva;
         let recursos = Recursos::abrir(&rutas)?;
@@ -488,6 +501,8 @@ pub async fn ajustes_guardar(
 
         // Primero la carpeta: si falla, no se guarda nada más.
         let movimiento = if std::path::Path::new(&ajustes.carpeta) != cuenta.carpeta {
+            // Hasta que termine, la ventana no se puede cerrar.
+            let _no_cerrar = guarda_movimiento;
             let login_evento = cuenta.login.to_string();
             let app_progreso = app.clone();
             let mut al_progresar = move |progreso| {
@@ -560,7 +575,9 @@ pub async fn rotar_token(
         return Err(ErrorUi::token_vacio(idioma));
     }
     let rutas = estado.rutas.clone();
+    let reserva = estado.reservar(&login, idioma)?;
     en_hilo(idioma, move || async move {
+        let _reserva = reserva;
         let recursos = Recursos::abrir(&rutas)?;
         let (cuenta, _rutas_cuenta) = recursos.cuenta(login.as_str())?;
         let github =
@@ -589,7 +606,9 @@ pub async fn baja_cuenta(
     tracing::debug!(comando = "baja_cuenta");
     let rutas = estado.rutas.clone();
     let idioma = estado.idioma();
+    let reserva = estado.reservar(&login, idioma)?;
     en_hilo(idioma, move || async move {
+        let _reserva = reserva;
         let recursos = Recursos::abrir(&rutas)?;
         let (cuenta, _rutas_cuenta) = recursos.cuenta(login.as_str())?;
         let lanzador = LanzadorSystemd;

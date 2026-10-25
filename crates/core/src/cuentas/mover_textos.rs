@@ -21,6 +21,10 @@ pub enum MotivoDestino {
     /// La ruta contiene un carácter de control o uno que rompería `app.ini` o una unidad
     /// de systemd (`%`, `$`, `"`, `\`, `#`, `;`).
     CaracterNoPermitido { caracter: char },
+    /// Un componente de la ruta empieza o acaba en espacio en blanco (Gitea lo recortaría).
+    ComponenteConEspacios,
+    /// El destino existe y es un punto de montaje (otro dispositivo que su carpeta padre).
+    EsPuntoDeMontaje,
     /// Es la raíz, el HOME o un ancestro del HOME.
     Protegida,
     /// Está dentro del directorio de datos de la app.

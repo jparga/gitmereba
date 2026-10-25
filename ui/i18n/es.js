@@ -291,6 +291,7 @@ export default {
   'ajustes.mover.preparando': 'Preparando el movimiento…',
   'ajustes.mover.hecho': 'Cuenta movida a {destino}.',
   'ajustes.mover.error': 'No se pudo mover la carpeta: {mensaje}',
+  'ajustes.mover.no_cerrar': 'Se está moviendo la carpeta: la ventana no se puede cerrar hasta que termine.',
   'ajustes.mover.aviso': 'Aviso: {mensaje}',
   'ajustes.guardar': 'Guardar',
   'ajustes.baja.zona_titulo': 'Dar de baja la cuenta',

@@ -291,6 +291,7 @@ export default {
   'ajustes.mover.preparando': 'Preparing the move…',
   'ajustes.mover.hecho': 'Account moved to {destino}.',
   'ajustes.mover.error': 'Could not move the folder: {mensaje}',
+  'ajustes.mover.no_cerrar': 'The folder is being moved: the window cannot be closed until it finishes.',
   'ajustes.mover.aviso': 'Warning: {mensaje}',
   'ajustes.guardar': 'Save',
   'ajustes.baja.zona_titulo': 'Remove the account',

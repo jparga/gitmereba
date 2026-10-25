@@ -16,8 +16,14 @@ Todos los cambios relevantes de gitmereba. Formato basado en
   se arranca Gitea en la carpeta nueva. La carpeta antigua se borra al final. Hasta escribir el
   índice de cuentas, cualquier fallo deja la cuenta funcionando donde estaba. El destino debe ser
   una ruta absoluta vacía o inexistente, y no puede solaparse con la carpeta de ninguna cuenta.
-- Mientras una cuenta sincroniza, activa una contingencia, se reconcilia, cambia su acceso LAN
-  o se mueve desde la ventana, ya no se admite otra de esas operaciones a la vez sobre ella.
+- Cada cuenta tiene un cerrojo de fichero entre procesos (`<datos>/cerrojos/<login>.lock`): mover
+  la carpeta, sincronizar (también la del temporizador, que se omite sin error), dar de baja, la
+  contingencia y el acceso LAN no pueden coincidir sobre la misma cuenta. La ventana no se deja
+  cerrar durante un movimiento, y un movimiento interrumpido deja una marca que `gitmereba doctor`
+  avisa (el manual explica cómo recuperarlo a mano).
+- Un destino con espacios al principio o al final de un componente, o que es un punto de montaje,
+  se rechaza; y `app.ini` no se genera con rutas así (Gitea las recortaría y arrancaría con una
+  base de datos vacía en otra ruta).
 
 ## [0.9.0] - 2026-10-25
 

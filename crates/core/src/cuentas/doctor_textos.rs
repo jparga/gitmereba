@@ -18,6 +18,7 @@ pub enum ParteCuenta {
     Secretos,
     Snapshots,
     Temporizador,
+    Movimiento,
 }
 
 /// Nombre de una comprobación de `doctor`.
@@ -167,6 +168,23 @@ pub enum TextoDoctor {
         error: TextoExterno,
     },
     ConsejoPermisosSnapshots,
+    // --- movimiento de carpeta interrumpido ---
+    MovimientoInterrumpido {
+        origen: PathBuf,
+        destino: PathBuf,
+        modo: String,
+    },
+    ConsejoMovimientoInterrumpido {
+        login: String,
+        origen: PathBuf,
+        destino: PathBuf,
+    },
+    MarcaMovimientoIlegible {
+        error: TextoExterno,
+    },
+    ConsejoMarcaMovimientoIlegible {
+        ruta: PathBuf,
+    },
     // --- temporizador ---
     TemporizadorNoInstalado,
     ConsejoAbrirVentanaInstala,

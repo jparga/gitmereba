@@ -44,6 +44,16 @@ export function suscribirProgresoMover(callback) {
   return mock.suscribirProgresoMover(callback);
 }
 
+/** Se suscribe al aviso de que la ventana no se ha cerrado porque hay un movimiento de
+ * carpeta en curso. Devuelve una promesa con la función para darse de baja. */
+export function suscribirCierreBloqueado(callback) {
+  const listen = globalThis.__TAURI__?.event?.listen;
+  if (listen) {
+    return listen('carpeta://cierre-bloqueado', () => callback());
+  }
+  return Promise.resolve(() => {});
+}
+
 export const api = {
   acercaDe: () => llamar('acerca_de'),
   versionGiteaCuenta: (login) => llamar('version_gitea_cuenta', { login }),

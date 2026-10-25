@@ -222,7 +222,9 @@ pub async fn lan_usuario_crear(
     tracing::debug!(comando = "lan_usuario_crear");
     let rutas = estado.rutas.clone();
     let idioma = estado.idioma();
+    let reserva = estado.reservar(&login, idioma)?;
     en_hilo(idioma, move || async move {
+        let _reserva = reserva;
         let nombre = usuario_valido(&nombre, idioma)?;
         let recursos = Recursos::abrir(&rutas)?;
         let (cuenta, _) = recursos.cuenta(&login)?;
@@ -248,7 +250,9 @@ pub async fn lan_usuario_eliminar(
     tracing::debug!(comando = "lan_usuario_eliminar");
     let rutas = estado.rutas.clone();
     let idioma = estado.idioma();
+    let reserva = estado.reservar(&login, idioma)?;
     en_hilo(idioma, move || async move {
+        let _reserva = reserva;
         let nombre = usuario_valido(&nombre, idioma)?;
         let recursos = Recursos::abrir(&rutas)?;
         let (cuenta, _) = recursos.cuenta(&login)?;

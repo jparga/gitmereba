@@ -64,6 +64,14 @@ pub fn generar_app_ini(parametros: &ParametrosAppIni<'_>) -> Result<String, Erro
     ] {
         validar_sin_salto_de_linea(valor)?;
     }
+    for ruta in [
+        work_path.as_str(),
+        db_path.as_str(),
+        repo_root.as_str(),
+        log_path.as_str(),
+    ] {
+        validar_sin_espacios_en_componentes(ruta)?;
+    }
 
     let (allow_localnetworks, import_local_paths) = if parametros.modo_pruebas {
         ("true", "true")
@@ -97,6 +105,8 @@ pub fn generar_app_ini(parametros: &ParametrosAppIni<'_>) -> Result<String, Erro
             ] {
                 validar_sin_salto_de_linea(valor)?;
             }
+            validar_sin_espacios_en_componentes(&ruta_certificado)?;
+            validar_sin_espacios_en_componentes(&ruta_clave)?;
             format!(
                 "PROTOCOL = https\n\
                  DOMAIN = {host}\n\
@@ -270,6 +280,42 @@ pub fn escribir_app_ini(rutas: &RutasCuenta, texto: &str) -> Result<(), ErrorIns
     fichero::escribir_privado(&rutas.gitea_app_ini(), texto.as_bytes())
 }
 
+/// Comprueba que el `WORK_PATH` y el `ROOT` del `app.ini` ya escrito de `rutas` son
+/// exactamente los de la cuenta, tal como los leería Gitea (que recorta los espacios de
+/// los valores). Si no, arrancaría con una base de datos vacía en otra ruta.
+pub fn verificar_rutas_app_ini(rutas: &RutasCuenta) -> Result<(), ErrorInstancia> {
+    let texto = std::fs::read_to_string(rutas.gitea_app_ini())
+        .map_err(|error| ErrorInstancia::Io(error.to_string()))?;
+    for (clave, esperado) in [
+        ("WORK_PATH", rutas.gitea().display().to_string()),
+        ("ROOT", rutas.gitea_repositorios().display().to_string()),
+    ] {
+        let leido = extraer_valor(&texto, clave)?;
+        if leido.trim() != esperado {
+            return Err(ErrorInstancia::EntradaInvalida(format!(
+                "{clave} de app.ini no es la ruta esperada de la cuenta"
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// Un componente con espacio en blanco al principio o al final cambia de ruta al pasar
+/// por el parser de ini de Gitea, que recorta los valores.
+fn validar_sin_espacios_en_componentes(ruta: &str) -> Result<(), ErrorInstancia> {
+    let torcido = ruta
+        .split('/')
+        .any(|componente| componente.trim() != componente);
+    if torcido {
+        Err(ErrorInstancia::EntradaInvalida(
+            "una ruta de app.ini tiene un componente con espacio al principio o al final"
+                .to_string(),
+        ))
+    } else {
+        Ok(())
+    }
+}
+
 /// Un valor de `app.ini` con un salto de línea podría inyectar una clave o sección
 /// nueva en el INI (p. ej. reabrir `[security]` con una clave distinta).
 fn validar_sin_salto_de_linea(valor: &str) -> Result<(), ErrorInstancia> {
@@ -389,6 +435,53 @@ mod tests {
         // El resto del endurecimiento no cambia con modo_pruebas.
         assert!(ini.contains("REQUIRE_SIGNIN_VIEW = true"));
         assert!(ini.contains("DISABLE_SSH = true"));
+    }
+
+    #[test]
+    fn rechaza_una_ruta_con_un_componente_con_espacio_inicial_o_final() {
+        for carpeta in [
+            "/cuentas/jparga ",
+            "/cuentas/ jparga",
+            "/cuentas /jparga",
+            "/c/\tx",
+        ] {
+            let rutas = RutasCuenta::nueva(carpeta);
+            let resultado = generar_app_ini(&parametros(&rutas, false));
+            assert!(
+                matches!(resultado, Err(ErrorInstancia::EntradaInvalida(_))),
+                "{carpeta:?}: {resultado:?}"
+            );
+        }
+        // Un espacio en medio de un componente sí es válido.
+        let rutas = RutasCuenta::nueva("/cuentas/mi cuenta");
+        assert!(generar_app_ini(&parametros(&rutas, false)).is_ok());
+    }
+
+    #[test]
+    fn verificar_rutas_detecta_lo_que_gitea_leeria_distinto() {
+        let temporal = tempfile::tempdir().expect("temporal");
+        let rutas = RutasCuenta::nueva(temporal.path().join("cuenta"));
+        let ini = generar_app_ini(&parametros(&rutas, false)).expect("genera");
+        escribir_app_ini(&rutas, &ini).expect("escribir");
+        verificar_rutas_app_ini(&rutas).expect("coinciden");
+
+        // Un valor con espacio final: Gitea lo recortaría y usaría otra ruta.
+        let torcido = ini.replace(
+            &format!("WORK_PATH = {}\n", rutas.gitea().display()),
+            &format!("WORK_PATH = {}/x \n", rutas.gitea().display()),
+        );
+        escribir_app_ini(&rutas, &torcido).expect("escribir");
+        assert!(matches!(
+            verificar_rutas_app_ini(&rutas),
+            Err(ErrorInstancia::EntradaInvalida(_))
+        ));
+
+        let torcido = ini.replace(
+            &format!("ROOT = {}\n", rutas.gitea_repositorios().display()),
+            "ROOT = /otro\n",
+        );
+        escribir_app_ini(&rutas, &torcido).expect("escribir");
+        assert!(verificar_rutas_app_ini(&rutas).is_err());
     }
 
     #[test]

@@ -20,6 +20,7 @@ use crate::verificacion::{
     ContextoVerificacion, InformeVerificacion, OpcionesVerificacion, verificar_cuenta,
 };
 
+use super::cerrojo::CerrojoCuenta;
 use super::comun::cargar_cuenta;
 use super::contexto::Contexto;
 use super::error::ErrorCuentas;
@@ -39,6 +40,7 @@ pub async fn sincronizar<L: Llavero>(
     login: &Nombre,
     opciones: &OpcionesSync,
 ) -> Result<InformeSync, ErrorCuentas> {
+    let _cerrojo = CerrojoCuenta::tomar(contexto.rutas, login)?;
     let cuenta = cargar_cuenta(contexto.rutas, login)?;
 
     let token_github = leer_secreto(contexto.llavero, login, ClaveSecreto::TokenGithub)?;
@@ -169,6 +171,7 @@ pub async fn sincronizar_y_verificar<L: Llavero>(
     opciones: &OpcionesSync,
     opciones_verificacion: &OpcionesVerificacion,
 ) -> Result<ResultadoSincronizacionYVerificacion, ErrorCuentas> {
+    let _cerrojo = CerrojoCuenta::tomar(contexto.rutas, login)?;
     let cuenta = cargar_cuenta(contexto.rutas, login)?;
 
     let token_github = leer_secreto(contexto.llavero, login, ClaveSecreto::TokenGithub)?;
@@ -710,6 +713,7 @@ pub async fn sincronizar_repo<L: Llavero>(
     cuenta: &Cuenta,
     id: &IdRepo,
 ) -> Result<SincronizacionDeRepo, ErrorCuentas> {
+    let _cerrojo = CerrojoCuenta::tomar(contexto.rutas, &cuenta.login)?;
     let token_gitea = leer_secreto(contexto.llavero, &cuenta.login, ClaveSecreto::TokenGitea)?;
     let gitea = super::comun::cliente_gitea_de_cuenta(cuenta, token_gitea)?;
     sincronizar_repo_con(contexto.almacen, cuenta, &gitea, id).await

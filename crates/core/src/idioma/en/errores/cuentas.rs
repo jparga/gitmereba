@@ -49,6 +49,18 @@ pub(crate) fn texto(e: &ErrorCuentas) -> String {
                 motivo.localizar(Idioma::En)
             )
         }
+        ErrorCuentas::MovimientoInterrumpido {
+            login,
+            origen,
+            destino,
+        } => format!(
+            "there is an unfinished folder move of “{login}” (from {} to {}): run “gitmereba doctor” and follow the manual's instructions",
+            origen.display(),
+            destino.display()
+        ),
+        ErrorCuentas::CuentaOcupada(login) => format!(
+            "the account “{login}” has another operation in progress: wait for it to finish"
+        ),
         ErrorCuentas::SincronizacionEnCurso(login) => {
             format!("a sync of “{login}” is in progress: wait for it to finish and try again")
         }

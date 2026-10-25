@@ -32,10 +32,12 @@ use crate::modelo::{Cuenta, Nombre};
 use crate::secretos::{Llavero, Secreto};
 
 use super::baja::verificar_carpeta_borrable;
+use super::cerrojo::CerrojoCuenta;
 use super::comun::{ruta_binario_cacheado, usuario_actual};
 use super::contexto::Contexto;
 use super::error::ErrorCuentas;
 use super::lanzador::{Lanzador, ParametrosLanzamiento};
+use super::marca_mover::{MarcaMover, borrar_marca, escribir_marca, leer_marca};
 use super::mover_copia::{
     comparar_arboles, comparar_hashes, copiar_en, crear_raiz_copia, fsck_repositorios,
 };
@@ -139,6 +141,17 @@ pub async fn mover_carpeta_con<L: Llavero, Ln: Lanzador, R: Renombrador>(
     renombrador: &R,
 ) -> Result<ResultadoMover, ErrorCuentas> {
     let rutas = contexto.rutas;
+    // Entre procesos: ni el temporizador, ni la CLI, ni la ventana pueden operar sobre la
+    // cuenta mientras se mueve.
+    let _cerrojo = CerrojoCuenta::tomar(rutas, login)?;
+    // Un movimiento anterior que murió a mitad: no se empieza otro encima.
+    if let Some(marca) = leer_marca(rutas, login)? {
+        return Err(ErrorCuentas::MovimientoInterrumpido {
+            login: login.clone(),
+            origen: marca.origen,
+            destino: marca.destino,
+        });
+    }
     al_progresar(ProgresoMover::Validando);
     let indice = config::leer_indice_cuentas(rutas)?;
     let entrada = indice
@@ -193,10 +206,25 @@ pub async fn mover_carpeta_con<L: Llavero, Ln: Lanzador, R: Renombrador>(
         hooks_tocados: false,
     };
 
+    // Antes de parar Gitea: si el proceso muere desde aquí, queda constancia.
+    escribir_marca(
+        rutas,
+        &MarcaMover {
+            login: login.to_string(),
+            origen: origen.clone(),
+            destino: destino.clone(),
+            modo: "pendiente".to_string(),
+        },
+    )?;
+
     if let Err(error) = contexto_mover.ejecutar(&mut estado, al_progresar).await {
         let problemas = contexto_mover.deshacer(&estado).await;
         for problema in &problemas {
             tracing::warn!(%problema, "no se pudo deshacer del todo el movimiento de la carpeta");
+        }
+        // Solo si todo quedó como estaba: si no, la marca se queda para que `doctor` avise.
+        if problemas.is_empty() {
+            let _ = borrar_marca(rutas, login);
         }
         let _ = contexto.almacen.auditar(
             Some(login),
@@ -213,6 +241,9 @@ pub async fn mover_carpeta_con<L: Llavero, Ln: Lanzador, R: Renombrador>(
     }
 
     // La cuenta ya vive en la carpeta nueva: a partir de aquí nada es un error.
+    if let Err(error) = borrar_marca(rutas, login) {
+        tracing::warn!(%error, "no se pudo borrar la marca de movimiento en curso");
+    }
     let mut avisos = Vec::new();
     if estado.modo == ModoMover::Copia {
         al_progresar(ProgresoMover::BorrandoOrigen);
@@ -309,6 +340,19 @@ impl<L: Llavero, Ln: Lanzador, R: Renombrador> ContextoMover<'_, L, Ln, R> {
         Ok(())
     }
 
+    /// Actualiza el modo en la marca de movimiento en curso.
+    fn anotar_modo(&self, modo: &str) -> Result<(), ErrorCuentas> {
+        escribir_marca(
+            self.contexto.rutas,
+            &MarcaMover {
+                login: self.login.to_string(),
+                origen: self.origen.to_path_buf(),
+                destino: self.destino.to_path_buf(),
+                modo: modo.to_string(),
+            },
+        )
+    }
+
     /// Paso 3: `rename`, o copia verificada si es otro sistema de ficheros.
     async fn mover_datos(
         &self,
@@ -319,6 +363,7 @@ impl<L: Llavero, Ln: Lanzador, R: Renombrador> ContextoMover<'_, L, Ln, R> {
         match self.renombrador.renombrar(self.origen, self.destino) {
             Ok(()) => {
                 estado.origen_renombrado = true;
+                self.anotar_modo("renombrado")?;
                 return Ok(());
             }
             Err(error) if error.kind() == io::ErrorKind::CrossesDevices => {}
@@ -326,6 +371,7 @@ impl<L: Llavero, Ln: Lanzador, R: Renombrador> ContextoMover<'_, L, Ln, R> {
         }
 
         estado.modo = ModoMover::Copia;
+        self.anotar_modo("copia")?;
         let parcial = ruta_parcial(self.destino);
         // La marca va tras crear la raíz: si otro la creó entre la validación y aquí, el
         // deshacer no debe borrar lo que no es nuestro.
@@ -372,6 +418,9 @@ impl<L: Llavero, Ln: Lanzador, R: Renombrador> ContextoMover<'_, L, Ln, R> {
             &usuario_actual(),
             acceso_lan,
         )?;
+
+        // Defensa en profundidad: lo que Gitea leerá es exactamente lo que se espera.
+        instancia::verificar_rutas_app_ini(&rutas_nueva)?;
 
         estado.unidades_tocadas = true;
         escribir_unidades(
@@ -600,13 +649,35 @@ mod tests {
     }
 
     fn preparar(raiz: &Path) -> (Rutas, PathBuf) {
+        preparar_con_puerto(raiz, 33055)
+    }
+
+    /// Responde 200 a todo en un puerto libre: hace de `/api/healthz` de Gitea.
+    fn servidor_de_salud() -> u16 {
+        use std::io::{Read, Write};
+        let escucha = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        let puerto = escucha.local_addr().expect("dirección").port();
+        std::thread::spawn(move || {
+            for conexion in escucha.incoming().flatten() {
+                let mut conexion = conexion;
+                let mut buffer = [0u8; 1024];
+                let _ = conexion.read(&mut buffer);
+                let _ = conexion.write_all(
+                    b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                );
+            }
+        });
+        puerto
+    }
+
+    fn preparar_con_puerto(raiz: &Path, puerto: u16) -> (Rutas, PathBuf) {
         let rutas = Rutas::con_raiz(raiz);
         let carpeta = raiz.join("cuenta");
         std::fs::create_dir_all(&carpeta).expect("crear carpeta");
         let cuenta = Cuenta {
             login: nombre("jparga"),
             carpeta: carpeta.clone(),
-            puerto: 33055,
+            puerto,
             intervalo_minutos: 30,
             alcance: Alcance {
                 incluir_forks: false,
@@ -624,7 +695,7 @@ mod tests {
             "jparga".to_string(),
             config::EntradaCuenta {
                 carpeta: carpeta.clone(),
-                puerto: 33055,
+                puerto,
             },
         );
         config::escribir_indice_cuentas(&rutas, &indice).expect("escribir índice");
@@ -662,6 +733,116 @@ mod tests {
         );
         assert!(carpeta.exists() && !destino.exists());
         assert!(almacen.auditoria(10, None).expect("auditoría").is_empty());
+    }
+
+    #[tokio::test]
+    async fn se_niega_si_otro_proceso_tiene_el_cerrojo_de_la_cuenta() {
+        let temporal = tempfile::tempdir().expect("temporal");
+        let (rutas, carpeta) = preparar(temporal.path());
+        let llavero = LlaveroEnMemoria::nuevo();
+        let almacen = Almacen::en_memoria().expect("almacén");
+        let contexto = Contexto::nuevo(&rutas, &llavero, &almacen);
+        let lanzador = LanzadorDoble::default();
+        let _otro = CerrojoCuenta::tomar(&rutas, &nombre("jparga")).expect("cerrojo");
+
+        let resultado = mover_carpeta(
+            &contexto,
+            &lanzador,
+            &nombre("jparga"),
+            &temporal.path().join("nueva"),
+            Path::new("/usr/bin/gitmereba"),
+            &mut |_| {},
+        )
+        .await;
+
+        assert!(matches!(resultado, Err(ErrorCuentas::CuentaOcupada(_))));
+        assert!(lanzador.paradas.lock().unwrap().is_empty());
+        assert!(carpeta.exists());
+    }
+
+    #[tokio::test]
+    async fn una_marca_de_un_movimiento_interrumpido_impide_empezar_otro() {
+        let temporal = tempfile::tempdir().expect("temporal");
+        let (rutas, carpeta) = preparar(temporal.path());
+        let llavero = LlaveroEnMemoria::nuevo();
+        let almacen = Almacen::en_memoria().expect("almacén");
+        let contexto = Contexto::nuevo(&rutas, &llavero, &almacen);
+        let lanzador = LanzadorDoble::default();
+        escribir_marca(
+            &rutas,
+            &MarcaMover {
+                login: "jparga".to_string(),
+                origen: carpeta.clone(),
+                destino: temporal.path().join("otra"),
+                modo: "copia".to_string(),
+            },
+        )
+        .expect("marca");
+
+        let resultado = mover_carpeta(
+            &contexto,
+            &lanzador,
+            &nombre("jparga"),
+            &temporal.path().join("nueva"),
+            Path::new("/usr/bin/gitmereba"),
+            &mut |_| {},
+        )
+        .await;
+
+        assert!(matches!(
+            resultado,
+            Err(ErrorCuentas::MovimientoInterrumpido { .. })
+        ));
+        assert!(lanzador.paradas.lock().unwrap().is_empty());
+        assert!(
+            leer_marca(&rutas, &nombre("jparga"))
+                .expect("leer")
+                .is_some()
+        );
+    }
+
+    #[tokio::test]
+    async fn la_marca_existe_mientras_dura_y_se_borra_al_deshacer_del_todo() {
+        let temporal = tempfile::tempdir().expect("temporal");
+        let puerto = servidor_de_salud();
+        let (rutas, carpeta) = preparar_con_puerto(temporal.path(), puerto);
+        let llavero = LlaveroEnMemoria::nuevo();
+        let almacen = Almacen::en_memoria().expect("almacén");
+        let contexto = Contexto::nuevo(&rutas, &llavero, &almacen);
+        let lanzador = LanzadorDoble::default();
+        let destino = temporal.path().join("nueva");
+        let mut vista_en_curso = None;
+
+        // El `app.ini` de prueba no tiene secretos: repuntar falla tras renombrar y el
+        // movimiento se deshace entero.
+        let resultado = mover_carpeta(
+            &contexto,
+            &lanzador,
+            &nombre("jparga"),
+            &destino,
+            Path::new("/usr/bin/gitmereba"),
+            &mut |p| {
+                if p == ProgresoMover::Repuntando {
+                    vista_en_curso = leer_marca(&rutas, &nombre("jparga")).expect("leer");
+                }
+            },
+        )
+        .await;
+
+        assert!(resultado.is_err());
+        let marca = vista_en_curso.expect("la marca existía durante el movimiento");
+        assert_eq!(marca.origen, carpeta);
+        assert_eq!(marca.modo, "renombrado");
+        assert!(
+            leer_marca(&rutas, &nombre("jparga"))
+                .expect("leer")
+                .is_none()
+        );
+        assert!(carpeta.exists() && !destino.exists());
+        assert_eq!(
+            std::fs::read_to_string(RutasCuenta::nueva(&carpeta).gitea_app_ini()).expect("leer"),
+            "contenido de app.ini\n"
+        );
     }
 
     #[tokio::test]

@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::almacen::VerificacionAuditoria;
-use crate::config::RutasCuenta;
+use crate::config::{Rutas, RutasCuenta};
 use crate::git;
 use crate::gitea::ApiGitea;
 use crate::idioma::{self, LecturaPreferencia};
@@ -24,6 +24,7 @@ use super::doctor_textos::{
     MotivoAppIni, NombreComprobacion, ParteCuenta, TextoDoctor, TextoExterno,
 };
 use super::listar::listar;
+use super::marca_mover::marcas_pendientes;
 
 const RUTA_GPGV: &str = "/usr/bin/gpgv";
 /// Fichero de AppArmor que, a `1`, indica que los servicios `systemd --user` no pueden
@@ -129,6 +130,8 @@ pub async fn doctor<L: Llavero>(contexto: &Contexto<'_, L>) -> InformeDoctor {
     ) {
         comprobaciones.push(c);
     }
+
+    comprobaciones.extend(comprobar_movimientos_interrumpidos(contexto.rutas));
 
     let directorio_bin = contexto.rutas.directorio_bin();
     match listar(contexto) {
@@ -420,6 +423,45 @@ fn comprobar_auditoria(almacen: &crate::almacen::Almacen) -> Comprobacion {
             TextoDoctor::ConsejoAccesoAlmacen,
         ),
     }
+}
+
+/// Una marca de `mover-en-curso-*.toml` huérfana: un movimiento de carpeta murió a mitad.
+/// Es un fallo porque los datos pueden estar partidos entre dos carpetas; no se recupera
+/// solo, el consejo dice qué mirar.
+fn comprobar_movimientos_interrumpidos(rutas: &Rutas) -> Vec<Comprobacion> {
+    marcas_pendientes(rutas)
+        .into_iter()
+        .map(|marca| match marca {
+            Ok(marca) => {
+                let nombre = match Nombre::nuevo(marca.login.as_str()) {
+                    Ok(login) => nombre_cuenta(&login, ParteCuenta::Movimiento),
+                    Err(_) => NombreComprobacion::Cuentas,
+                };
+                Comprobacion::fallo(
+                    nombre,
+                    TextoDoctor::MovimientoInterrumpido {
+                        origen: marca.origen.clone(),
+                        destino: marca.destino.clone(),
+                        modo: marca.modo,
+                    },
+                    TextoDoctor::ConsejoMovimientoInterrumpido {
+                        login: marca.login,
+                        origen: marca.origen,
+                        destino: marca.destino,
+                    },
+                )
+            }
+            Err(error) => Comprobacion::fallo(
+                NombreComprobacion::Cuentas,
+                TextoDoctor::MarcaMovimientoIlegible {
+                    error: TextoExterno::de(&error),
+                },
+                TextoDoctor::ConsejoMarcaMovimientoIlegible {
+                    ruta: rutas.directorio_datos().to_path_buf(),
+                },
+            ),
+        })
+        .collect()
 }
 
 async fn comprobar_cuenta<L: Llavero>(
@@ -1128,6 +1170,41 @@ mod tests {
             comprobar_temporizador(temporal.path(), &login).nivel,
             NivelComprobacion::Ok
         );
+    }
+
+    #[test]
+    fn una_marca_de_movimiento_huerfana_es_un_fallo_con_instrucciones() {
+        use super::super::marca_mover::{MarcaMover, escribir_marca};
+        let raiz = tempfile::tempdir().expect("directorio temporal");
+        let rutas = Rutas::con_raiz(raiz.path());
+        assert!(comprobar_movimientos_interrumpidos(&rutas).is_empty());
+
+        escribir_marca(
+            &rutas,
+            &MarcaMover {
+                login: "ana".to_string(),
+                origen: "/viejo".into(),
+                destino: "/nuevo".into(),
+                modo: "copia".to_string(),
+            },
+        )
+        .expect("marca");
+        let comprobaciones = comprobar_movimientos_interrumpidos(&rutas);
+
+        assert_eq!(comprobaciones.len(), 1);
+        let c = &comprobaciones[0];
+        assert_eq!(c.nivel, NivelComprobacion::Fallo);
+        assert!(matches!(
+            &c.mensaje,
+            TextoDoctor::MovimientoInterrumpido { modo, .. } if modo == "copia"
+        ));
+        let consejo = c
+            .consejo
+            .as_ref()
+            .expect("lleva consejo")
+            .localizar(Idioma::Es);
+        assert!(consejo.contains("/viejo") && consejo.contains("/nuevo"));
+        assert!(consejo.contains("mover-en-curso-ana.toml"));
     }
 
     #[test]
