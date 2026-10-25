@@ -494,8 +494,8 @@ pub async fn ajustes_guardar(
         // El intervalo vive también en el timer de systemd: sin esto no cambiaría hasta
         // volver a dar de alta la cuenta.
         let (actualizada, _rutas_cuenta) = recursos.cuenta(login.as_str())?;
-        let ejecutable =
-            std::env::current_exe().map_err(|error| ErrorUi::externo("interno", None, &error))?;
+        let ejecutable = gitmereba_core::entorno::ruta_ejecutable_persistente()
+            .map_err(|error| ErrorUi::externo("interno", None, &error))?;
         cuentas::reparar_temporizador(&recursos.rutas, &actualizada, &ejecutable)
             .await
             .map_err(|error| ErrorUi::de(&error, idioma))?;

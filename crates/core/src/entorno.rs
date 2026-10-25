@@ -1,8 +1,9 @@
 //! Datos del entorno para la pantalla «Acerca de»: nombre del sistema, rutas acortadas,
 //! enlaces del proyecto y versión de Gitea de una instancia frente a la incluida.
 
+use std::ffi::OsString;
 use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use url::Url;
@@ -37,6 +38,110 @@ impl EstadoVersion {
             EstadoVersion::Desconocida => "desconocida",
             EstadoVersion::NoDisponible => "no_disponible",
         }
+    }
+}
+
+/// Ruta del ejecutable que debe recordarse fuera del proceso (unidades de systemd, enlaces
+/// de lanzador). Dentro de un AppImage `current_exe()` apunta a un montaje temporal
+/// (`/tmp/.mount_*`) que desaparece al cerrar; ahí vale la variable `APPIMAGE`, que
+/// apunta al propio fichero `.AppImage`. Fuera de un AppImage, `current_exe()`.
+pub fn ruta_ejecutable_persistente() -> std::io::Result<PathBuf> {
+    ruta_ejecutable_persistente_con(std::env::var_os("APPIMAGE"), std::env::current_exe)
+}
+
+/// Núcleo de [`ruta_ejecutable_persistente`] con el entorno inyectado. `APPIMAGE` solo se
+/// acepta si es absoluta, sin caracteres de control (acabaría en una unidad de systemd)
+/// y apunta a un fichero regular existente; si no, se usa `actual`.
+fn ruta_ejecutable_persistente_con(
+    appimage: Option<OsString>,
+    actual: impl FnOnce() -> std::io::Result<PathBuf>,
+) -> std::io::Result<PathBuf> {
+    if let Some(valor) = appimage {
+        let ruta = PathBuf::from(valor);
+        let sin_control = !ruta.to_string_lossy().chars().any(char::is_control);
+        let es_fichero = std::fs::metadata(&ruta).is_ok_and(|m| m.is_file());
+        if ruta.is_absolute() && sin_control && es_fichero {
+            return Ok(ruta);
+        }
+    }
+    actual()
+}
+
+/// Auxiliar de WebKitGTK que delata una compilación AppImage, relativo a `usr`. Es la ruta
+/// que `scripts/empaquetar.sh` deja dentro del AppDir.
+const AUXILIAR_WEBKIT_RELATIVO: &str = "lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess";
+
+/// Qué hacer con el directorio de trabajo antes de abrir la ventana.
+#[derive(Debug, PartialEq, Eq)]
+pub enum PlanDirectorioVentana {
+    /// `.deb`, `.tar.gz` o cargo: no se toca.
+    SinCambios,
+    /// AppImage: entrar en este `usr` (la `libwebkit2gtk` empaquetada busca sus procesos
+    /// auxiliares con una ruta relativa a él).
+    EntrarEn(PathBuf),
+}
+
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+pub enum ErrorEntornoAppImage {
+    #[error("no se pudo localizar el ejecutable: {0}")]
+    Ejecutable(String),
+    #[error(
+        "las variables APPIMAGE o APPDIR están definidas, pero {0} no es el ejecutable de un \
+         AppImage de gitmereba: no se abre la ventana (WebKit podría ejecutar procesos del \
+         directorio actual)"
+    )]
+    Incoherente(PathBuf),
+    #[error("no se pudo entrar en {ruta} para abrir la ventana: {causa}")]
+    CambioDeDirectorio { ruta: PathBuf, causa: String },
+}
+
+/// Decide el directorio de trabajo de la ventana. `ejecutable` es la ruta real
+/// (canonicalizada) del binario, no una variable de entorno: solo un binario que cuelga de
+/// `<usr>/bin/` con `<usr>` distinto de `/usr` y con el auxiliar de WebKit empaquetado en
+/// `<usr>/lib/x86_64-linux-gnu/webkit2gtk-4.1/` es una compilación AppImage. Si, sin serlo,
+/// hay variables de AppImage definidas (`hay_variables_appimage`), el estado es incoherente.
+pub fn planificar_directorio_ventana(
+    ejecutable: &Path,
+    hay_variables_appimage: bool,
+    existe: impl Fn(&Path) -> bool,
+) -> Result<PlanDirectorioVentana, ErrorEntornoAppImage> {
+    let usr = ejecutable
+        .parent()
+        .filter(|bin| bin.file_name().is_some_and(|n| n == "bin"))
+        .and_then(Path::parent)
+        .filter(|usr| *usr != Path::new("/usr") && usr.file_name().is_some());
+    if let Some(usr) = usr
+        && usr.is_absolute()
+        && existe(&usr.join(AUXILIAR_WEBKIT_RELATIVO))
+    {
+        return Ok(PlanDirectorioVentana::EntrarEn(usr.to_path_buf()));
+    }
+    if hay_variables_appimage {
+        return Err(ErrorEntornoAppImage::Incoherente(ejecutable.to_path_buf()));
+    }
+    Ok(PlanDirectorioVentana::SinCambios)
+}
+
+/// Aplica [`planificar_directorio_ventana`] al proceso real: ejecutable canonicalizado,
+/// entorno y sistema de ficheros reales. Si hay que entrar en el `usr` del AppImage y no se
+/// puede, devuelve error (la ventana no debe abrirse con un directorio de trabajo ajeno).
+pub fn preparar_directorio_ventana() -> Result<(), ErrorEntornoAppImage> {
+    let ejecutable = std::env::current_exe()
+        .and_then(std::fs::canonicalize)
+        .map_err(|error| ErrorEntornoAppImage::Ejecutable(error.to_string()))?;
+    let hay_variables =
+        std::env::var_os("APPIMAGE").is_some() || std::env::var_os("APPDIR").is_some();
+    let plan = planificar_directorio_ventana(&ejecutable, hay_variables, |ruta| {
+        std::fs::metadata(ruta).is_ok_and(|m| m.is_file())
+    })?;
+    match plan {
+        PlanDirectorioVentana::SinCambios => Ok(()),
+        PlanDirectorioVentana::EntrarEn(usr) => std::env::set_current_dir(&usr).map_err(|error| {
+            ErrorEntornoAppImage::CambioDeDirectorio {
+                ruta: usr,
+                causa: error.to_string(),
+            }
+        }),
     }
 }
 
@@ -151,6 +256,132 @@ mod tests {
     use super::*;
     use crate::gitea::ClienteGitea;
     use crate::secretos::Secreto;
+
+    fn actual_falso() -> std::io::Result<PathBuf> {
+        Ok(PathBuf::from("/usr/bin/gitmereba"))
+    }
+
+    #[test]
+    fn ruta_persistente_sin_appimage_es_el_ejecutable_actual() {
+        let ruta = ruta_ejecutable_persistente_con(None, actual_falso).unwrap();
+        assert_eq!(ruta, PathBuf::from("/usr/bin/gitmereba"));
+    }
+
+    #[test]
+    fn ruta_persistente_usa_appimage_si_es_fichero_regular_absoluto() {
+        let carpeta = tempfile::tempdir().unwrap();
+        let imagen = carpeta.path().join("gitmereba.AppImage");
+        std::fs::write(&imagen, b"x").unwrap();
+        let ruta =
+            ruta_ejecutable_persistente_con(Some(imagen.clone().into_os_string()), actual_falso)
+                .unwrap();
+        assert_eq!(ruta, imagen);
+    }
+
+    #[test]
+    fn ruta_persistente_ignora_appimage_relativa() {
+        let ruta = ruta_ejecutable_persistente_con(Some("gitmereba.AppImage".into()), actual_falso)
+            .unwrap();
+        assert_eq!(ruta, PathBuf::from("/usr/bin/gitmereba"));
+    }
+
+    #[test]
+    fn ruta_persistente_ignora_appimage_inexistente_o_directorio() {
+        let carpeta = tempfile::tempdir().unwrap();
+        let inexistente = carpeta.path().join("no-existe.AppImage");
+        let ruta =
+            ruta_ejecutable_persistente_con(Some(inexistente.into_os_string()), actual_falso)
+                .unwrap();
+        assert_eq!(ruta, PathBuf::from("/usr/bin/gitmereba"));
+        let ruta = ruta_ejecutable_persistente_con(
+            Some(carpeta.path().to_path_buf().into_os_string()),
+            actual_falso,
+        )
+        .unwrap();
+        assert_eq!(ruta, PathBuf::from("/usr/bin/gitmereba"));
+    }
+
+    #[test]
+    fn ruta_persistente_ignora_appimage_vacia_o_con_caracteres_de_control() {
+        let carpeta = tempfile::tempdir().unwrap();
+        let con_salto = carpeta.path().join("a\nb.AppImage");
+        std::fs::write(&con_salto, b"x").unwrap();
+        for valor in [std::ffi::OsString::new(), con_salto.into_os_string()] {
+            let ruta = ruta_ejecutable_persistente_con(Some(valor), actual_falso).unwrap();
+            assert_eq!(ruta, PathBuf::from("/usr/bin/gitmereba"));
+        }
+    }
+
+    fn existe_webkit_en(usr: &str) -> impl Fn(&Path) -> bool {
+        let esperado = PathBuf::from(usr).join(AUXILIAR_WEBKIT_RELATIVO);
+        move |ruta| ruta == esperado
+    }
+
+    #[test]
+    fn plan_ventana_appimage_entra_en_el_usr_del_ejecutable() {
+        let plan = planificar_directorio_ventana(
+            Path::new("/tmp/.mount_abc/usr/bin/gitmereba"),
+            false,
+            existe_webkit_en("/tmp/.mount_abc/usr"),
+        )
+        .unwrap();
+        assert_eq!(
+            plan,
+            PlanDirectorioVentana::EntrarEn(PathBuf::from("/tmp/.mount_abc/usr"))
+        );
+    }
+
+    #[test]
+    fn plan_ventana_appimage_no_depende_de_las_variables() {
+        // Lanzado a mano desde el AppDir extraído: sigue entrando en su usr.
+        let plan = planificar_directorio_ventana(
+            Path::new("/home/u/squashfs-root/usr/bin/gitmereba"),
+            true,
+            existe_webkit_en("/home/u/squashfs-root/usr"),
+        )
+        .unwrap();
+        assert!(matches!(plan, PlanDirectorioVentana::EntrarEn(_)));
+    }
+
+    #[test]
+    fn plan_ventana_deb_y_tar_no_cambian_nada() {
+        for exe in ["/usr/bin/gitmereba", "/home/u/.local/bin/gitmereba"] {
+            let plan = planificar_directorio_ventana(Path::new(exe), false, |_| false).unwrap();
+            assert_eq!(plan, PlanDirectorioVentana::SinCambios);
+        }
+    }
+
+    #[test]
+    fn plan_ventana_usr_del_sistema_nunca_es_appimage() {
+        // Aunque /usr tenga WebKit instalado (un .deb), no es una compilación AppImage.
+        let plan = planificar_directorio_ventana(Path::new("/usr/bin/gitmereba"), false, |_| true)
+            .unwrap();
+        assert_eq!(plan, PlanDirectorioVentana::SinCambios);
+    }
+
+    #[test]
+    fn plan_ventana_rechaza_variables_de_appimage_fuera_de_un_appimage() {
+        for exe in ["/usr/bin/gitmereba", "/home/u/.local/bin/gitmereba"] {
+            let error = planificar_directorio_ventana(Path::new(exe), true, |_| false).unwrap_err();
+            assert!(matches!(error, ErrorEntornoAppImage::Incoherente(_)));
+        }
+    }
+
+    #[test]
+    fn plan_ventana_ignora_ejecutables_que_no_son_usr_bin() {
+        // Sin carpeta `bin` o con otro nombre de carpeta no hay `usr` que deducir.
+        for exe in ["/gitmereba", "/opt/x/gitmereba", "/opt/usr/sbin/gitmereba"] {
+            let plan = planificar_directorio_ventana(Path::new(exe), false, |_| true).unwrap();
+            assert_eq!(plan, PlanDirectorioVentana::SinCambios, "{exe}");
+        }
+    }
+
+    #[test]
+    fn ruta_persistente_propaga_el_error_de_current_exe() {
+        let resultado =
+            ruta_ejecutable_persistente_con(None, || Err(std::io::Error::other("sin ejecutable")));
+        assert!(resultado.is_err());
+    }
 
     fn os_release(contenido: &str) -> (tempfile::TempDir, PathBuf) {
         let dir = tempfile::tempdir().unwrap();

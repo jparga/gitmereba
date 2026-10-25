@@ -29,6 +29,13 @@ fn main() -> ExitCode {
 
     // Sin subcomando se abre la ventana; con subcomando, la CLI (lo que usa el timer).
     if cli.comando.is_none() {
+        // Dentro de un AppImage, WebKitGTK busca sus procesos auxiliares con una ruta
+        // relativa al directorio de trabajo: si no se puede fijar con seguridad, no hay
+        // ventana. Solo la ventana cambia de directorio; la CLI conserva el suyo.
+        if let Err(error) = gitmereba_core::entorno::preparar_directorio_ventana() {
+            tracing::error!(%error, "no se abre la ventana");
+            return ExitCode::FAILURE;
+        }
         return match ventana::abrir(rutas) {
             Ok(()) => ExitCode::SUCCESS,
             Err(error) => {

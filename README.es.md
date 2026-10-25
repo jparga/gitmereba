@@ -105,6 +105,14 @@ Descarga el `.deb` de [Releases](https://github.com/jparga/gitmereba/releases) e
 sudo apt install ./gitmereba_<versión>_amd64.deb
 ```
 
+¿Sin root ni `apt`? Cada versión incluye también un AppImage (x86_64; necesita `git` instalado):
+
+```bash
+chmod +x gitmereba_<versión>_x86_64.AppImage && ./gitmereba_<versión>_x86_64.AppImage
+```
+
+Deja el fichero donde está: los temporizadores de tus cuentas apuntan a él.
+
 Cada versión incluye un fichero `SHA256SUMS` y una atestación de procedencia del build, para
 que compruebes que el paquete se generó desde este repositorio:
 

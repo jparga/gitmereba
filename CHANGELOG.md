@@ -6,6 +6,16 @@ Todos los cambios relevantes de gitmereba. Formato basado en
 
 ## [Sin publicar]
 
+### Añadido
+
+- **AppImage.** Cada versión incluye un `.AppImage` (x86_64) además del `.deb` y el `.tar.gz`:
+  lleva GTK y WebKitGTK dentro y se ejecuta sin instalar. `scripts/empaquetar.sh --appimage` lo
+  construye con `linuxdeploy`, su plugin gtk, `appimagetool` y el runtime type2, en versiones
+  concretas con SHA-256 fijado. Los temporizadores de systemd apuntan al propio fichero `.AppImage` y no al montaje
+  temporal, y extraen el AppImage en un directorio privado (0700) en vez del `/tmp` compartido.
+  Dentro de un AppImage la ventana no se abre si no puede fijar su directorio de trabajo con
+  seguridad: WebKitGTK localiza sus procesos auxiliares por una ruta relativa a él.
+
 ## [0.8.1] - 2026-10-25
 
 ### Seguridad

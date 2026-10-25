@@ -103,8 +103,8 @@ impl LanzadorSystemd {
     ) -> Result<(), ErrorCuentas> {
         let rutas_cuenta = RutasCuenta::nueva(parametros.carpeta_cuenta);
         let cuenta = config::leer_cuenta(&rutas_cuenta)?;
-        let ruta_ejecutable =
-            std::env::current_exe().map_err(|error| ErrorCuentas::Io(error.to_string()))?;
+        let ruta_ejecutable = crate::entorno::ruta_ejecutable_persistente()
+            .map_err(|error| ErrorCuentas::Io(error.to_string()))?;
 
         let parametros_temporizador = ParametrosTemporizador {
             login: parametros.login,
