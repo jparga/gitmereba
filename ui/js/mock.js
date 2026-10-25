@@ -379,6 +379,39 @@ export function suscribirProgresoSync(callback) {
   return Promise.resolve(() => suscriptoresProgresoSync.delete(callback));
 }
 
+// Progreso de `ajustes_guardar` al cambiar la carpeta (`carpeta://progreso`).
+const suscriptoresProgresoMover = new Set();
+
+export function suscribirProgresoMover(callback) {
+  suscriptoresProgresoMover.add(callback);
+  return Promise.resolve(() => suscriptoresProgresoMover.delete(callback));
+}
+
+const FICHEROS_MOVER_DE_EJEMPLO = 12;
+
+async function emitirProgresoMover(login) {
+  const emitir = (progreso) => {
+    for (const cb of suscriptoresProgresoMover) cb({ login, ...progreso });
+  };
+  emitir({ fase: 'parando_gitea', texto: tx('Parando Gitea', 'Stopping Gitea') });
+  await esperar(300);
+  emitir({ fase: 'renombrando', texto: tx('Moviendo la carpeta', 'Moving the folder') });
+  await esperar(300);
+  for (let hechos = 0; hechos <= FICHEROS_MOVER_DE_EJEMPLO; hechos += 3) {
+    emitir({
+      fase: 'copiando',
+      ficheros: hechos,
+      ficheros_total: FICHEROS_MOVER_DE_EJEMPLO,
+      bytes: hechos * 1000,
+      bytes_total: FICHEROS_MOVER_DE_EJEMPLO * 1000,
+      texto: tx(`Copiando: ${hechos} de ${FICHEROS_MOVER_DE_EJEMPLO} ficheros`, `Copying: ${hechos} of ${FICHEROS_MOVER_DE_EJEMPLO} files`),
+    });
+    await esperar(200);
+  }
+  emitir({ fase: 'arrancando_gitea', texto: tx('Arrancando Gitea en la carpeta nueva', 'Starting Gitea in the new folder') });
+  await esperar(300);
+}
+
 // Cuántas acciones simuladas se «aplican» en una pasada de ejemplo.
 const ACCIONES_SYNC_DE_EJEMPLO = 3;
 
@@ -506,9 +539,33 @@ export async function invocar(comando, args = {}) {
     case 'ajustes_leer':
       return { cuenta: CUENTAS[args.login], version_gitea: '1.27.3', snapshots: [] };
 
-    case 'ajustes_guardar':
-      Object.assign(CUENTAS[args.login], args.ajustes);
-      return { ok: true };
+    case 'ajustes_guardar': {
+      const cuenta = CUENTAS[args.login];
+      const origen = cuenta.carpeta;
+      const cambiaCarpeta = args.ajustes.carpeta !== origen;
+      if (cambiaCarpeta && !String(args.ajustes.carpeta).startsWith('/')) {
+        throw {
+          codigo: 'destino_no_valido',
+          mensaje: tx('la carpeta de destino no es válida: la carpeta debe ser una ruta absoluta', 'the destination folder is not valid: the folder must be an absolute path'),
+        };
+      }
+      if (cambiaCarpeta) await emitirProgresoMover(args.login);
+      Object.assign(cuenta, args.ajustes);
+      return {
+        ok: true,
+        movimiento: cambiaCarpeta
+          ? {
+              modo: 'copia',
+              origen,
+              destino: args.ajustes.carpeta,
+              // Si la carpeta nueva lleva «aviso» en el nombre se simula que no se pudo borrar la antigua.
+              avisos: args.ajustes.carpeta.includes('aviso')
+                ? [tx(`La cuenta ya está en la carpeta nueva, pero no se pudo borrar la antigua «${origen}». Bórrala a mano.`, `The account is already in the new folder, but the old one “${origen}” could not be deleted. Delete it by hand.`)]
+                : [],
+            }
+          : null,
+      };
+    }
 
     case 'rotar_token':
       if (!args.token) throw { codigo: 'token_vacio', mensaje: tx('Falta el token nuevo.', 'The new token is missing.') };

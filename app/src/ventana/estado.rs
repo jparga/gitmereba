@@ -1,6 +1,8 @@
 //! Estado compartido por los comandos y ejecución de `core` fuera del hilo de la ventana.
 
+use std::collections::HashSet;
 use std::future::Future;
+use std::sync::{Arc, Mutex, PoisonError};
 
 use gitmereba_core::almacen::Almacen;
 use gitmereba_core::config::{self, Rutas, RutasCuenta};
@@ -18,9 +20,54 @@ use crate::comandos::abrir_almacen;
 #[derive(Debug, Clone)]
 pub struct EstadoApp {
     pub rutas: Rutas,
+    /// Logins con una operación larga en curso desde la ventana (sincronizar, mover la
+    /// carpeta...). Solo cubre esta ventana; el temporizador de systemd se comprueba aparte
+    /// (`Lanzador::sincronizacion_en_curso`).
+    ocupadas: Arc<Mutex<HashSet<String>>>,
+}
+
+/// Marca de «esta cuenta está ocupada»: se libera al soltarla.
+#[derive(Debug)]
+pub struct Reserva {
+    ocupadas: Arc<Mutex<HashSet<String>>>,
+    login: String,
+}
+
+impl Drop for Reserva {
+    fn drop(&mut self) {
+        self.ocupadas
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(&self.login);
+    }
 }
 
 impl EstadoApp {
+    pub fn nuevo(rutas: Rutas) -> Self {
+        Self {
+            rutas,
+            ocupadas: Arc::default(),
+        }
+    }
+
+    /// Reserva la cuenta `login` para una operación que no admite otra a la vez, o
+    /// `cuenta_ocupada` si ya hay una en curso.
+    pub fn reservar(&self, login: &str, idioma: Idioma) -> Result<Reserva, ErrorUi> {
+        let nueva = self
+            .ocupadas
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(login.to_string());
+        if nueva {
+            Ok(Reserva {
+                ocupadas: Arc::clone(&self.ocupadas),
+                login: login.to_string(),
+            })
+        } else {
+            Err(ErrorUi::cuenta_ocupada(login, idioma))
+        }
+    }
+
     /// Idioma de la interfaz en este momento. No se cachea: el usuario puede cambiarlo
     /// mientras la ventana sigue abierta.
     pub fn idioma(&self) -> Idioma {
@@ -101,4 +148,21 @@ where
             "the command finished without a result",
         ))
     })?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn una_cuenta_solo_se_reserva_una_vez_hasta_soltarla() {
+        let estado = EstadoApp::nuevo(Rutas::con_raiz("/tmp/gitmereba-prueba-reserva"));
+        let primera = estado.reservar("ana", Idioma::Es).expect("primera reserva");
+        let error = estado.reservar("ana", Idioma::Es).expect_err("ya ocupada");
+        assert_eq!(error.codigo, "cuenta_ocupada");
+        // Otra cuenta no se ve afectada.
+        let _otra = estado.reservar("luis", Idioma::Es).expect("otra cuenta");
+        drop(primera);
+        assert!(estado.reservar("ana", Idioma::Es).is_ok());
+    }
 }

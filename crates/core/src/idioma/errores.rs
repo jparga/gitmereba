@@ -56,7 +56,7 @@ mod tests {
     use crate::avisos::ErrorAvisos;
     use crate::config::ErrorConfig;
     use crate::contingencia::{ErrorContingencia, PasoActivar};
-    use crate::cuentas::ErrorCuentas;
+    use crate::cuentas::{ErrorCuentas, MotivoDestino, ProblemaCopia};
     use crate::git::ErrorGit;
     use crate::gitea::ErrorGitea;
     use crate::github::ErrorGithub;
@@ -337,6 +337,20 @@ mod tests {
             (
                 ErrorCuentas::CarpetaNoValidaParaBorrar(PathBuf::from("/d"), nombre("ana")),
                 "the folder “/d” is not the data folder of “ana”: it will not be deleted",
+            ),
+            (
+                ErrorCuentas::DestinoNoValido(MotivoDestino::NoVacio),
+                "the destination folder is not valid: the destination must be empty or not exist",
+            ),
+            (
+                ErrorCuentas::SincronizacionEnCurso(nombre("ana")),
+                "a sync of “ana” is in progress: wait for it to finish and try again",
+            ),
+            (
+                ErrorCuentas::Copia(ProblemaCopia::Falta {
+                    ruta: PathBuf::from("a/b"),
+                }),
+                "the copy of the folder is not correct: “a/b” is missing from the copy",
             ),
             (
                 ErrorCuentas::Github(ErrorGithub::TokenInvalido),

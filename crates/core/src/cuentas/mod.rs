@@ -17,6 +17,10 @@ mod estado;
 mod lan;
 mod lanzador;
 mod listar;
+mod mover;
+mod mover_copia;
+mod mover_destino;
+mod mover_textos;
 mod progreso;
 mod proteccion;
 mod repos;
@@ -42,6 +46,13 @@ pub use estado::{ConteoRepos, EstadoCuenta, estado};
 pub use lan::{InformeLan, estado_lan, exponer_lan, ocultar_lan};
 pub use lanzador::{Lanzador, LanzadorPrimerPlano, LanzadorSystemd, ParametrosLanzamiento};
 pub use listar::listar;
+pub use mover::{
+    PrevisualizacionMover, RenombradoReal, Renombrador, mover_carpeta, mover_carpeta_con,
+    previsualizar_mover,
+};
+pub use mover_textos::{
+    AvisoMover, ModoMover, MotivoDestino, ProblemaCopia, ProgresoMover, ResultadoMover,
+};
 pub use progreso::{EstadoPaso, PasoAlta};
 pub use proteccion::{CambioDetectado, InformeProteccion, proteger_cuenta};
 pub use repos::excluir_repo;

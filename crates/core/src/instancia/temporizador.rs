@@ -170,6 +170,20 @@ pub async fn instalar_temporizador(
     texto_service: &str,
     texto_timer: &str,
 ) -> Result<(), ErrorInstancia> {
+    escribir_temporizador(rutas, login, texto_service, texto_timer)?;
+    ejecutar_systemctl(&["--user", "daemon-reload"]).await?;
+    Ok(())
+}
+
+/// Escribe las dos unidades (0600) sin tocar systemd: ni `daemon-reload` ni nada más.
+/// Para reescribir unas unidades ya instaladas cuando se mueve la carpeta de la cuenta;
+/// la recarga la hace quien arranca el servicio.
+pub fn escribir_temporizador(
+    rutas: &Rutas,
+    login: &Nombre,
+    texto_service: &str,
+    texto_timer: &str,
+) -> Result<(), ErrorInstancia> {
     let ruta_service = rutas
         .directorio_systemd_usuario()
         .join(nombre_servicio_sync(login));
@@ -178,8 +192,21 @@ pub async fn instalar_temporizador(
         .join(nombre_timer_sync(login));
     fichero::escribir_privado(&ruta_service, texto_service.as_bytes())?;
     fichero::escribir_privado(&ruta_timer, texto_timer.as_bytes())?;
-    ejecutar_systemctl(&["--user", "daemon-reload"]).await?;
     Ok(())
+}
+
+/// `true` si `gitmereba-sync-<login>.service` (el oneshot que lanza el temporizador) se
+/// está ejecutando ahora mismo: `systemctl --user is-active` dice `active` o
+/// `activating` (un oneshot en marcha está en `activating`). Un código de salida distinto
+/// de cero no es un error: es como `is-active` dice «inactive», «failed» o «no existe».
+pub async fn servicio_sync_activo(login: &Nombre) -> Result<bool, ErrorInstancia> {
+    let mut comando = comando_systemctl(&["--user", "is-active", &nombre_servicio_sync(login)]);
+    let salida = timeout(TIEMPO_LIMITE_SYSTEMCTL, comando.output())
+        .await
+        .map_err(|_| ErrorInstancia::Timeout)?
+        .map_err(mapear_error_spawn)?;
+    let estado = String::from_utf8_lossy(&salida.stdout);
+    Ok(matches!(estado.trim(), "active" | "activating"))
 }
 
 /// `systemctl --user enable --now <timer>`.

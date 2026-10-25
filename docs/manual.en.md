@@ -48,7 +48,7 @@ key.
 | **Repositories** | List with the status of each repository. Include or exclude. Local clone address. |
 | **Contingency** | Work without GitHub and send the changes back afterwards. |
 | **Activity** | Sync history and audit log. |
-| **Settings** | Interval, scope, token, local network access, removal, Gitea update. |
+| **Settings** | Interval, scope, account folder, token, local network access, removal, Gitea update. |
 | **About** | From the window footer. Version, licence and links; each account's Gitea version; paths and environment. “Copy for a report”. |
 
 ### Signing in to Gitea
@@ -175,6 +175,7 @@ gitmereba                         # opens the window
 gitmereba cuenta add --login <username> --carpeta <path>   # asks for the token without echoing it
 gitmereba cuenta list
 gitmereba cuenta rm <username>                              # does not delete the repositories
+gitmereba cuenta mover <username> <folder> [--si]           # moves the account's folder
 gitmereba cuenta lan --login <username> --activar | --desactivar | --estado
 gitmereba cuenta usuario --login <username> --crear <name> | --eliminar <name> | --listar
 gitmereba sync <username> | --todas [--simulacro]
@@ -212,6 +213,27 @@ gitmereba doctor                  # checks the system and each account
 The whole account lives in its folder: copying it in full (with the account stopped) is a
 complete backup. To stop using an account, **Settings → Remove account…**; the folder stays
 where it is until you delete it yourself.
+
+### Moving an account's folder
+
+Under **Settings → Account folder** press **Choose…**, pick another one and **Save**; or, from
+the terminal, `gitmereba cuenta mover <username> <folder>`. It asks for confirmation because
+**the old folder is deleted**. The new folder must be an absolute path that does not exist or
+is empty, owned by you, and it cannot be inside another account's folder or the account's own
+(or contain them).
+
+- Gitea is stopped (the account is unavailable meanwhile) and, if a sync is running, the move
+  is refused: wait for it to finish.
+- On the same disk it is a plain rename, instant.
+- To another disk everything is copied with a progress display, the copy is **verified** (same
+  files, sizes and permissions, same SHA-256 sums for the database and the configuration, and
+  `git fsck` of every repository and backup copy) and only then is the old folder deleted.
+- Then the configuration, the systemd units and Gitea's repositories are updated and Gitea
+  starts in the new folder. If anything fails before the end, the account stays as it was (in
+  the old folder, running) and you are told why.
+- If everything is in the new folder but the old one cannot be deleted, you are told which path
+  is left to delete by hand.
+
 
 ## 12. Language
 

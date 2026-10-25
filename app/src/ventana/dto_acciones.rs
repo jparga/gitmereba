@@ -9,7 +9,9 @@
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
-use gitmereba_core::cuentas::{Descubrimiento, EstadoPaso, PasoAlta};
+use gitmereba_core::cuentas::{
+    Descubrimiento, EstadoPaso, PasoAlta, ProgresoMover, ResultadoMover,
+};
 use gitmereba_core::idioma::{Idioma, Localizable};
 use gitmereba_core::modelo::{Cuenta, RepoOrigen};
 use gitmereba_core::sync::{FaseSync, ProgresoSync};
@@ -200,6 +202,64 @@ pub fn payload_progreso_sync(login: &str, progreso: ProgresoSync) -> ProgresoSyn
     }
 }
 
+/// Payload del evento `carpeta://progreso`, emitido mientras `ajustes_guardar` mueve la
+/// carpeta de una cuenta. `fase` y los contadores salen de `ProgresoMover` (aplanado):
+/// `copiando` lleva `ficheros`/`ficheros_total`/`bytes`/`bytes_total`, `verificando` lleva
+/// `hechos`/`total`. `texto` es la frase ya localizada.
+#[derive(Debug, Clone, Serialize)]
+pub struct ProgresoMoverPayload {
+    pub login: String,
+    pub texto: String,
+    #[serde(flatten)]
+    pub progreso: ProgresoMover,
+}
+
+/// Construye el payload de `carpeta://progreso`.
+pub fn payload_progreso_mover(
+    login: &str,
+    progreso: ProgresoMover,
+    idioma: Idioma,
+) -> ProgresoMoverPayload {
+    ProgresoMoverPayload {
+        login: login.to_string(),
+        texto: progreso.localizar(idioma),
+        progreso,
+    }
+}
+
+/// Qué ha pasado con la carpeta al guardar los ajustes de una cuenta.
+#[derive(Debug, Clone, Serialize)]
+pub struct MovimientoDto {
+    /// `"renombrado"` o `"copia"`.
+    pub modo: String,
+    pub origen: String,
+    pub destino: String,
+    /// Avisos ya localizados (por ejemplo, la carpeta antigua que queda por borrar).
+    pub avisos: Vec<String>,
+}
+
+impl MovimientoDto {
+    pub fn de(resultado: &ResultadoMover, idioma: Idioma) -> Self {
+        Self {
+            modo: resultado.modo.identificador().to_string(),
+            origen: resultado.origen.display().to_string(),
+            destino: resultado.destino.display().to_string(),
+            avisos: resultado
+                .avisos
+                .iter()
+                .map(|aviso| aviso.localizar(idioma))
+                .collect(),
+        }
+    }
+}
+
+/// Respuesta de `ajustes_guardar`: `{ ok: true, movimiento: null | MovimientoDto }`.
+#[derive(Debug, Clone, Serialize)]
+pub struct RespuestaAjustes {
+    pub ok: bool,
+    pub movimiento: Option<MovimientoDto>,
+}
+
 /// `reconciliar`, según el contrato con la interfaz.
 #[derive(Debug, Clone, Serialize)]
 pub struct ResultadoReconciliacion {
@@ -249,6 +309,35 @@ mod tests {
     fn estado_paso_a_texto_usa_los_literales_del_contrato() {
         assert_eq!(estado_paso_a_texto(EstadoPaso::Iniciando), "en-curso");
         assert_eq!(estado_paso_a_texto(EstadoPaso::Hecho), "ok");
+    }
+
+    #[test]
+    fn el_progreso_de_mover_se_aplana_con_su_fase() {
+        let payload = payload_progreso_mover(
+            "ana",
+            ProgresoMover::Copiando {
+                ficheros: 3,
+                ficheros_total: 10,
+                bytes: 30,
+                bytes_total: 100,
+            },
+            Idioma::En,
+        );
+        let json = serde_json::to_value(payload).unwrap();
+        assert_eq!(json["login"], "ana");
+        assert_eq!(json["fase"], "copiando");
+        assert_eq!(json["ficheros"], 3);
+        assert_eq!(json["ficheros_total"], 10);
+        assert_eq!(json["bytes_total"], 100);
+        assert_eq!(json["texto"], "Copying: 3 of 10 files");
+
+        let json = serde_json::to_value(payload_progreso_mover(
+            "ana",
+            ProgresoMover::ParandoGitea,
+            Idioma::Es,
+        ))
+        .unwrap();
+        assert_eq!(json["fase"], "parando_gitea");
     }
 
     #[test]

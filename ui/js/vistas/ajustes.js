@@ -1,5 +1,5 @@
-import { api } from '../api.js';
-import { h, pintar, avisar, ocupar } from '../dom.js';
+import { api, suscribirProgresoMover } from '../api.js';
+import { h, pintar, avisar, ocupar, barraProgreso } from '../dom.js';
 import { crearConmutadorTema } from '../tema.js';
 import { navegar } from '../router.js';
 import { t } from '../i18n.js';
@@ -117,6 +117,46 @@ function dialogoBaja(login, onBaja) {
   return dialogo;
 }
 
+/** Pide confirmación para mover la carpeta de la cuenta. Resuelve `true` si se confirma. */
+function confirmarMover(login, origen, destino) {
+  return new Promise((resolver) => {
+    let confirmado = false;
+    const dialogo = h(
+      'dialog',
+      { 'aria-labelledby': 'titulo-mover' },
+      h(
+        'div',
+        { clase: 'dialogo-cuerpo' },
+        h('h2', { id: 'titulo-mover' }, t('ajustes.mover.titulo', { login })),
+        h('p', null, t('ajustes.mover.texto', { origen, destino })),
+        h(
+          'div',
+          { clase: 'dialogo-botones' },
+          h('button', { type: 'button', clase: 'btn ghost', onClick: () => dialogo.close() }, t('ajustes.cancelar')),
+          h(
+            'button',
+            {
+              type: 'button',
+              clase: 'btn danger',
+              onClick: () => {
+                confirmado = true;
+                dialogo.close();
+              },
+            },
+            t('ajustes.mover.boton'),
+          ),
+        ),
+      ),
+    );
+    document.body.append(dialogo);
+    dialogo.addEventListener('close', () => {
+      dialogo.remove();
+      resolver(confirmado);
+    });
+    dialogo.showModal();
+  });
+}
+
 /** Dice si el formulario de la cuenta tiene cambios sin guardar; lo fija `panelCuenta`. */
 let hayCambiosSinGuardar = () => false;
 
@@ -140,6 +180,8 @@ async function panelCuenta(contenedor, login, recargarCuentas) {
   const campoCarpeta = h('input', { id: 'campo-carpeta', type: 'text', value: cuenta.carpeta, readonly: true });
 
   const mensajeGuardado = h('p', { clase: 'hint' });
+  const zonaProgresoMover = h('div', { 'aria-live': 'polite' });
+  const botonGuardar = h('button', { type: 'submit', clase: 'btn' }, t('ajustes.guardar'));
 
   // Valores del formulario tal como se cargaron o se guardaron por última vez.
   const instantanea = () =>
@@ -155,10 +197,32 @@ async function panelCuenta(contenedor, login, recargarCuentas) {
         clase: 'card pad',
         onSubmit: async (evento) => {
           evento.preventDefault();
+          const carpetaNueva = campoCarpeta.value;
+          const cambiaCarpeta = carpetaNueva !== cuenta.carpeta;
+          if (cambiaCarpeta && !(await confirmarMover(login, cuenta.carpeta, carpetaNueva))) return;
+          // El botón se guarda antes de cualquier `await`: `evento.currentTarget` ya no vale después.
+          const liberar = cambiaCarpeta ? ocupar(botonGuardar, t('ajustes.mover.moviendo')) : null;
+          let desuscribir = null;
+          if (cambiaCarpeta) {
+            pintar(zonaProgresoMover, barraProgreso(t('ajustes.mover.preparando')));
+            desuscribir = await suscribirProgresoMover((progreso) => {
+              if (progreso.login !== login) return;
+              const copiando = progreso.fase === 'copiando';
+              const verificando = progreso.fase === 'verificando';
+              pintar(
+                zonaProgresoMover,
+                barraProgreso(
+                  progreso.texto,
+                  copiando ? progreso.ficheros : verificando ? progreso.hechos : undefined,
+                  copiando ? progreso.ficheros_total : verificando ? progreso.total : undefined,
+                ),
+              );
+            });
+          }
           try {
-            await api.ajustesGuardar(login, {
+            const respuesta = await api.ajustesGuardar(login, {
               intervalo_minutos: Number(campoIntervalo.value),
-              carpeta: campoCarpeta.value,
+              carpeta: carpetaNueva,
               alcance: {
                 incluir_forks: campoForks.checked,
                 organizaciones: campoOrganizaciones.value
@@ -168,11 +232,41 @@ async function panelCuenta(contenedor, login, recargarCuentas) {
                 excluidos: cuenta.alcance.excluidos,
               },
             });
+            cuenta.carpeta = carpetaNueva;
             base = instantanea();
             mensajeGuardado.textContent = t('ajustes.guardado');
-            avisar(t('ajustes.guardados'), 'success');
+            const movimiento = respuesta?.movimiento;
+            if (movimiento) {
+              avisar(t('ajustes.mover.hecho', { destino: movimiento.destino }), 'success');
+              if (movimiento.avisos?.length) {
+                mensajeGuardado.textContent = movimiento.avisos.map((aviso) => t('ajustes.mover.aviso', { mensaje: aviso })).join(' ');
+                avisar(mensajeGuardado.textContent, 'warn');
+              }
+            } else {
+              avisar(t('ajustes.guardados'), 'success');
+            }
           } catch (error) {
-            mensajeGuardado.textContent = t('ajustes.error', { mensaje: error?.mensaje ?? error });
+            mensajeGuardado.textContent = t(cambiaCarpeta ? 'ajustes.mover.error' : 'ajustes.error', {
+              mensaje: error?.mensaje ?? error,
+            });
+            if (cambiaCarpeta) {
+              // Si el movimiento llegó a hacerse y falló lo posterior, el formulario debe
+              // mostrar la carpeta real y no la antigua.
+              try {
+                const actual = (await api.ajustesLeer(login)).cuenta.carpeta;
+                if (actual !== cuenta.carpeta) {
+                  cuenta.carpeta = actual;
+                  campoCarpeta.value = actual;
+                  base = instantanea();
+                }
+              } catch {
+                // Sin dato del backend: se deja lo que hay.
+              }
+            }
+          } finally {
+            if (desuscribir) desuscribir();
+            pintar(zonaProgresoMover);
+            if (liberar) liberar();
           }
         },
       },
@@ -208,11 +302,12 @@ async function panelCuenta(contenedor, login, recargarCuentas) {
         ),
         h('p', { clase: 'hint' }, t('ajustes.carpeta.ayuda')),
       ),
+      zonaProgresoMover,
       mensajeGuardado,
       h(
         'div',
         { clase: 'row mt' },
-        h('button', { type: 'submit', clase: 'btn' }, t('ajustes.guardar')),
+        botonGuardar,
         h('button', { type: 'button', clase: 'btn ghost', onClick: () => dialogoRotarToken(login).showModal() }, t('ajustes.rotar.boton')),
       ),
     ),

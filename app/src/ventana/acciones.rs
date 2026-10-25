@@ -7,7 +7,7 @@ use std::process::Stdio;
 use gitmereba_core::config;
 use gitmereba_core::contingencia::{self, CredencialGitea, OrigenReconciliacion};
 use gitmereba_core::cuentas::{
-    self, AprovisionadorReal, EstadoPaso, LanzadorSystemd, PasoAlta, SolicitudAlta,
+    self, AprovisionadorReal, ErrorCuentas, EstadoPaso, LanzadorSystemd, PasoAlta, SolicitudAlta,
 };
 use gitmereba_core::gitea::ClienteGitea;
 use gitmereba_core::github::{ApiGithub, ClienteGithub};
@@ -19,9 +19,10 @@ use tauri::{Emitter, State};
 use tauri_plugin_dialog::DialogExt;
 
 use super::dto_acciones::{
-    AjustesCuentaEntrada, CredencialesGiteaDto, InformeSincResumen, PreviaAlta,
-    RespuestaActualizarGitea, RespuestaCarpeta, RespuestaOk, ResultadoReconciliacion, indice_paso,
-    payload_progreso, payload_progreso_error, payload_progreso_sync,
+    AjustesCuentaEntrada, CredencialesGiteaDto, InformeSincResumen, MovimientoDto, PreviaAlta,
+    RespuestaActualizarGitea, RespuestaAjustes, RespuestaCarpeta, RespuestaOk,
+    ResultadoReconciliacion, indice_paso, payload_progreso, payload_progreso_error,
+    payload_progreso_mover, payload_progreso_sync,
 };
 use super::error::{ErrorUi, texto};
 use super::estado::{EstadoApp, Recursos, en_hilo};
@@ -62,7 +63,10 @@ pub async fn sincronizar(
     tracing::debug!(comando = "sincronizar");
     let rutas = estado.rutas.clone();
     let idioma = estado.idioma();
+    // Mientras dure, nadie puede mover la carpeta de la cuenta.
+    let reserva = estado.reservar(&login, idioma)?;
     en_hilo(idioma, move || async move {
+        let _reserva = reserva;
         let recursos = Recursos::abrir(&rutas)?;
         let (cuenta, _rutas_cuenta) = recursos.cuenta(login.as_str())?;
 
@@ -328,7 +332,9 @@ pub async fn activar_contingencia(
     tracing::debug!(comando = "activar_contingencia");
     let rutas = estado.rutas.clone();
     let idioma = estado.idioma();
+    let reserva = estado.reservar(&login, idioma)?;
     en_hilo(idioma, move || async move {
+        let _reserva = reserva;
         let recursos = Recursos::abrir(&rutas)?;
         let (cuenta, rutas_cuenta) = recursos.cuenta(login.as_str())?;
         let token_gitea = token_gitea_de(&recursos, &cuenta.login)?;
@@ -375,7 +381,9 @@ pub async fn reconciliar(
         return Err(ErrorUi::token_vacio(idioma));
     }
     let rutas = estado.rutas.clone();
+    let reserva = estado.reservar(&login, idioma)?;
     en_hilo(idioma, move || async move {
+        let _reserva = reserva;
         let recursos = Recursos::abrir(&rutas)?;
         let (cuenta, rutas_cuenta) = recursos.cuenta(login.as_str())?;
 
@@ -460,28 +468,55 @@ pub async fn reconciliar(
 
 #[tauri::command]
 pub async fn ajustes_guardar(
+    app: tauri::AppHandle,
     estado: State<'_, EstadoApp>,
     login: String,
     ajustes: AjustesCuentaEntrada,
-) -> Result<RespuestaOk, ErrorUi> {
+) -> Result<RespuestaAjustes, ErrorUi> {
     tracing::debug!(comando = "ajustes_guardar");
     let rutas = estado.rutas.clone();
     let idioma = estado.idioma();
+    // Mover la carpeta no puede coincidir con una sincronización de la ventana ni con otro
+    // movimiento; el temporizador de systemd lo comprueba `mover_carpeta` por su cuenta.
+    let reserva = estado.reservar(&login, idioma)?;
     en_hilo(idioma, move || async move {
+        let _reserva = reserva;
         let recursos = Recursos::abrir(&rutas)?;
         let (cuenta, rutas_cuenta) = recursos.cuenta(login.as_str())?;
+        let ejecutable = gitmereba_core::entorno::ruta_ejecutable_persistente()
+            .map_err(|error| ErrorUi::externo("interno", None, &error))?;
 
-        if std::path::Path::new(&ajustes.carpeta) != cuenta.carpeta {
-            return Err(ErrorUi::nuevo(
-                "no_implementado",
-                texto(
-                    idioma,
-                    "mover la carpeta de una cuenta aún no está disponible",
-                    "moving an account's folder is not available yet",
-                ),
-            ));
-        }
+        // Primero la carpeta: si falla, no se guarda nada más.
+        let movimiento = if std::path::Path::new(&ajustes.carpeta) != cuenta.carpeta {
+            let login_evento = cuenta.login.to_string();
+            let app_progreso = app.clone();
+            let mut al_progresar = move |progreso| {
+                let payload = payload_progreso_mover(&login_evento, progreso, idioma);
+                if let Err(error) = app_progreso.emit("carpeta://progreso", payload) {
+                    tracing::warn!(error = %error, "no se pudo emitir el progreso del movimiento");
+                }
+            };
+            let resultado = cuentas::mover_carpeta(
+                &recursos.contexto(),
+                &LanzadorSystemd,
+                &cuenta.login,
+                std::path::Path::new(&ajustes.carpeta),
+                &ejecutable,
+                &mut al_progresar,
+            )
+            .await
+            .map_err(|error| error_ui_mover(&error, idioma))?;
+            Some(MovimientoDto::de(&resultado, idioma))
+        } else {
+            None
+        };
 
+        // Tras mover, la cuenta vive en otra carpeta: se vuelve a leer del índice.
+        let (cuenta, rutas_cuenta) = if movimiento.is_some() {
+            recursos.cuenta(login.as_str())?
+        } else {
+            (cuenta, rutas_cuenta)
+        };
         cuentas::actualizar_ajustes(
             &recursos.almacen,
             &rutas_cuenta,
@@ -494,15 +529,22 @@ pub async fn ajustes_guardar(
         // El intervalo vive también en el timer de systemd: sin esto no cambiaría hasta
         // volver a dar de alta la cuenta.
         let (actualizada, _rutas_cuenta) = recursos.cuenta(login.as_str())?;
-        let ejecutable = gitmereba_core::entorno::ruta_ejecutable_persistente()
-            .map_err(|error| ErrorUi::externo("interno", None, &error))?;
         cuentas::reparar_temporizador(&recursos.rutas, &actualizada, &ejecutable)
             .await
             .map_err(|error| ErrorUi::de(&error, idioma))?;
 
-        Ok(RespuestaOk::si())
+        Ok(RespuestaAjustes {
+            ok: true,
+            movimiento,
+        })
     })
     .await
+}
+
+/// Error de `mover_carpeta` con un código estable en `snake_case` (`destino_no_valido`,
+/// `sincronizacion_en_curso`, `copia_no_valida`, ...), el de `ErrorCuentas::codigo`.
+fn error_ui_mover(error: &ErrorCuentas, idioma: Idioma) -> ErrorUi {
+    ErrorUi::nuevo(&error.codigo().replace('-', "_"), error.localizar(idioma))
 }
 
 #[tauri::command]

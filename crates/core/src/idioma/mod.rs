@@ -10,7 +10,10 @@ use serde::{Deserialize, Serialize};
 use crate::avisos::TextoAviso;
 use crate::config::Rutas;
 use crate::contingencia::InformeReconciliacion;
-use crate::cuentas::{NombreComprobacion, PasoAlta, TextoDoctor};
+use crate::cuentas::{
+    AvisoMover, MotivoDestino, NombreComprobacion, PasoAlta, ProblemaCopia, ProgresoMover,
+    TextoDoctor,
+};
 use crate::sync::InformeSync;
 use crate::verificacion::Aviso;
 
@@ -192,6 +195,42 @@ impl Localizable for PasoAlta {
         match idioma {
             Idioma::Es => es::progreso::descripcion(*self).to_string(),
             Idioma::En => en::progreso::descripcion(*self).to_string(),
+        }
+    }
+}
+
+impl Localizable for MotivoDestino {
+    fn localizar(&self, idioma: Idioma) -> String {
+        match idioma {
+            Idioma::Es => es::mover::motivo_destino(self),
+            Idioma::En => en::mover::motivo_destino(self),
+        }
+    }
+}
+
+impl Localizable for ProblemaCopia {
+    fn localizar(&self, idioma: Idioma) -> String {
+        match idioma {
+            Idioma::Es => es::mover::problema_copia(self),
+            Idioma::En => en::mover::problema_copia(self),
+        }
+    }
+}
+
+impl Localizable for ProgresoMover {
+    fn localizar(&self, idioma: Idioma) -> String {
+        match idioma {
+            Idioma::Es => es::mover::progreso(self),
+            Idioma::En => en::mover::progreso(self),
+        }
+    }
+}
+
+impl Localizable for AvisoMover {
+    fn localizar(&self, idioma: Idioma) -> String {
+        match idioma {
+            Idioma::Es => es::mover::aviso(self),
+            Idioma::En => en::mover::aviso(self),
         }
     }
 }
@@ -1072,5 +1111,90 @@ mod tests {
             assert_eq!(nombre.localizar(Idioma::Es), es, "{nombre:?}");
             assert_eq!(nombre.localizar(Idioma::En), en, "{nombre:?}");
         }
+    }
+
+    #[test]
+    fn mover_carpeta_tiene_texto_en_los_dos_idiomas() {
+        use crate::cuentas::{AvisoMover, MotivoDestino, ProblemaCopia, ProgresoMover};
+        let ruta = PathBuf::from("/a/b");
+        let motivos = vec![
+            MotivoDestino::NoAbsoluta,
+            MotivoDestino::ConPuntoPunto,
+            MotivoDestino::NoUtf8,
+            MotivoDestino::CaracterNoPermitido { caracter: '\n' },
+            MotivoDestino::Protegida,
+            MotivoDestino::DentroDeDatosDeLaApp,
+            MotivoDestino::SinPadre,
+            MotivoDestino::PadreAjeno,
+            MotivoDestino::EsEnlaceSimbolico,
+            MotivoDestino::NoEsDirectorio,
+            MotivoDestino::NoVacio,
+            MotivoDestino::DentroDeLaPropia,
+            MotivoDestino::ContieneLaPropia,
+            MotivoDestino::ParcialExistente { ruta: ruta.clone() },
+            MotivoDestino::OrigenNoValido { ruta: ruta.clone() },
+            MotivoDestino::Io {
+                detalle: TextoExterno::literal("x"),
+            },
+        ];
+        for motivo in motivos {
+            assert_ne!(motivo.localizar(Idioma::Es), motivo.localizar(Idioma::En));
+        }
+        let problemas = vec![
+            ProblemaCopia::TipoEspecial { ruta: ruta.clone() },
+            ProblemaCopia::Falta { ruta: ruta.clone() },
+            ProblemaCopia::Sobra { ruta: ruta.clone() },
+            ProblemaCopia::Distinta { ruta: ruta.clone() },
+            ProblemaCopia::HashDistinto { ruta: ruta.clone() },
+            ProblemaCopia::Fsck {
+                repo: ruta.clone(),
+                detalle: TextoExterno {
+                    es: "fallo".into(),
+                    en: "failure".into(),
+                },
+            },
+        ];
+        for problema in problemas {
+            assert_ne!(
+                problema.localizar(Idioma::Es),
+                problema.localizar(Idioma::En)
+            );
+        }
+        let progresos = vec![
+            ProgresoMover::Validando,
+            ProgresoMover::ParandoGitea,
+            ProgresoMover::Renombrando,
+            ProgresoMover::Copiando {
+                ficheros: 1,
+                ficheros_total: 2,
+                bytes: 3,
+                bytes_total: 4,
+            },
+            ProgresoMover::Verificando {
+                hechos: 1,
+                total: 2,
+            },
+            ProgresoMover::Repuntando,
+            ProgresoMover::ArrancandoGitea,
+            ProgresoMover::Confirmando,
+            ProgresoMover::BorrandoOrigen,
+            ProgresoMover::Terminado,
+        ];
+        for progreso in progresos {
+            assert_ne!(
+                progreso.localizar(Idioma::Es),
+                progreso.localizar(Idioma::En)
+            );
+        }
+        let aviso = AvisoMover::OrigenSinBorrar {
+            ruta,
+            motivo: TextoExterno {
+                es: "denegado".into(),
+                en: "denied".into(),
+            },
+        };
+        assert!(aviso.localizar(Idioma::Es).contains("denegado"));
+        assert!(aviso.localizar(Idioma::En).contains("denied"));
+        assert!(aviso.localizar(Idioma::En).contains("/a/b"));
     }
 }

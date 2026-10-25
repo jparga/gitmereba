@@ -21,7 +21,7 @@ pub fn abrir(rutas: Rutas) -> Result<(), tauri::Error> {
     reparar_temporizadores_en_segundo_plano(rutas.clone());
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .manage(EstadoApp { rutas })
+        .manage(EstadoApp::nuevo(rutas))
         .invoke_handler(tauri::generate_handler![
             idioma::idioma,
             idioma::fijar_idioma,

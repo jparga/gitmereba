@@ -119,11 +119,23 @@ pub async fn instalar_unidad(
     login: &Nombre,
     texto: &str,
 ) -> Result<std::path::PathBuf, ErrorInstancia> {
+    let ruta = escribir_unidad(rutas, login, texto)?;
+    ejecutar_systemctl(&["--user", "daemon-reload"]).await?;
+    Ok(ruta)
+}
+
+/// Escribe la unidad de `login` en `rutas.directorio_systemd_usuario()` (0600) sin tocar
+/// systemd: ni `daemon-reload` ni nada más. Para reescribir una unidad ya instalada
+/// cuando se mueve la carpeta de la cuenta; la recarga la hace quien arranca el servicio.
+pub fn escribir_unidad(
+    rutas: &Rutas,
+    login: &Nombre,
+    texto: &str,
+) -> Result<std::path::PathBuf, ErrorInstancia> {
     let ruta = rutas
         .directorio_systemd_usuario()
         .join(nombre_unidad(login));
     fichero::escribir_privado(&ruta, texto.as_bytes())?;
-    ejecutar_systemctl(&["--user", "daemon-reload"]).await?;
     Ok(ruta)
 }
 
@@ -241,7 +253,9 @@ impl ProcesoGitea {
     }
 }
 
-async fn esperar_salud(
+/// Espera hasta 30 s a que `{url_base}/api/healthz` responda con éxito. Con HTTPS,
+/// `certificado_pem` es el único certificado en el que confía.
+pub async fn esperar_salud(
     url_base: &str,
     certificado_pem: Option<&[u8]>,
 ) -> Result<(), ErrorInstancia> {

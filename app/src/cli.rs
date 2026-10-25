@@ -44,6 +44,8 @@ pub enum ComandoCuenta {
     List,
     /// Da de baja una cuenta.
     Rm(CuentaRmArgs),
+    /// Mueve la carpeta de una cuenta a otra y borra la antigua.
+    Mover(CuentaMoverArgs),
     /// Activa, desactiva o consulta el acceso a la cuenta desde la LAN por HTTPS.
     Lan(CuentaLanArgs),
     /// Crea, elimina o lista los usuarios de Gitea para otras personas de la LAN.
@@ -146,6 +148,19 @@ pub struct CuentaRmArgs {
     /// Borra también la carpeta de datos de la cuenta.
     #[arg(long = "borrar-datos")]
     pub borrar_datos: bool,
+
+    /// No pide confirmación escribiendo el login.
+    #[arg(long = "si")]
+    pub si: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct CuentaMoverArgs {
+    /// Login de la cuenta a mover.
+    pub login: String,
+
+    /// Carpeta nueva (ruta absoluta; no existe o está vacía).
+    pub carpeta: PathBuf,
 
     /// No pide confirmación escribiendo el login.
     #[arg(long = "si")]

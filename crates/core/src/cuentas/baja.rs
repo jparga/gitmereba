@@ -68,7 +68,7 @@ pub async fn baja<L: Llavero, Ln: Lanzador>(
 
 /// Comprueba que `carpeta` es de verdad la carpeta de datos de `login` y que borrarla es
 /// seguro (no es la raíz, el HOME ni un ancestro del HOME).
-fn verificar_carpeta_borrable(
+pub(super) fn verificar_carpeta_borrable(
     rutas: &crate::config::Rutas,
     login: &Nombre,
     carpeta: &Path,
@@ -93,7 +93,7 @@ fn verificar_carpeta_borrable(
     Ok(())
 }
 
-fn es_ruta_protegida(rutas: &crate::config::Rutas, canonica: &Path) -> bool {
+pub(super) fn es_ruta_protegida(rutas: &crate::config::Rutas, canonica: &Path) -> bool {
     if canonica == Path::new("/") {
         return true;
     }

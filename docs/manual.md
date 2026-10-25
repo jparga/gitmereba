@@ -48,7 +48,7 @@ la tecla **F1**.
 | **Repositorios** | Lista con estado por repositorio. Incluir o excluir. Dirección de clonado local. |
 | **Contingencia** | Trabajar sin GitHub y devolver los cambios después. |
 | **Actividad** | Historial de sincronizaciones y registro de auditoría. |
-| **Ajustes** | Intervalo, alcance, token, acceso desde la red local, baja, actualización de Gitea. |
+| **Ajustes** | Intervalo, alcance, carpeta de la cuenta, token, acceso desde la red local, baja, actualización de Gitea. |
 | **Acerca de** | Desde el pie de la ventana. Versión, licencia y enlaces; versión de Gitea de cada cuenta; rutas y entorno. «Copiar para informe». |
 
 ### Entrar en Gitea
@@ -171,6 +171,7 @@ gitmereba                         # abre la ventana
 gitmereba cuenta add --login <usuario> --carpeta <ruta>   # pide el token sin mostrarlo
 gitmereba cuenta list
 gitmereba cuenta rm <usuario>                              # no borra los repositorios
+gitmereba cuenta mover <usuario> <carpeta> [--si]          # mueve la carpeta de la cuenta
 gitmereba cuenta lan --login <usuario> --activar | --desactivar | --estado
 gitmereba cuenta usuario --login <usuario> --crear <nombre> | --eliminar <nombre> | --listar
 gitmereba sync <usuario> | --todas [--simulacro]
@@ -207,6 +208,27 @@ gitmereba doctor                  # comprueba el sistema y cada cuenta
 Toda la cuenta está en su carpeta: copiarla entera (con la cuenta parada) es una copia de
 seguridad completa. Para dejar de usar una cuenta, **Ajustes → Dar de baja**; la carpeta se
 queda donde está hasta que la borres tú.
+
+### Mover la carpeta de una cuenta
+
+En **Ajustes → Carpeta de la cuenta** pulsa **Elegir…**, escoge otra y **Guardar**; o, desde
+la terminal, `gitmereba cuenta mover <usuario> <carpeta>`. Pide confirmación, porque **la
+carpeta antigua se borra**. La carpeta nueva debe ser una ruta absoluta que no exista o esté
+vacía, tuya, y no puede estar dentro de la carpeta de otra cuenta ni de la propia (ni al
+revés).
+
+- Se para Gitea (la cuenta no está disponible mientras dura) y, si hay una sincronización en
+  marcha, el movimiento se rechaza: espera a que termine.
+- En el mismo disco es un simple cambio de nombre, instantáneo.
+- A otro disco se copia todo mostrando el progreso, se **verifica** la copia (mismos ficheros,
+  tamaños y permisos, mismas sumas SHA-256 de la base de datos y de la configuración, y
+  `git fsck` de cada repositorio y de las copias de seguridad) y solo entonces se borra la
+  antigua.
+- Después se actualizan la configuración, las unidades de systemd y los repositorios de Gitea,
+  y Gitea arranca en la carpeta nueva. Si algo falla antes de terminar, la cuenta queda como
+  estaba (en la carpeta antigua, funcionando) y se te dice el motivo.
+- Si ya está todo en la carpeta nueva pero no se puede borrar la antigua, se te avisa de qué
+  ruta queda por borrar a mano.
 
 ## 12. Idioma
 

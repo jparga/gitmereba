@@ -73,6 +73,20 @@ impl ErrorUi {
         )
     }
 
+    pub fn cuenta_ocupada(login: &str, idioma: Idioma) -> Self {
+        Self::nuevo(
+            "cuenta_ocupada",
+            match idioma {
+                Idioma::Es => format!(
+                    "la cuenta «{login}» tiene otra operación en curso: espera a que termine"
+                ),
+                Idioma::En => format!(
+                    "the account “{login}” has another operation in progress: wait for it to finish"
+                ),
+            },
+        )
+    }
+
     pub fn interno(mensaje: impl Into<String>) -> Self {
         Self::nuevo("interno", mensaje)
     }

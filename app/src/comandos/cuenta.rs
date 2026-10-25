@@ -1,4 +1,4 @@
-//! `gitmereba cuenta add|list|rm`.
+//! `gitmereba cuenta add|list|rm|mover|lan|usuario`.
 
 use std::collections::BTreeMap;
 use std::io::{IsTerminal, Write};
@@ -7,7 +7,7 @@ use super::abrir_almacen;
 use gitmereba_core::config::{self, Rutas};
 use gitmereba_core::cuentas::{
     self, AprovisionadorReal, Contexto, ErrorCuentas, EstadoPaso, InformeLan, Lanzador,
-    LanzadorPrimerPlano, LanzadorSystemd, PasoAlta, Previsualizacion, SolicitudAlta,
+    LanzadorPrimerPlano, LanzadorSystemd, PasoAlta, Previsualizacion, ProgresoMover, SolicitudAlta,
 };
 use gitmereba_core::gitea::ClienteGitea;
 use gitmereba_core::github::ClienteGithub;
@@ -15,7 +15,9 @@ use gitmereba_core::idioma::{Idioma, Localizable, idioma_actual};
 use gitmereba_core::modelo::{Alcance, Nombre, NombreHostInterno};
 use gitmereba_core::secretos::{ClaveSecreto, Llavero, LlaveroDelSistema, Secreto};
 
-use crate::cli::{ComandoCuenta, CuentaAddArgs, CuentaLanArgs, CuentaRmArgs, CuentaUsuarioArgs};
+use crate::cli::{
+    ComandoCuenta, CuentaAddArgs, CuentaLanArgs, CuentaMoverArgs, CuentaRmArgs, CuentaUsuarioArgs,
+};
 use crate::salida;
 use crate::textos_cli::TextoCli;
 
@@ -26,6 +28,7 @@ pub async fn ejecutar(accion: ComandoCuenta, rutas: &Rutas) -> u8 {
         ComandoCuenta::Add(args) => add(args, rutas).await,
         ComandoCuenta::List => list(rutas).await,
         ComandoCuenta::Rm(args) => rm(args, rutas).await,
+        ComandoCuenta::Mover(args) => mover(args, rutas).await,
         ComandoCuenta::Lan(args) => lan(args, rutas).await,
         ComandoCuenta::Usuario(args) => usuario(args, rutas).await,
     }
@@ -240,6 +243,112 @@ async fn rm(args: CuentaRmArgs, rutas: &Rutas) -> u8 {
                 &mut stdout,
                 &TextoCli::CuentaBaja(login.to_string()).texto(idioma),
             );
+            0
+        }
+        Err(error) => emitir_error(idioma, &error),
+    }
+}
+
+async fn mover(args: CuentaMoverArgs, rutas: &Rutas) -> u8 {
+    let idioma = idioma_actual(rutas);
+    let login = match Nombre::nuevo(args.login.as_str()) {
+        Ok(login) => login,
+        Err(error) => {
+            return fallo_uso(&TextoCli::LoginInvalido(error.localizar(idioma)).texto(idioma));
+        }
+    };
+    if !args.carpeta.is_absolute() {
+        return fallo_uso(&TextoCli::CarpetaNoAbsoluta.texto(idioma));
+    }
+    // Se valida antes de pedir confirmación: no tiene sentido confirmar algo que no se puede hacer.
+    let previa = match cuentas::previsualizar_mover(rutas, &login, &args.carpeta) {
+        Ok(previa) => previa,
+        Err(error) => return emitir_error(idioma, &error),
+    };
+    if !args.si
+        && !confirmar_texto(
+            &TextoCli::ConfirmarMover(
+                login.to_string(),
+                previa.origen.display().to_string(),
+                previa.destino.display().to_string(),
+            )
+            .texto(idioma),
+            login.as_str(),
+        )
+    {
+        let mut stdout = std::io::stdout().lock();
+        salida::linea(&mut stdout, &TextoCli::MovimientoCancelado.texto(idioma));
+        return 0;
+    }
+
+    let llavero = match LlaveroDelSistema::nuevo() {
+        Ok(llavero) => llavero,
+        Err(error) => {
+            return fallo(&TextoCli::LlaveroInaccesible(error.localizar(idioma)).texto(idioma));
+        }
+    };
+    let almacen = match abrir_almacen(rutas) {
+        Ok(almacen) => almacen,
+        Err(error) => {
+            return fallo(&TextoCli::AlmacenInaccesible(error.localizar(idioma)).texto(idioma));
+        }
+    };
+    let ejecutable = match gitmereba_core::entorno::ruta_ejecutable_persistente() {
+        Ok(ruta) => ruta,
+        Err(error) => return fallo(&error.to_string()),
+    };
+    let contexto = Contexto::nuevo(rutas, &llavero, &almacen);
+
+    // Las fases se imprimen una vez; la copia, cada 10 % de ficheros.
+    let mut ultima_fase = None;
+    let mut ultimo_decil = None;
+    let mut al_progresar = |progreso: ProgresoMover| {
+        let (fase, decil) = match progreso {
+            ProgresoMover::Copiando {
+                ficheros,
+                ficheros_total,
+                ..
+            } => (
+                std::mem::discriminant(&progreso),
+                Some(ficheros * 10 / ficheros_total.max(1)),
+            ),
+            ProgresoMover::Verificando { hechos, total } => (
+                std::mem::discriminant(&progreso),
+                Some(hechos * 10 / total.max(1)),
+            ),
+            _ => (std::mem::discriminant(&progreso), None),
+        };
+        if ultima_fase == Some(fase) && ultimo_decil == Some(decil) {
+            return;
+        }
+        ultima_fase = Some(fase);
+        ultimo_decil = Some(decil);
+        let mut stdout = std::io::stdout().lock();
+        salida::linea(&mut stdout, &progreso.localizar(idioma));
+    };
+
+    match cuentas::mover_carpeta(
+        &contexto,
+        &LanzadorSystemd,
+        &login,
+        &previa.destino,
+        &ejecutable,
+        &mut al_progresar,
+    )
+    .await
+    {
+        Ok(resultado) => {
+            let mut stdout = std::io::stdout().lock();
+            salida::linea(
+                &mut stdout,
+                &TextoCli::CuentaMovida(login.to_string(), resultado.destino.display().to_string())
+                    .texto(idioma),
+            );
+            drop(stdout);
+            let mut stderr = std::io::stderr().lock();
+            for aviso in &resultado.avisos {
+                let _ = writeln!(stderr, "{}", aviso.localizar(idioma));
+            }
             0
         }
         Err(error) => emitir_error(idioma, &error),
@@ -538,19 +647,23 @@ fn confirmar(pregunta: &str, idioma: Idioma) -> bool {
 }
 
 fn confirmar_login(login: &str, idioma: Idioma) -> bool {
+    confirmar_texto(
+        &TextoCli::ConfirmarBaja(login.to_string()).texto(idioma),
+        login,
+    )
+}
+
+/// Escribe `pregunta` y devuelve si el usuario contesta exactamente `esperado`.
+fn confirmar_texto(pregunta: &str, esperado: &str) -> bool {
     let mut stdout = std::io::stdout().lock();
-    let _ = write!(
-        stdout,
-        "{}",
-        TextoCli::ConfirmarBaja(login.to_string()).texto(idioma)
-    );
+    let _ = write!(stdout, "{pregunta}");
     let _ = stdout.flush();
     drop(stdout);
     let mut linea = String::new();
     if std::io::stdin().read_line(&mut linea).is_err() {
         return false;
     }
-    linea.trim() == login
+    linea.trim() == esperado
 }
 
 fn mostrar_previsualizacion(previsualizacion: &Previsualizacion, idioma: Idioma) {

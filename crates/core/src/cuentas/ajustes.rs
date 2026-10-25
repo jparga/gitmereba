@@ -1,6 +1,6 @@
 //! Ajustes editables de una cuenta ya dada de alta: intervalo de sincronización y
 //! alcance (pantalla Ajustes). El cambio de carpeta no se hace aquí: mover los
-//! datos con Gitea en marcha necesita un diseño aparte.
+//! datos con Gitea en marcha es [`super::mover_carpeta`].
 
 use crate::almacen::Almacen;
 use crate::config::{self, RutasCuenta, validar_intervalo};
