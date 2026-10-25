@@ -18,7 +18,9 @@ const VISTAS = {
 function leerRuta() {
   const hash = globalThis.location.hash.replace(/^#\/?/, '');
   const [ruta, resto] = hash.split('?');
-  return { ruta: VISTAS[ruta] ? ruta : RUTA_POR_DEFECTO, parametros: new URLSearchParams(resto ?? '') };
+  // Solo claves propias: `#/constructor` o `#/__proto__` no deben resolver a lo heredado de Object.
+  const conocida = Object.hasOwn(VISTAS, ruta);
+  return { ruta: conocida ? ruta : RUTA_POR_DEFECTO, parametros: new URLSearchParams(resto ?? '') };
 }
 
 /**

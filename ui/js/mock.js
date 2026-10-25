@@ -314,11 +314,10 @@ function nombreUsuarioLanValido(nombre) {
 // Contraseña de ejemplo de 32 caracteres, imitando lo que genera Gitea de verdad.
 function passwordLanDeEjemplo() {
   const alfabeto = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
-  let password = '';
-  for (let i = 0; i < 32; i += 1) {
-    password += alfabeto[Math.floor(Math.random() * alfabeto.length)];
-  }
-  return password;
+  // Aunque sea un doble de pruebas, una contraseña sale siempre de un generador criptográfico.
+  // El sesgo del módulo (256 % 57) es irrelevante para un dato de ejemplo.
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return Array.from(bytes, (b) => alfabeto[b % alfabeto.length]).join('');
 }
 
 // Simula el clonado de Gitea: tras unas cuantas consultas, el repo pendiente termina.
