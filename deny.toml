@@ -12,6 +12,11 @@ ignore = [
     { id = "RUSTSEC-2025-0080", reason = "unic-common: transitiva de urlpattern (Tauri); tablas Unicode estáticas" },
     { id = "RUSTSEC-2025-0100", reason = "unic-ucd-ident: transitiva de urlpattern (Tauri); tablas Unicode estáticas" },
     { id = "RUSTSEC-2025-0098", reason = "unic-ucd-version: transitiva de urlpattern (Tauri); tablas Unicode estáticas" },
+    # Sin mantenimiento (no vulnerabilidad), sin versión sustituta: piezas de zbus, que llega por
+    # el llavero (secret-service), las notificaciones y el diálogo de carpeta. Revisar al subir zbus.
+    { id = "RUSTSEC-2026-0370", reason = "zvariant: transitiva de zbus (llavero, notificaciones, diálogo)" },
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names: transitiva de zbus (llavero, notificaciones, diálogo)" },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive: transitiva de zbus (llavero, notificaciones, diálogo)" },
 ]
 
 [licenses]
