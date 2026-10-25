@@ -36,8 +36,10 @@ const TIEMPO_LIMITE_SYSTEMCTL: Duration = Duration::from_secs(30);
 /// Parámetros para generar y gestionar el timer de sincronización de una cuenta.
 pub struct ParametrosTemporizador<'a> {
     pub login: &'a Nombre,
-    /// Ruta absoluta del ejecutable de `gitmereba` (`std::env::current_exe()`, a cargo
-    /// del llamador: este módulo no decide cómo se localiza el propio binario).
+    /// Ruta absoluta y persistente del ejecutable de `gitmereba`
+    /// (`entorno::ruta_ejecutable_persistente()`, a cargo del llamador: este módulo no
+    /// decide cómo se localiza el propio binario). Dentro de un AppImage es el propio
+    /// `.AppImage`, no el montaje temporal.
     pub ruta_ejecutable: &'a Path,
     /// Carpeta raíz de la cuenta, para `ReadWritePaths`.
     pub carpeta_cuenta: &'a Path,
@@ -76,6 +78,13 @@ fn escapar_valor(valor: &str) -> String {
 /// <login>`, ordenado después de la unidad de Gitea de la cuenta (`After=`/`Wants=`), con
 /// prioridad de CPU y E/S baja (`Nice=10`, `IOSchedulingClass=idle`) y un límite de
 /// arranque generoso (`TimeoutStartSec=30min`, para cuentas con muchos repos).
+/// `APPIMAGE_EXTRACT_AND_RUN=1` hace que, si el ejecutable es un AppImage, se extraiga en
+/// vez de montarse con FUSE (que el sandbox no permite); con un binario normal no tiene
+/// efecto. El runtime extrae en `$TMPDIR/appimage_extracted_<hash>` (un nombre predecible y
+/// que reutiliza si ya existe), y en unidades de usuario AppArmor puede anular
+/// `PrivateTmp=` sin avisar, dejando el `/tmp` real compartido: por eso la unidad tiene su
+/// propio `TMPDIR` en un `RuntimeDirectory=` de modo 0700 (`%t/gitmereba-sync-<login>`,
+/// que systemd crea al arrancar y borra al terminar).
 pub fn generar_servicio_sync(parametros: &ParametrosTemporizador<'_>) -> String {
     let gitea_unit = nombre_unidad(parametros.login);
     let exec_start = format!(
@@ -98,6 +107,10 @@ pub fn generar_servicio_sync(parametros: &ParametrosTemporizador<'_>) -> String 
          [Service]\n\
          Type=oneshot\n\
          ExecStart={exec_start}\n\
+         Environment=APPIMAGE_EXTRACT_AND_RUN=1\n\
+         RuntimeDirectory={directorio_runtime}\n\
+         RuntimeDirectoryMode=0700\n\
+         Environment=TMPDIR=%t/{directorio_runtime}\n\
          Nice=10\n\
          IOSchedulingClass=idle\n\
          TimeoutStartSec=30min\n\
@@ -123,6 +136,7 @@ pub fn generar_servicio_sync(parametros: &ParametrosTemporizador<'_>) -> String 
          KeyringMode=private\n\
          ProtectHostname=yes\n",
         login = parametros.login,
+        directorio_runtime = format!("gitmereba-sync-{}", parametros.login),
     )
 }
 
@@ -325,6 +339,37 @@ mod tests {
         ));
         assert!(unidad.contains("ExecStart=/usr/bin/gitmereba sync jparga"));
         assert!(unidad.contains("Type=oneshot"));
+    }
+
+    #[test]
+    fn el_servicio_pide_extraer_y_ejecutar_por_si_el_ejecutable_es_un_appimage() {
+        let login = nombre("jparga");
+        let unidad = generar_servicio_sync(&parametros(
+            &login,
+            Path::new("/home/u/gitmereba.AppImage"),
+            Path::new("/cuentas/jparga"),
+            Path::new("/datos/gitmereba"),
+            30,
+        ));
+        assert!(unidad.contains("Environment=APPIMAGE_EXTRACT_AND_RUN=1\n"));
+    }
+
+    #[test]
+    fn el_servicio_tiene_un_tmpdir_privado_0700_por_cuenta() {
+        for (login, ruta) in [("jparga", "a"), ("otra", "b")] {
+            let login = nombre(login);
+            let unidad = generar_servicio_sync(&parametros(
+                &login,
+                Path::new(ruta),
+                Path::new("/cuentas/x"),
+                Path::new("/datos/gitmereba"),
+                30,
+            ));
+            let directorio = format!("gitmereba-sync-{login}");
+            assert!(unidad.contains(&format!("RuntimeDirectory={directorio}\n")));
+            assert!(unidad.contains("RuntimeDirectoryMode=0700\n"));
+            assert!(unidad.contains(&format!("Environment=TMPDIR=%t/{directorio}\n")));
+        }
     }
 
     #[test]

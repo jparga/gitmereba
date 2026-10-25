@@ -101,6 +101,14 @@ Download the `.deb` from [Releases](https://github.com/jparga/gitmereba/releases
 sudo apt install ./gitmereba_<version>_amd64.deb
 ```
 
+No root or `apt`? Each release also has an AppImage (x86_64, needs `git` installed):
+
+```bash
+chmod +x gitmereba_<version>_x86_64.AppImage && ./gitmereba_<version>_x86_64.AppImage
+```
+
+Keep the file where it is: the sync timers of your accounts point to it.
+
 Each release ships a `SHA256SUMS` file and a build provenance attestation, so you can check
 that the package was built from this repository:
 

@@ -27,6 +27,7 @@ cargo build --release -p gitmereba      # deja el binario en target/release/gitm
 ```bash
 scripts/empaquetar.sh          # compila y construye target/paquetes/gitmereba_<versión>_amd64.deb
 scripts/empaquetar.sh --tar    # además, un .tar.gz genérico para distribuciones sin dpkg
+scripts/empaquetar.sh --appimage   # además, un AppImage (target/paquetes/gitmereba_<versión>_x86_64.AppImage)
 
 sudo apt install ./target/paquetes/gitmereba_<versión>_amd64.deb
 ```
@@ -34,6 +35,33 @@ sudo apt install ./target/paquetes/gitmereba_<versión>_amd64.deb
 El paquete instala `/usr/bin/gitmereba`, el lanzador de escritorio y los iconos.
 `apt` instala también las dependencias (`libwebkit2gtk-4.1-0`, `libgtk-3-0`, `git`).
 Para desinstalarlo: `sudo apt remove gitmereba`.
+
+### AppImage
+
+`--appimage` (solo x86_64) descarga `linuxdeploy`, su plugin gtk, `appimagetool` y el runtime type2 a
+`target/herramientas-appimage/`. Son versiones concretas y sus SHA-256 están fijados en
+`empaquetado/appimage/herramientas.sha256`: se comprueban antes de darles permisos de
+ejecución y, si no coinciden, se borra la descarga y el script aborta. Además de las
+dependencias de compilación necesita `curl`, `file`, `patchelf`, `libglib2.0-bin`,
+`libglib2.0-dev-bin`, `libgdk-pixbuf2.0-bin`, `libgtk-3-bin` y `librsvg2-common`:
+
+```bash
+sudo apt install curl file patchelf libglib2.0-bin libglib2.0-dev-bin libgdk-pixbuf2.0-bin libgtk-3-bin librsvg2-common
+```
+
+El AppImage lleva dentro GTK y WebKitGTK, pero no `git` (usa el del sistema) ni Gitea (la
+app lo descarga). Constrúyelo en la distribución más antigua que quieras soportar (las
+publicadas se construyen en Ubuntu 24.04): el AppImage no funciona en sistemas con una glibc
+más antigua que la del equipo de compilación. Para ejecutarlo:
+
+```bash
+chmod +x gitmereba_<versión>_x86_64.AppImage
+./gitmereba_<versión>_x86_64.AppImage            # sin FUSE: añade --appimage-extract-and-run
+```
+
+Los temporizadores de las cuentas apuntan al propio fichero `.AppImage` (no al montaje
+temporal): no lo muevas ni lo borres mientras tengas cuentas dadas de alta. Si lo mueves,
+al abrirlo desde la nueva ubicación se corrigen solos.
 
 ## 4. Instalar sin permisos de administrador
 

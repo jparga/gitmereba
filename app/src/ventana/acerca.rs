@@ -123,7 +123,7 @@ pub async fn acerca_de(estado: State<'_, EstadoApp>) -> Result<AcercaDeDto, Erro
             &rutas,
             idioma,
             entorno::nombre_sistema(Path::new(OS_RELEASE)),
-            std::env::current_exe().ok(),
+            gitmereba_core::entorno::ruta_ejecutable_persistente().ok(),
             cuentas,
         ))
     })

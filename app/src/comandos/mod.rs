@@ -6,7 +6,7 @@ pub mod status;
 pub mod sync;
 
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use clap::CommandFactory;
 use gitmereba_core::almacen::{Almacen, ErrorAlmacen};
@@ -64,9 +64,16 @@ pub async fn ejecutar(cli: Cli, rutas: &Rutas, idioma: Idioma) -> u8 {
     }
 }
 
+/// Ruta absoluta respecto al directorio actual de ahora. Las rutas de `Rutas` se fijan
+/// antes de que la ventana (dentro de un AppImage) cambie de directorio de trabajo; una
+/// relativa acabaría apuntando al AppDir. Si no se puede resolver, se deja como está.
+fn hacer_absoluta(ruta: &Path) -> PathBuf {
+    std::path::absolute(ruta).unwrap_or_else(|_| ruta.to_path_buf())
+}
+
 pub(crate) fn construir_rutas(datos: Option<&Path>) -> Rutas {
     match datos {
-        Some(raiz) => Rutas::con_raiz(raiz),
+        Some(raiz) => Rutas::con_raiz(hacer_absoluta(raiz)),
         None => match Rutas::del_sistema() {
             Ok(rutas) => rutas,
             Err(error) => {
@@ -77,7 +84,7 @@ pub(crate) fn construir_rutas(datos: Option<&Path>) -> Rutas {
                 // No hay HOME: no hay una raíz razonable. Se usa el directorio actual
                 // para que los comandos sigan pudiendo ejecutarse (y fallar con un
                 // mensaje claro) en vez de entrar en pánico aquí.
-                Rutas::con_raiz(".")
+                Rutas::con_raiz(hacer_absoluta(Path::new(".")))
             }
         },
     }
@@ -98,6 +105,23 @@ mod tests {
     use super::*;
     use crate::cli::Cli;
     use clap::Parser;
+
+    #[test]
+    fn datos_relativos_se_vuelven_absolutos() {
+        let rutas = construir_rutas(Some(Path::new("relativo/datos")));
+        assert!(rutas.directorio_datos().is_absolute());
+        assert!(rutas.directorio_home().is_absolute());
+        assert!(
+            rutas
+                .directorio_datos()
+                .starts_with(std::env::current_dir().unwrap())
+        );
+    }
+
+    #[test]
+    fn la_reserva_sin_home_tampoco_es_relativa() {
+        assert!(hacer_absoluta(Path::new(".")).is_absolute());
+    }
 
     #[tokio::test]
     async fn sin_subcomando_sale_con_exito() {

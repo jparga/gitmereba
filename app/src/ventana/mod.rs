@@ -73,7 +73,7 @@ fn reparar_temporizadores_en_segundo_plano(rutas: Rutas) {
         else {
             return;
         };
-        let Ok(ejecutable) = std::env::current_exe() else {
+        let Ok(ejecutable) = gitmereba_core::entorno::ruta_ejecutable_persistente() else {
             return;
         };
         let Ok(indice) = config::leer_indice_cuentas(&rutas) else {
