@@ -13,7 +13,7 @@ Todos los cambios relevantes de gitmereba. Formato basado en
 - Actualizadas dependencias con avisos de seguridad: `rustls` 0.23.46 (exposición de secretos TLS
   en `Debug`, degradación del intercambio de claves, datos enviados tras un rechazo de ECH y
   descompresión de certificados sin límite), `rustls-webpki` 0.103.16 (intermedios desconfiados
-  aceptados), `ctutils` 0.4.5 (comparaciones en tiempo no constante) y `tokio` 1.54.1
+  aceptados), `ctutils` 0.4.5 (comparaciones en tiempo no constante), `tokio` 1.54.1
   (`AsyncFd::new` incumplía la seguridad de E/S) y `webpki-root-certs` 1.0.11 (raíces que daban
   por buenos intermedios emSign desconfiados).
 
