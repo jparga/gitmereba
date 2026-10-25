@@ -49,6 +49,12 @@ pub async fn baja<L: Llavero, Ln: Lanzador>(
 
     indice.cuentas.remove(login.as_str());
     config::escribir_indice_cuentas(contexto.rutas, &indice)?;
+    // Una marca de movimiento interrumpido ya no tiene cuenta a la que referirse; si se
+    // quedara, `doctor` seguiría avisando y un alta nueva con el mismo login no podría
+    // mover su carpeta.
+    if let Err(error) = super::marca_mover::borrar_marca(contexto.rutas, login) {
+        tracing::warn!(%error, "no se pudo borrar la marca de movimiento en curso");
+    }
 
     contexto.llavero.borrar_cuenta(login)?;
     contexto.almacen.borrar_estados_de(login)?;
@@ -186,6 +192,29 @@ mod tests {
                 .expect("leer")
                 .is_none()
         );
+    }
+
+    #[tokio::test]
+    async fn baja_borra_la_marca_de_un_movimiento_interrumpido() {
+        let temporal = tempfile::tempdir().expect("directorio temporal");
+        let (rutas, carpeta) = preparar_cuenta(temporal.path(), "jparga");
+        let llavero = LlaveroEnMemoria::nuevo();
+        let almacen = Almacen::en_memoria().expect("almacén en memoria");
+        let login = nombre("jparga");
+        let marca = crate::cuentas::marca_mover::MarcaMover {
+            login: "jparga".to_string(),
+            origen: carpeta.clone(),
+            destino: temporal.path().join("destino"),
+            modo: "copia".to_string(),
+        };
+        crate::cuentas::marca_mover::escribir_marca(&rutas, &marca).expect("escribir marca");
+        let contexto = Contexto::nuevo(&rutas, &llavero, &almacen);
+
+        baja(&contexto, &LanzadorDoble::default(), &login, false)
+            .await
+            .expect("baja no falla");
+
+        assert!(crate::cuentas::marca_mover::marcas_pendientes(&rutas).is_empty());
     }
 
     #[tokio::test]

@@ -223,8 +223,10 @@ pub async fn mover_carpeta_con<L: Llavero, Ln: Lanzador, R: Renombrador>(
             tracing::warn!(%problema, "no se pudo deshacer del todo el movimiento de la carpeta");
         }
         // Solo si todo quedó como estaba: si no, la marca se queda para que `doctor` avise.
-        if problemas.is_empty() {
-            let _ = borrar_marca(rutas, login);
+        if problemas.is_empty()
+            && let Err(error) = borrar_marca(rutas, login)
+        {
+            tracing::warn!(%error, "no se pudo borrar la marca de movimiento en curso");
         }
         let _ = contexto.almacen.auditar(
             Some(login),
