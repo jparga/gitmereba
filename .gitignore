@@ -24,3 +24,9 @@ secrets/
 .vscode/
 *.swp
 .DS_Store
+
+# Descargas de una release en la raíz (sumas y paquetes), para verificarlas a mano
+/SHA256SUMS
+/gitmereba_*.deb
+/gitmereba_*.tar.gz
+/gitmereba_*.AppImage
