@@ -472,23 +472,23 @@ mod tests {
 
     #[test]
     fn url_enlace_construye_los_cuatro_destinos() {
-        let repo = "https://github.com/jparga/gitmereba";
+        let repo = "https://github.com/me-re-ba/gitmereba";
         let url = |enlace| url_enlace(enlace, repo, "0.8.0").unwrap().to_string();
         assert_eq!(
             url(Enlace::Repositorio),
-            "https://github.com/jparga/gitmereba"
+            "https://github.com/me-re-ba/gitmereba"
         );
         assert_eq!(
             url(Enlace::Release),
-            "https://github.com/jparga/gitmereba/releases/tag/v0.8.0"
+            "https://github.com/me-re-ba/gitmereba/releases/tag/v0.8.0"
         );
         assert_eq!(
             url(Enlace::Seguridad),
-            "https://github.com/jparga/gitmereba/blob/main/SECURITY.md"
+            "https://github.com/me-re-ba/gitmereba/blob/main/SECURITY.md"
         );
         assert_eq!(
             url(Enlace::Marcas),
-            "https://github.com/jparga/gitmereba/blob/main/TRADEMARKS.md"
+            "https://github.com/me-re-ba/gitmereba/blob/main/TRADEMARKS.md"
         );
     }
 

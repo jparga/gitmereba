@@ -81,7 +81,7 @@ puesta_en_escena() {
     cat > "$destino/usr/share/doc/gitmereba/copyright" <<EOF
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: gitmereba
-Source: https://github.com/jparga/gitmereba
+Source: https://github.com/me-re-ba/gitmereba
 
 Files: *
 Copyright: 2026 Jacinto Parga (MEREBA)
@@ -114,7 +114,7 @@ Version: $version
 Architecture: $arquitectura
 Installed-Size: $tamano_instalado_kb
 Maintainer: ${MANTENEDOR:-Jacinto Parga <jparga@mereba.com>}
-Homepage: https://github.com/jparga/gitmereba
+Homepage: https://github.com/me-re-ba/gitmereba
 Section: vcs
 Priority: optional
 Depends: libwebkit2gtk-4.1-0, libgtk-3-0, git
