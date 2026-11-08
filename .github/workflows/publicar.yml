@@ -149,7 +149,7 @@ jobs:
             echo
             echo '```bash'
             echo "sha256sum -c SHA256SUMS --ignore-missing"
-            echo "gh attestation verify gitmereba_${VERSION}_amd64.deb --repo jparga/gitmereba"
+            echo "gh attestation verify gitmereba_${VERSION}_amd64.deb --repo me-re-ba/gitmereba"
             echo '```'
           } > "$notas"
           echo "NOTAS=$notas" >> "$GITHUB_ENV"
