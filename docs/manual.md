@@ -18,7 +18,7 @@ guardan en el llavero del sistema y nada se borra sin que lo decidas tú.
 ## 2. Instalación
 
 Descarga el `.deb` de la página de
-[versiones](https://github.com/jparga/gitmereba/releases) e instálalo con
+[versiones](https://github.com/me-re-ba/gitmereba/releases) e instálalo con
 `sudo apt install ./gitmereba_<versión>_amd64.deb`. Para compilarlo tú, instalar sin
 permisos de administrador o fijar gitmereba al dock de Ubuntu, consulta
 [`compilar.md`](compilar.md).

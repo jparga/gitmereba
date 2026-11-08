@@ -4,7 +4,7 @@
 
 Mantén un clon local y operativo de tus cuentas de GitHub sobre un Gitea nativo, y sigue haciendo `push` cuando GitHub cae.
 
-[![CI](https://github.com/jparga/gitmereba/actions/workflows/ci.yml/badge.svg)](https://github.com/jparga/gitmereba/actions/workflows/ci.yml)
+[![CI](https://github.com/me-re-ba/gitmereba/actions/workflows/ci.yml/badge.svg)](https://github.com/me-re-ba/gitmereba/actions/workflows/ci.yml)
 ![Licencia: GPL-3.0](https://img.shields.io/badge/licencia-GPL--3.0--or--later-blue)
 ![Plataforma: Linux](https://img.shields.io/badge/plataforma-Linux-lightgrey)
 ![Rust](https://img.shields.io/badge/hecho%20con-Rust-orange)
@@ -99,7 +99,7 @@ basada en la descripción pública de cada proyecto; consulta su documentación.
 
 ## Instalación
 
-Descarga el `.deb` de [Releases](https://github.com/jparga/gitmereba/releases) e instálalo:
+Descarga el `.deb` de [Releases](https://github.com/me-re-ba/gitmereba/releases) e instálalo:
 
 ```bash
 sudo apt install ./gitmereba_<versión>_amd64.deb
@@ -118,7 +118,7 @@ que compruebes que el paquete se generó desde este repositorio:
 
 ```bash
 sha256sum -c SHA256SUMS --ignore-missing
-gh attestation verify gitmereba_<versión>_amd64.deb --repo jparga/gitmereba
+gh attestation verify gitmereba_<versión>_amd64.deb --repo me-re-ba/gitmereba
 ```
 
 Necesitas Linux con escritorio (probado en Ubuntu 24.04) y un llavero activo (GNOME Keyring o

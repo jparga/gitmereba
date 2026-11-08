@@ -4,7 +4,7 @@
 
 Keep a local, working clone of your GitHub accounts on a native Gitea, and keep pushing when GitHub is down.
 
-[![CI](https://github.com/jparga/gitmereba/actions/workflows/ci.yml/badge.svg)](https://github.com/jparga/gitmereba/actions/workflows/ci.yml)
+[![CI](https://github.com/me-re-ba/gitmereba/actions/workflows/ci.yml/badge.svg)](https://github.com/me-re-ba/gitmereba/actions/workflows/ci.yml)
 ![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)
 ![Platform: Linux](https://img.shields.io/badge/platform-Linux-lightgrey)
 ![Rust](https://img.shields.io/badge/built%20with-Rust-orange)
@@ -95,7 +95,7 @@ team server. Pick the other tools if you need those things; they are good at the
 
 ## Installation
 
-Download the `.deb` from [Releases](https://github.com/jparga/gitmereba/releases) and install it:
+Download the `.deb` from [Releases](https://github.com/me-re-ba/gitmereba/releases) and install it:
 
 ```bash
 sudo apt install ./gitmereba_<version>_amd64.deb
@@ -114,7 +114,7 @@ that the package was built from this repository:
 
 ```bash
 sha256sum -c SHA256SUMS --ignore-missing
-gh attestation verify gitmereba_<version>_amd64.deb --repo jparga/gitmereba
+gh attestation verify gitmereba_<version>_amd64.deb --repo me-re-ba/gitmereba
 ```
 
 You need a Linux desktop (tested on Ubuntu 24.04) with an active keyring (GNOME Keyring or

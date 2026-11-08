@@ -13,7 +13,7 @@ correcciones de seguridad.
 ## Cómo informar de una vulnerabilidad
 
 **No abras un issue público.** Usa el aviso privado de GitHub:
-[Report a vulnerability](https://github.com/jparga/gitmereba/security/advisories/new).
+[Report a vulnerability](https://github.com/me-re-ba/gitmereba/security/advisories/new).
 
 Incluye, si puedes:
 
@@ -50,7 +50,7 @@ repositories and a Gitea server that may be shared on your local network.
 **Supported versions:** while below 1.0, only the latest release receives security fixes.
 
 **Reporting:** do **not** open a public issue. Use GitHub's private reporting:
-[Report a vulnerability](https://github.com/jparga/gitmereba/security/advisories/new).
+[Report a vulnerability](https://github.com/me-re-ba/gitmereba/security/advisories/new).
 Include the version, your distribution, impact and preconditions, and reproduction steps.
 Never include real tokens, passwords or data.
 
