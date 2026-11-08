@@ -1,7 +1,7 @@
 # Compilar e instalar desde el código
 
 Lo normal es instalar el paquete `.deb` de la página de
-[versiones](https://github.com/jparga/gitmereba/releases). Esta guía es para compilarlo tú.
+[versiones](https://github.com/me-re-ba/gitmereba/releases). Esta guía es para compilarlo tú.
 
 ## 1. Requisitos
 

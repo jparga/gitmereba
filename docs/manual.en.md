@@ -17,7 +17,7 @@ kept in the system keyring and nothing is deleted unless you decide so.
 
 ## 2. Installation
 
-Download the `.deb` from the [releases](https://github.com/jparga/gitmereba/releases) page and
+Download the `.deb` from the [releases](https://github.com/me-re-ba/gitmereba/releases) page and
 install it with `sudo apt install ./gitmereba_<version>_amd64.deb`. To build it yourself,
 install without administrator rights or pin gitmereba to the Ubuntu dock, see
 [`compilar.md`](compilar.md) (in Spanish).
