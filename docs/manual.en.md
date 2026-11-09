@@ -221,7 +221,8 @@ administrator, and you do it with `sudo`.
 
 The profile starts in `complain` mode: it only logs what it would deny and blocks nothing.
 After using the app for a while, check the logs with `journalctl -k | grep apparmor`. If no
-legitimate access was denied, switch it to `enforce`:
+legitimate access was denied, switch it to `enforce`. Before that, try a `git push` to the
+local Gitea while it is still in `complain`:
 
 ```bash
 sudo aa-enforce gitmereba-gitea

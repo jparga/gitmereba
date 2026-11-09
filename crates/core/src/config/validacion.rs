@@ -64,23 +64,66 @@ pub(crate) fn caracter_no_permitido_en_carpeta(texto: &str) -> Option<char> {
         .find(|c| c.is_control() || CARACTERES_RESERVADOS.contains(c))
 }
 
-/// Canonicaliza la parte existente de `ruta` (resolviendo enlaces simbólicos) y le añade
-/// el resto, que aún no existe, tal cual. La ruta no debe contener `..`.
-pub(crate) fn canonica_hasta_donde_existe(ruta: &Path) -> std::path::PathBuf {
+/// Máximo de enlaces simbólicos colgantes que se siguen al resolver una ruta.
+const MAX_SALTOS_ENLACE: u32 = 40;
+
+/// Normaliza léxicamente `ruta` (quita `.` y resuelve `..`) sin tocar el disco.
+fn normalizar_lexicamente(ruta: &Path) -> std::path::PathBuf {
+    let mut resultado = std::path::PathBuf::new();
+    for componente in ruta.components() {
+        match componente {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                resultado.pop();
+            }
+            otro => resultado.push(otro.as_os_str()),
+        }
+    }
+    resultado
+}
+
+/// Canonicaliza la parte existente de `ruta` (resolviendo enlaces simbólicos, también los
+/// colgantes) y le añade el resto, que aún no existe, tal cual. La ruta no debe contener
+/// `..`.
+///
+/// # Errors
+///
+/// `Io` si se encadenan más de 40 enlaces simbólicos (p. ej. un bucle).
+pub(crate) fn canonica_hasta_donde_existe(ruta: &Path) -> Result<std::path::PathBuf, ErrorConfig> {
     let mut resto = Vec::new();
-    let mut actual = ruta;
+    let mut actual = ruta.to_path_buf();
+    let mut saltos = 0;
     loop {
         if let Ok(canonica) = actual.canonicalize() {
             let mut resultado = canonica;
             resultado.extend(resto.iter().rev());
-            return resultado;
+            return Ok(resultado);
+        }
+        // Un enlace colgante no se puede canonicalizar: se sigue a mano para que no pase
+        // por un componente inexistente.
+        if fs::symlink_metadata(&actual).is_ok_and(|m| m.file_type().is_symlink())
+            && let Ok(destino) = fs::read_link(&actual)
+        {
+            saltos += 1;
+            if saltos > MAX_SALTOS_ENLACE {
+                return Err(ErrorConfig::Io(
+                    "demasiados enlaces simbólicos encadenados en la carpeta de destino"
+                        .to_string(),
+                ));
+            }
+            let absoluto = match actual.parent() {
+                Some(padre) if destino.is_relative() => padre.join(destino),
+                _ => destino,
+            };
+            actual = normalizar_lexicamente(&absoluto);
+            continue;
         }
         match (actual.parent(), actual.file_name()) {
             (Some(padre), Some(nombre)) => {
-                resto.push(nombre);
-                actual = padre;
+                resto.push(nombre.to_os_string());
+                actual = padre.to_path_buf();
             }
-            _ => return ruta.to_path_buf(),
+            _ => return Ok(ruta.to_path_buf()),
         }
     }
 }
@@ -115,8 +158,8 @@ fn validar_carpeta(
     // Comprobación sobre rutas con los enlaces simbólicos ya resueltos: la léxica sola la
     // esquivaría un enlace a la carpeta de datos.
     if carpeta.starts_with(rutas.directorio_datos())
-        || canonica_hasta_donde_existe(carpeta)
-            .starts_with(canonica_hasta_donde_existe(rutas.directorio_datos()))
+        || canonica_hasta_donde_existe(carpeta)?
+            .starts_with(canonica_hasta_donde_existe(rutas.directorio_datos())?)
     {
         return Err(ErrorConfig::CarpetaDentroDeDatos);
     }
@@ -244,6 +287,60 @@ mod tests {
         let indice = IndiceCuentas::default();
         let resultado = validar_alta(&rutas, &indice, "nueva", &enlace.join("cuenta"), 3002, 30);
         assert!(matches!(resultado, Err(ErrorConfig::CarpetaDentroDeDatos)));
+    }
+
+    #[test]
+    fn un_enlace_colgante_hacia_los_datos_no_esquiva_la_comprobacion() {
+        let temporal = tempfile::tempdir().expect("directorio temporal");
+        let rutas = Rutas::con_raiz(temporal.path().join("raiz"));
+        std::fs::create_dir_all(rutas.directorio_datos()).expect("crear datos");
+        let enlace = temporal.path().join("enlace");
+        std::os::unix::fs::symlink(rutas.directorio_datos().join("nueva"), &enlace)
+            .expect("enlace");
+        let indice = IndiceCuentas::default();
+        let resultado = validar_alta(&rutas, &indice, "nueva", &enlace.join("cuenta"), 3002, 30);
+        assert!(matches!(resultado, Err(ErrorConfig::CarpetaDentroDeDatos)));
+    }
+
+    #[test]
+    fn un_enlace_colgante_relativo_hacia_los_datos_tambien_se_rechaza() {
+        let temporal = tempfile::tempdir().expect("directorio temporal");
+        let rutas = Rutas::con_raiz(temporal.path().join("raiz"));
+        std::fs::create_dir_all(rutas.directorio_datos()).expect("crear datos");
+        let enlace = temporal.path().join("enlace");
+        let destino = rutas.directorio_datos().join("nueva");
+        let relativo = destino
+            .strip_prefix(temporal.path())
+            .expect("dentro del temporal");
+        std::os::unix::fs::symlink(relativo, &enlace).expect("enlace");
+        let indice = IndiceCuentas::default();
+        let resultado = validar_alta(&rutas, &indice, "nueva", &enlace.join("cuenta"), 3002, 30);
+        assert!(matches!(resultado, Err(ErrorConfig::CarpetaDentroDeDatos)));
+    }
+
+    #[test]
+    fn un_enlace_colgante_fuera_de_los_datos_se_acepta() {
+        let temporal = tempfile::tempdir().expect("directorio temporal");
+        let rutas = Rutas::con_raiz(temporal.path().join("raiz"));
+        std::fs::create_dir_all(rutas.directorio_datos()).expect("crear datos");
+        let enlace = temporal.path().join("enlace");
+        std::os::unix::fs::symlink(temporal.path().join("otro-sitio"), &enlace).expect("enlace");
+        let indice = IndiceCuentas::default();
+        assert!(validar_alta(&rutas, &indice, "nueva", &enlace.join("cuenta"), 3002, 30).is_ok());
+    }
+
+    #[test]
+    fn un_bucle_de_enlaces_se_rechaza() {
+        let temporal = tempfile::tempdir().expect("directorio temporal");
+        let rutas = Rutas::con_raiz(temporal.path().join("raiz"));
+        std::fs::create_dir_all(rutas.directorio_datos()).expect("crear datos");
+        let a = temporal.path().join("a");
+        let b = temporal.path().join("b");
+        std::os::unix::fs::symlink(&b, &a).expect("enlace a");
+        std::os::unix::fs::symlink(&a, &b).expect("enlace b");
+        let indice = IndiceCuentas::default();
+        let resultado = validar_alta(&rutas, &indice, "nueva", &a.join("cuenta"), 3002, 30);
+        assert!(resultado.is_err());
     }
 
     #[test]
