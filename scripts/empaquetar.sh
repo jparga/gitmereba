@@ -160,7 +160,7 @@ if [ "$hacer_tar" -eq 1 ]; then
 
     paquete_tar="$directorio_paquetes/gitmereba_${version}_linux_${arquitectura}.tar.gz"
     echo "== Construyendo $paquete_tar =="
-    tar -czf "$paquete_tar" -C "$raiz_tar" .
+    tar --owner=0 --group=0 --numeric-owner -czf "$paquete_tar" -C "$raiz_tar" .
     echo "Generado: $paquete_tar"
 fi
 
