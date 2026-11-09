@@ -201,15 +201,8 @@ async fn forzar_repo(
     let Some(login) = logins.first() else {
         return Ok(());
     };
-    let rutas_cuenta = config::leer_indice_cuentas(contexto.rutas)
-        .ok()
-        .and_then(|indice| indice.cuentas.get(login.as_str()).cloned())
-        .map(|entrada| config::RutasCuenta::nueva(entrada.carpeta))
-        .ok_or_else(|| fallo(&TextoCli::CuentaNoExiste(login.to_string()).texto(idioma)))?;
-    let cuenta = config::leer_cuenta(&rutas_cuenta)
-        .map_err(|error| fallo(&TextoCli::NoLeeCuenta(error.localizar(idioma)).texto(idioma)))?;
-
-    match cuentas::sincronizar_repo(contexto, &cuenta, &id).await {
+    // La cuenta la lee `sincronizar_repo` ya con el cerrojo tomado.
+    match cuentas::sincronizar_repo(contexto, login, &id).await {
         Ok(cuentas::SincronizacionDeRepo::Sincronizado) => {
             salida::linea(
                 &mut std::io::stdout().lock(),

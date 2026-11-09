@@ -132,7 +132,7 @@ pub async fn sincronizar(
             }
             Some(id) => {
                 let inicio = time::OffsetDateTime::now_utc();
-                let hecho = cuentas::sincronizar_repo(&recursos.contexto(), &cuenta, &id)
+                let hecho = cuentas::sincronizar_repo(&recursos.contexto(), &cuenta.login, &id)
                     .await
                     .map_err(|error| error_ui_repo(&error, &id, idioma))?;
                 let resumen = match hecho {
