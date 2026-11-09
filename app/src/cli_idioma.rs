@@ -141,6 +141,10 @@ const CATALOGO_EN: &[(&str, &str)] = &[
         "doctor",
         "Checks the health of the system and of each account",
     ),
+    (
+        "apparmor",
+        "Prints an optional AppArmor profile for gitmereba's Gitea (it does not install it)",
+    ),
 ];
 
 /// Nombre del valor (`--repo <DUEÑO/NOMBRE>`) en inglés, por ruta de argumento. Los

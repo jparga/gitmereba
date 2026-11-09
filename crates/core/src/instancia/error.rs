@@ -42,6 +42,11 @@ pub enum ErrorInstancia {
     SinPuertoLibre,
     #[error("entrada inválida: {0}")]
     EntradaInvalida(String),
+    /// Una ruta que acabaría dentro de un perfil de AppArmor (que se carga como root) no
+    /// es segura: no es absoluta, no es UTF-8 o lleva caracteres con significado para
+    /// AppArmor. El texto va ya escapado (`{:?}`) para no volcar saltos de línea.
+    #[error("ruta no válida para un perfil de AppArmor: {0}")]
+    RutaPerfilApparmorInvalida(String),
     /// `gitea admin user create` para un usuario de la LAN que ya existe:
     /// Gitea imprime igualmente una contraseña generada en `stdout`, pero termina con
     /// código de error; se detecta por `stderr` («user already exists»), nunca por el

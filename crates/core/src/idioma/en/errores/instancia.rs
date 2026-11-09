@@ -33,6 +33,9 @@ pub(crate) fn texto(e: &ErrorInstancia) -> String {
         }
         ErrorInstancia::SinPuertoLibre => "there is no free port in the assigned range".to_string(),
         ErrorInstancia::EntradaInvalida(detalle) => format!("invalid input: {detalle}"),
+        ErrorInstancia::RutaPerfilApparmorInvalida(ruta) => {
+            format!("path not valid for an AppArmor profile: {ruta}")
+        }
         ErrorInstancia::UsuarioGiteaYaExiste(usuario) => {
             format!("the user “{usuario}” already exists on Gitea")
         }

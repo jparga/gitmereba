@@ -34,6 +34,8 @@ pub enum Comando {
     Status(StatusArgs),
     /// Comprueba la salud del sistema y de cada cuenta.
     Doctor,
+    /// Imprime un perfil de AppArmor opcional para el Gitea de gitmereba (no lo instala).
+    Apparmor,
 }
 
 #[derive(Debug, Subcommand)]

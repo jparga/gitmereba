@@ -102,6 +102,9 @@ pub enum TextoCli {
     RepoSincronizacionPedida(String),
     RepoReclonar(String),
     SincronizacionOmitida(String),
+    // `apparmor`.
+    ApparmorSinCuentas,
+    ApparmorRutaInvalida(String),
 }
 
 impl TextoCli {
@@ -161,6 +164,11 @@ fn es(t: &TextoCli) -> String {
         T::No => "no".to_string(),
         T::Nunca => "nunca".to_string(),
         T::NoHayCuentas => "No hay ninguna cuenta dada de alta.".to_string(),
+        T::ApparmorSinCuentas => {
+            "aviso: no hay cuentas dadas de alta; el perfil no concede escritura en ninguna carpeta"
+                .to_string()
+        }
+        T::ApparmorRutaInvalida(e) => format!("no se pudo generar el perfil: {e}"),
         T::CarpetaNoAbsoluta => "la carpeta debe ser una ruta absoluta".to_string(),
         T::TokenNoRecibido => "no se ha recibido ningún token por la entrada estándar".to_string(),
         T::PedirToken => "Token de lectura de GitHub: ".to_string(),
@@ -275,6 +283,11 @@ fn en(t: &TextoCli) -> String {
         T::No => "no".to_string(),
         T::Nunca => "never".to_string(),
         T::NoHayCuentas => "No accounts have been added.".to_string(),
+        T::ApparmorSinCuentas => {
+            "warning: no accounts have been added; the profile grants write access to no folder"
+                .to_string()
+        }
+        T::ApparmorRutaInvalida(e) => format!("could not generate the profile: {e}"),
         T::CarpetaNoAbsoluta => "the folder must be an absolute path".to_string(),
         T::TokenNoRecibido => "no token was received on standard input".to_string(),
         T::PedirToken => "GitHub read token: ".to_string(),
@@ -389,6 +402,8 @@ mod tests {
             T::No,
             T::Nunca,
             T::NoHayCuentas,
+            T::ApparmorSinCuentas,
+            T::ApparmorRutaInvalida(cadena("x")),
             T::CarpetaNoAbsoluta,
             T::TokenNoRecibido,
             T::PedirToken,

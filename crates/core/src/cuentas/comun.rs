@@ -71,7 +71,7 @@ pub(super) fn usuario_actual() -> String {
 /// Ruta al binario de Gitea cacheado por versión (`instancia::asegurar_binario`), común a
 /// todas las cuentas. Usado por `lan` y `usuarios_lan` para invocar la
 /// CLI de `gitea` sin volver a descargarlo.
-pub(super) fn ruta_binario_cacheado(rutas: &Rutas) -> PathBuf {
+pub fn ruta_binario_cacheado(rutas: &Rutas) -> PathBuf {
     rutas
         .directorio_bin()
         .join(format!("gitea-{}", instancia::VERSION_GITEA))
