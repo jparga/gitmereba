@@ -19,6 +19,12 @@ pub enum ErrorConfig {
     CarpetaHome,
     #[error("la carpeta de destino no puede estar dentro del directorio de datos de la app")]
     CarpetaDentroDeDatos,
+    #[error("la carpeta de destino no puede contener «..»")]
+    CarpetaConPuntoPunto,
+    #[error("la carpeta de destino no es texto UTF-8 válido")]
+    CarpetaNoUtf8,
+    #[error("la carpeta de destino contiene un carácter no permitido ({})", .0.escape_debug())]
+    CarpetaConCaracterNoPermitido(char),
     #[error("la carpeta de destino debe estar vacía o no existir")]
     CarpetaNoVacia,
     #[error("el login «{0}» ya está en uso por otra cuenta")]

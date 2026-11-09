@@ -19,6 +19,14 @@ pub(crate) fn texto(e: &ErrorConfig) -> String {
         ErrorConfig::CarpetaDentroDeDatos => {
             "the destination folder cannot be inside the app's data directory".to_string()
         }
+        ErrorConfig::CarpetaConPuntoPunto => {
+            "the destination folder cannot contain “..”".to_string()
+        }
+        ErrorConfig::CarpetaNoUtf8 => "the destination folder is not valid UTF-8 text".to_string(),
+        ErrorConfig::CarpetaConCaracterNoPermitido(caracter) => format!(
+            "the destination folder contains a character that is not allowed ({})",
+            caracter.escape_debug()
+        ),
         ErrorConfig::CarpetaNoVacia => {
             "the destination folder must be empty or not exist".to_string()
         }

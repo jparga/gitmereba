@@ -35,7 +35,7 @@ pub fn validar_ref(referencia: &str) -> Result<(), ErrorGit> {
             "la referencia no puede contener caracteres de control".to_string(),
         ));
     }
-    if referencia.chars().any(char::is_whitespace) {
+    if referencia.contains(' ') {
         return Err(ErrorGit::EntradaInvalida(
             "la referencia no puede contener espacios".to_string(),
         ));
@@ -83,6 +83,13 @@ mod tests {
     fn rechaza_rangos_y_dobles_puntos() {
         assert!(validar_ref("a..b").is_err());
         assert!(validar_ref("..").is_err());
+    }
+
+    #[test]
+    fn acepta_espacios_unicode_y_rechaza_el_ascii() {
+        assert!(validar_ref("a\u{a0}b").is_ok());
+        assert!(validar_ref("a\u{3000}b").is_ok());
+        assert!(validar_ref("a b").is_err());
     }
 
     #[test]

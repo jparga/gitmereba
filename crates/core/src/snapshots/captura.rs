@@ -11,6 +11,7 @@ use super::comparacion::{filtrar_ramas_y_tags, mismas_refs};
 use super::error::ErrorSnapshots;
 use super::manifiesto::{
     DIR_MANIFIESTOS, Manifiesto, escribir_manifiesto, generar_marca_unica, leer_todos,
+    serializar_manifiesto,
 };
 use super::rutas::{asegurar_directorio_bare_destino, ruta_bare_origen, ruta_candidata};
 
@@ -62,6 +63,17 @@ pub async fn capturar(
         return Ok(Captura::SinCambios);
     }
 
+    let marca = generar_marca_unica(&anteriores, ahora);
+    let manifiesto = Manifiesto {
+        momento: ahora.to_offset(time::UtcOffset::UTC),
+        id: marca.clone(),
+        refs: refs_origen,
+        protegida: false,
+    };
+    // Falla pronto, antes de crear nada ni traer objetos, si el manifiesto de este repo
+    // superaría el tope: solo afecta a este repo, no a los demás de la cuenta.
+    serializar_manifiesto(&manifiesto)?;
+
     let destino = asegurar_directorio_bare_destino(&rutas.snapshots(), id)?;
     let opciones_destino = Opciones {
         directorio: Some(destino.clone()),
@@ -70,7 +82,6 @@ pub async fn capturar(
     git::ejecutar(&["init", "--bare", "-q"], &opciones_destino).await?;
     configurar_bare_destino(&destino).await?;
 
-    let marca = generar_marca_unica(&anteriores, ahora);
     let origen_str = origen
         .to_str()
         .ok_or(ErrorSnapshots::RutaNoUtf8)?
@@ -93,12 +104,6 @@ pub async fn capturar(
     )
     .await?;
 
-    let manifiesto = Manifiesto {
-        momento: ahora.to_offset(time::UtcOffset::UTC),
-        id: marca.clone(),
-        refs: refs_origen,
-        protegida: false,
-    };
     escribir_manifiesto(
         &destino.join(DIR_MANIFIESTOS).join(format!("{marca}.json")),
         &manifiesto,

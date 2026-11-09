@@ -106,7 +106,14 @@ pub(crate) fn cuerpo_migrate(peticion: &PeticionMirror) -> Value {
         "lfs": true,
         "service": servicio_de(&peticion.url_clon),
     });
-    if let Some(token) = &peticion.token {
+    // El token de GitHub solo viaja si el origen es exactamente `github.com` por https y
+    // sin puerto: con cualquier otro host se omite (el mirror se intenta sin credenciales)
+    // para no entregarle a un tercero un token que no es suyo.
+    if let Some(token) = peticion
+        .token
+        .as_ref()
+        .filter(|_| es_github(&peticion.url_clon))
+    {
         cuerpo["auth_token"] = Value::String(token.exponer().to_string());
     }
     if let Some(descripcion) = &peticion.descripcion {
@@ -120,9 +127,19 @@ pub(crate) fn cuerpo_migrate(peticion: &PeticionMirror) -> Value {
 /// Con `github`, Gitea deriva la URL de la API a partir del origen (y así trae también la
 /// wiki); con cualquier otro origen eso falla antes de clonar, así que se usa `git`.
 fn servicio_de(url_clon: &str) -> &'static str {
-    let es_github = url::Url::parse(url_clon)
-        .is_ok_and(|url| url.scheme() == "https" && url.host_str() == Some("github.com"));
-    if es_github { "github" } else { "git" }
+    if es_github(url_clon) { "github" } else { "git" }
+}
+
+/// `true` solo para `https://github.com/...` sin credenciales embebidas ni puerto
+/// explícito (el 443 por defecto cuenta como sin puerto).
+fn es_github(url_clon: &str) -> bool {
+    url::Url::parse(url_clon).is_ok_and(|url| {
+        url.scheme() == "https"
+            && url.host_str() == Some("github.com")
+            && url.port().is_none()
+            && url.username().is_empty()
+            && url.password().is_none()
+    })
 }
 
 /// Extrae `message` del JSON de error de Gitea, si el cuerpo es JSON válido.
@@ -194,6 +211,30 @@ mod tests {
         assert_eq!(cuerpo["lfs"], true);
         assert_eq!(cuerpo["service"], "github");
         assert_eq!(cuerpo["auth_token"], "ghp_x");
+    }
+
+    #[test]
+    fn cuerpo_migrate_no_lleva_token_si_el_origen_no_es_github() {
+        for otro in [
+            "https://gitlab.com/acme/demo.git",
+            "https://github.com.evil.example/acme/demo.git",
+            "https://github.com:8443/acme/demo.git",
+            "http://github.com/acme/demo.git",
+            "https://u:p@github.com/acme/demo.git",
+        ] {
+            let peticion = PeticionMirror {
+                url_clon: otro.to_string(),
+                token: Some(Secreto::nuevo("ghp_x")),
+                dueno: nombre("acme"),
+                nombre: nombre("demo"),
+                intervalo: "30m".to_string(),
+                privado: true,
+                descripcion: None,
+            };
+            let cuerpo = cuerpo_migrate(&peticion);
+            assert!(cuerpo.get("auth_token").is_none(), "{otro}");
+            assert_eq!(cuerpo["service"], "git", "{otro}");
+        }
     }
 
     #[test]

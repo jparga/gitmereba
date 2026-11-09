@@ -7,7 +7,7 @@
 
 use std::fs::{self, DirBuilder, OpenOptions};
 use std::io::Write;
-use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
 use super::error::ErrorInstancia;
@@ -16,12 +16,17 @@ const MODO_DIRECTORIO: u32 = 0o700;
 const MODO_FICHERO: u32 = 0o600;
 
 /// Escribe `contenido` en `ruta` de forma atómica y con permisos 0600. Crea los
-/// directorios que falten con permisos 0700.
+/// directorios que falten con permisos 0700, pero NO cambia el modo de un directorio que
+/// ya existía: puede no ser solo de gitmereba (p. ej. `~/.config/systemd/user`, donde
+/// viven las unidades de otras aplicaciones). Los directorios propios se endurecen con
+/// [`crear_directorio_privado`].
 pub(super) fn escribir_privado(ruta: &Path, contenido: &[u8]) -> Result<(), ErrorInstancia> {
     let directorio = ruta.parent().ok_or_else(|| {
         ErrorInstancia::Io(format!("«{}» no tiene directorio padre", ruta.display()))
     })?;
-    crear_directorio_privado(directorio)?;
+    if !directorio.exists() {
+        crear_directorio_privado(directorio)?;
+    }
 
     let temporal = fichero_temporal(ruta);
     escribir_fichero_nuevo(&temporal, contenido)?;
@@ -29,10 +34,16 @@ pub(super) fn escribir_privado(ruta: &Path, contenido: &[u8]) -> Result<(), Erro
     Ok(())
 }
 
-/// Crea `directorio` (y los que falten) con permisos 0700 si no existe ya.
+/// Crea `directorio` (y los que falten) con permisos 0700. Si ya existe, le aplica 0700
+/// igualmente: si no es del usuario `set_permissions` falla y se devuelve el error, que
+/// en ese caso es motivo de sospecha y no debe ignorarse.
 pub(super) fn crear_directorio_privado(directorio: &Path) -> Result<(), ErrorInstancia> {
     if directorio.exists() {
-        return Ok(());
+        return std::fs::set_permissions(
+            directorio,
+            std::fs::Permissions::from_mode(MODO_DIRECTORIO),
+        )
+        .map_err(|error| ErrorInstancia::Io(error.to_string()));
     }
     DirBuilder::new()
         .recursive(true)
@@ -79,6 +90,35 @@ mod tests {
         assert_eq!(fs::read(&ruta).expect("leer fichero"), b"hola");
         let permisos = fs::metadata(&ruta).expect("metadata").permissions();
         assert_eq!(permisos.mode() & 0o777, 0o600);
+    }
+
+    #[test]
+    fn un_directorio_preexistente_con_0755_queda_en_0700() {
+        let directorio = tempfile::tempdir().expect("directorio temporal");
+        let existente = directorio.path().join("ya-existe");
+        fs::create_dir(&existente).expect("crear directorio");
+        fs::set_permissions(&existente, fs::Permissions::from_mode(0o755)).expect("chmod");
+
+        crear_directorio_privado(&existente).expect("crear_directorio_privado no falla");
+
+        let permisos = fs::metadata(&existente).expect("metadata").permissions();
+        assert_eq!(permisos.mode() & 0o777, 0o700);
+    }
+
+    #[test]
+    fn escribir_privado_no_cambia_el_modo_de_un_directorio_que_ya_existia() {
+        let raiz = tempfile::tempdir().expect("directorio temporal");
+        let compartido = raiz.path().join("compartido");
+        fs::create_dir(&compartido).expect("crear directorio");
+        fs::set_permissions(&compartido, fs::Permissions::from_mode(0o755)).expect("chmod");
+
+        escribir_privado(&compartido.join("unidad.service"), b"x").expect("escribir");
+
+        let modo = fs::metadata(&compartido)
+            .expect("metadata")
+            .permissions()
+            .mode();
+        assert_eq!(modo & 0o777, 0o755);
     }
 
     #[test]

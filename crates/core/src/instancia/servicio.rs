@@ -51,8 +51,8 @@ pub fn nombre_unidad(login: &Nombre) -> String {
 pub fn generar_unidad(parametros: &ParametrosUnidad<'_>) -> String {
     let exec_start = format!(
         "{} web --config {}",
-        escapar_valor(&mostrar(parametros.binario_gitea)),
-        escapar_valor(&mostrar(parametros.app_ini)),
+        escapar_argumento_exec(&mostrar(parametros.binario_gitea)),
+        escapar_argumento_exec(&mostrar(parametros.app_ini)),
     );
     let entorno = escapar_valor(&format!(
         "GITEA_WORK_DIR={}",
@@ -102,13 +102,35 @@ fn mostrar(ruta: &Path) -> String {
     ruta.display().to_string()
 }
 
-/// Aplica las reglas de citado de systemd (`systemd.syntax`(7)): un valor con
-/// espacios se envuelve entre comillas dobles, escapando `\` y `"` dentro de ellas.
-fn escapar_valor(valor: &str) -> String {
-    if !valor.chars().any(char::is_whitespace) {
-        return valor.to_string();
+/// Escapa `valor` para una directiva donde systemd solo expande specifiers (`%`):
+/// `Environment=` (donde `$` no significa nada) y las de rutas como `ReadWritePaths=`.
+///
+/// Reglas de `systemd.syntax`(7): `%` se duplica (`%%`) porque es el carácter de los
+/// specifiers; un valor con espacios u otro carácter de citado (`"`, `'`, `\`) se
+/// envuelve entre comillas dobles, escapando `\` y `"` dentro. Un valor sin nada de eso
+/// queda tal cual.
+pub(super) fn escapar_valor(valor: &str) -> String {
+    citar(valor, false)
+}
+
+/// Como [`escapar_valor`], para una directiva donde systemd también expande variables
+/// (`ExecStart=`): además duplica `$` (`$$`).
+pub(super) fn escapar_argumento_exec(valor: &str) -> String {
+    citar(valor, true)
+}
+
+fn citar(valor: &str, duplicar_dolar: bool) -> String {
+    let mut valor_escapado = valor.replace('%', "%%");
+    if duplicar_dolar {
+        valor_escapado = valor_escapado.replace('$', "$$");
     }
-    let escapado = valor.replace('\\', "\\\\").replace('"', "\\\"");
+    let hay_que_citar = valor
+        .chars()
+        .any(|c| c.is_whitespace() || matches!(c, '"' | '\'' | '\\'));
+    if !hay_que_citar {
+        return valor_escapado;
+    }
+    let escapado = valor_escapado.replace('\\', "\\\\").replace('"', "\\\"");
     format!("\"{escapado}\"")
 }
 
@@ -418,6 +440,79 @@ mod tests {
                 "no debería contener «{prohibido}»"
             );
         }
+    }
+
+    #[test]
+    fn el_texto_completo_de_la_unidad_para_rutas_normales_no_cambia() {
+        let login = nombre("jparga");
+        let unidad = generar_unidad(&parametros(
+            &login,
+            Path::new("/home/jparga/.local/share/gitmereba/bin/gitea-1.27.3"),
+            Path::new("/home/jparga/cuentas/jparga/gitea/custom/conf/app.ini"),
+            Path::new("/home/jparga/cuentas/jparga/gitea"),
+            Path::new("/home/jparga/cuentas/jparga"),
+        ));
+        let esperado = "[Unit]\n\
+Description=Gitea nativo de gitmereba (jparga)\n\
+After=network.target\n\
+\n\
+[Service]\n\
+Type=simple\n\
+Environment=GITEA_WORK_DIR=/home/jparga/cuentas/jparga/gitea\n\
+ExecStart=/home/jparga/.local/share/gitmereba/bin/gitea-1.27.3 web --config /home/jparga/cuentas/jparga/gitea/custom/conf/app.ini\n\
+Restart=on-failure\n\
+NoNewPrivileges=yes\n\
+SystemCallFilter=@system-service\n\
+SystemCallFilter=~@privileged @resources\n\
+SystemCallArchitectures=native\n\
+SystemCallErrorNumber=EPERM\n\
+ProtectSystem=strict\n\
+ReadWritePaths=/home/jparga/cuentas/jparga\n\
+PrivateTmp=yes\n\
+ProtectHome=read-only\n\
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX\n\
+LockPersonality=yes\n\
+UMask=0077\n\
+RestrictSUIDSGID=yes\n\
+ProtectKernelTunables=yes\n\
+ProtectControlGroups=yes\n\
+RestrictNamespaces=yes\n\
+MemoryDenyWriteExecute=yes\n\
+RestrictRealtime=yes\n\
+RemoveIPC=yes\n\
+KeyringMode=private\n\
+ProtectHostname=yes\n\
+\n\
+[Install]\n\
+WantedBy=default.target\n";
+        assert_eq!(unidad, esperado);
+    }
+
+    #[test]
+    fn escapa_caracteres_especiales_segun_la_directiva() {
+        let login = nombre("jparga");
+        let carpeta = Path::new("/c/a%b$c\"d\\e f");
+        let unidad = generar_unidad(&parametros(
+            &login,
+            Path::new("/c/b%$\"x\\"),
+            Path::new("/c/a$b%/app.ini"),
+            carpeta,
+            carpeta,
+        ));
+        // ExecStart: specifiers y variables; sin espacios pero con `"` y `\` se cita.
+        assert!(
+            unidad.contains("ExecStart=\"/c/b%%$$\\\"x\\\\\" web --config /c/a$$b%%/app.ini\n"),
+            "{unidad}"
+        );
+        // Environment y ReadWritePaths: solo specifiers, `$` intacto.
+        assert!(
+            unidad.contains("Environment=\"GITEA_WORK_DIR=/c/a%%b$c\\\"d\\\\e f\"\n"),
+            "{unidad}"
+        );
+        assert!(
+            unidad.contains("ReadWritePaths=\"/c/a%%b$c\\\"d\\\\e f\"\n"),
+            "{unidad}"
+        );
     }
 
     #[test]

@@ -347,20 +347,32 @@ fn es_host_loopback(url: &Url) -> bool {
     }
 }
 
-/// Máximo `MAX_REDIRECCIONES` saltos, y solo si el host coincide con el de la petición
-/// original.
+/// Máximo `MAX_REDIRECCIONES` saltos, y solo si el destino tiene el mismo origen
+/// (esquema, host y puerto) que la petición original: así el `Authorization` nunca viaja
+/// a otro puerto ni baja de https a http.
 fn politica_mismo_host() -> redirect::Policy {
     redirect::Policy::custom(|intento| {
         if intento.previous().len() >= MAX_REDIRECCIONES {
             return intento.error("se ha superado el máximo de redirecciones permitidas");
         }
-        let host_original = intento.previous().first().and_then(|url| url.host_str());
-        if host_original == intento.url().host_str() {
+        let permitida = intento
+            .previous()
+            .first()
+            .is_some_and(|original| redireccion_permitida(original, intento.url()));
+        if permitida {
             intento.follow()
         } else {
-            intento.error("redirección a un host distinto del original, no permitida")
+            intento.error("redirección a un origen distinto del original, no permitida")
         }
     })
+}
+
+/// `true` si seguir una redirección de `original` a `destino` es seguro: mismo origen y
+/// https (http solo en loopback, para las pruebas con servidores locales).
+fn redireccion_permitida(original: &Url, destino: &Url) -> bool {
+    mismo_origen(original, destino)
+        && (destino.scheme() == "https"
+            || (destino.scheme() == "http" && es_host_loopback(destino)))
 }
 
 /// Tope de cualquier espera entre reintentos: un `retry-after` enorme no bloquea la app.
@@ -430,6 +442,51 @@ mod tests {
     use super::*;
 
     const TOKEN: &str = "ghp_test_token_secreto";
+
+    fn url(texto: &str) -> Url {
+        Url::parse(texto).expect("url de prueba válida")
+    }
+
+    #[test]
+    fn la_redireccion_exige_el_mismo_origen_y_https() {
+        let origen = url("https://api.github.com/user");
+        assert!(redireccion_permitida(
+            &origen,
+            &url("https://api.github.com/otra")
+        ));
+        assert!(redireccion_permitida(
+            &origen,
+            &url("https://api.github.com:443/otra")
+        ));
+        // Otro host, otro puerto, o bajar a http: no.
+        assert!(!redireccion_permitida(
+            &origen,
+            &url("https://evil.example/otra")
+        ));
+        assert!(!redireccion_permitida(
+            &origen,
+            &url("https://api.github.com:8443/otra")
+        ));
+        assert!(!redireccion_permitida(
+            &origen,
+            &url("http://api.github.com/otra")
+        ));
+        // http solo en loopback y con el mismo origen.
+        let local = url("http://127.0.0.1:4000/user");
+        assert!(redireccion_permitida(
+            &local,
+            &url("http://127.0.0.1:4000/x")
+        ));
+        assert!(!redireccion_permitida(
+            &local,
+            &url("http://127.0.0.1:4001/x")
+        ));
+        let remoto = url("http://example.com/user");
+        assert!(!redireccion_permitida(
+            &remoto,
+            &url("http://example.com/x")
+        ));
+    }
 
     fn secreto() -> Secreto {
         Secreto::nuevo(TOKEN)

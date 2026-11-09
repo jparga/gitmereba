@@ -11,8 +11,10 @@ use super::fichero::escribir_privado;
 
 /// Subcarpeta del bare de snapshots donde viven los manifiestos JSON.
 pub(super) const DIR_MANIFIESTOS: &str = "gitmereba-snapshots";
-/// Tamaño máximo admitido de un manifiesto en disco: no fiarse de lo que hay ahí.
-const TAMANO_MAXIMO_MANIFIESTO: u64 = 5 * 1024 * 1024;
+/// Tamaño máximo admitido de un manifiesto, al leerlo y también al escribirlo: lo que no
+/// se puede releer no debe escribirse (un repo con decenas de miles de refs inutilizaría
+/// sus capturas). Sigue sin fiarse de lo que hay en disco.
+const TAMANO_MAXIMO_MANIFIESTO: u64 = 64 * 1024 * 1024;
 
 /// Manifiesto de una captura: las refs del repo en el momento de capturarla.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -126,13 +128,23 @@ pub(super) fn leer_manifiesto(ruta: &Path) -> Result<Manifiesto, ErrorSnapshots>
     Ok(manifiesto)
 }
 
+/// Serializa `manifiesto` comprobando que no supera el tope de tamaño: si lo supera,
+/// error tipado para ese repo (sin tocar nada en disco).
+pub(super) fn serializar_manifiesto(manifiesto: &Manifiesto) -> Result<Vec<u8>, ErrorSnapshots> {
+    let contenido =
+        serde_json::to_vec(manifiesto).map_err(|error| ErrorSnapshots::Json(error.to_string()))?;
+    if contenido.len() as u64 > TAMANO_MAXIMO_MANIFIESTO {
+        return Err(ErrorSnapshots::ManifiestoDemasiadoGrande(contenido.len()));
+    }
+    Ok(contenido)
+}
+
 /// Escribe `manifiesto` de forma atómica y con permisos 0600 en `ruta`.
 pub(super) fn escribir_manifiesto(
     ruta: &Path,
     manifiesto: &Manifiesto,
 ) -> Result<(), ErrorSnapshots> {
-    let contenido =
-        serde_json::to_vec(manifiesto).map_err(|error| ErrorSnapshots::Json(error.to_string()))?;
+    let contenido = serializar_manifiesto(manifiesto)?;
     escribir_privado(ruta, &contenido)
 }
 
@@ -140,6 +152,10 @@ pub(super) fn escribir_manifiesto(
 /// reciente (el nombre de fichero, `<marca>.json`, ya ordena así). Si `directorio` no
 /// existe se interpreta como «sin capturas todavía», no como un error. No sigue
 /// enlaces simbólicos: solo lee ficheros normales.
+///
+/// Un manifiesto ilegible, demasiado grande o inválido no aborta la lectura: se salta y
+/// se registra con `tracing::warn!` (sin volcar su contenido), para que un único
+/// fichero malo no inutilice las capturas ni el listado de toda la cuenta.
 pub(super) fn leer_todos(directorio: &Path) -> Result<Vec<Manifiesto>, ErrorSnapshots> {
     let entradas = match std::fs::read_dir(directorio) {
         Ok(entradas) => entradas,
@@ -162,7 +178,14 @@ pub(super) fn leer_todos(directorio: &Path) -> Result<Vec<Manifiesto>, ErrorSnap
         if ruta.extension().and_then(|e| e.to_str()) != Some("json") {
             continue;
         }
-        manifiestos.push(leer_manifiesto(&ruta)?);
+        match leer_manifiesto(&ruta) {
+            Ok(manifiesto) => manifiestos.push(manifiesto),
+            Err(error) => tracing::warn!(
+                fichero = %ruta.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+                %error,
+                "manifiesto de snapshot descartado por ilegible o inválido"
+            ),
+        }
     }
     manifiestos.sort_by(|a, b| a.id.cmp(&b.id));
     Ok(manifiestos)
@@ -321,6 +344,53 @@ mod tests {
             leer_manifiesto(&ruta),
             Err(ErrorSnapshots::ManifiestoDemasiadoGrande(_))
         ));
+    }
+
+    #[test]
+    fn leer_todos_salta_un_manifiesto_corrupto_y_devuelve_el_bueno() {
+        let directorio = tempfile::tempdir().expect("directorio temporal");
+        let bueno = manifiesto_de_prueba();
+        escribir_manifiesto(
+            &directorio.path().join(format!("{}.json", bueno.id)),
+            &bueno,
+        )
+        .expect("escribir bueno");
+        std::fs::write(directorio.path().join("20250101T000000Z.json"), b"basura")
+            .expect("escribir corrupto");
+        let enorme = vec![b'a'; (TAMANO_MAXIMO_MANIFIESTO + 1) as usize];
+        std::fs::write(directorio.path().join("20250202T000000Z.json"), enorme)
+            .expect("escribir enorme");
+
+        let leidos = leer_todos(directorio.path()).expect("leer_todos no falla");
+        assert_eq!(leidos, vec![bueno]);
+    }
+
+    #[test]
+    fn serializar_un_manifiesto_sobre_el_tope_da_error_tipado() {
+        let mut manifiesto = manifiesto_de_prueba();
+        let linea = (
+            "refs/heads/".to_string() + &"x".repeat(1000),
+            "a".repeat(40),
+        );
+        manifiesto.refs = vec![linea; (TAMANO_MAXIMO_MANIFIESTO as usize / 1000) + 1000];
+        assert!(matches!(
+            serializar_manifiesto(&manifiesto),
+            Err(ErrorSnapshots::ManifiestoDemasiadoGrande(_))
+        ));
+    }
+
+    #[test]
+    fn el_nombre_de_ref_admite_nbsp_y_rechaza_espacio_y_control() {
+        assert!(validar_nombre_ref("refs/heads/a\u{a0}b").is_ok());
+        assert!(validar_nombre_ref("refs/heads/a\u{3000}b").is_ok());
+        for malo in [
+            "refs/heads/a b",
+            "refs/heads/a\nb",
+            "refs/heads/a\0b",
+            "refs/heads/a\tb",
+        ] {
+            assert!(validar_nombre_ref(malo).is_err(), "{malo:?}");
+        }
     }
 
     #[test]
