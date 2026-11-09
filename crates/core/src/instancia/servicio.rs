@@ -153,6 +153,14 @@ pub async fn parar(login: &Nombre) -> Result<(), ErrorInstancia> {
         .map(|_| ())
 }
 
+/// `systemctl --user try-restart <unidad>`: reinicia solo si está activa (si no, no hace
+/// nada). Para aplicar una unidad reescrita sin arrancar una que estaba parada.
+pub async fn reiniciar_si_activa(login: &Nombre) -> Result<(), ErrorInstancia> {
+    ejecutar_systemctl(&["--user", "try-restart", &nombre_unidad(login)])
+        .await
+        .map(|_| ())
+}
+
 /// `systemctl --user is-active <unidad>`, recortado. Un código de salida distinto de
 /// cero no es un error aquí: `is-active` lo usa precisamente para decir «inactive» o
 /// «failed».
