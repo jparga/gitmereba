@@ -371,11 +371,24 @@ fn mapear_error_red(error: reqwest::Error) -> ErrorInstancia {
     ErrorInstancia::Red(error.without_url().to_string())
 }
 
+/// Borra un temporal que haya quedado de un fallo previo, sin seguir enlaces simbólicos
+/// (si es un enlace se borra el enlace, no su destino). Si no existe, no hace nada.
+fn quitar_temporal_previo(ruta: &Path) -> Result<(), ErrorInstancia> {
+    match std::fs::symlink_metadata(ruta) {
+        Ok(_) => std::fs::remove_file(ruta).map_err(|e| ErrorInstancia::Io(e.to_string())),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(ErrorInstancia::Io(e.to_string())),
+    }
+}
+
+/// Crea un fichero 0600 que no existía. `create_new` (`O_CREAT | O_EXCL`) falla si la
+/// ruta ya existe, también si es un enlace simbólico (aunque apunte a la nada), así que
+/// nunca se escribe a través de un enlace plantado en el directorio.
 async fn crear_fichero_privado(ruta: &Path) -> Result<fs::File, ErrorInstancia> {
+    quitar_temporal_previo(ruta)?;
     fs::OpenOptions::new()
         .write(true)
-        .create(true)
-        .truncate(true)
+        .create_new(true)
         .mode(0o600)
         .open(ruta)
         .await
@@ -386,10 +399,10 @@ async fn crear_fichero_privado(ruta: &Path) -> Result<fs::File, ErrorInstancia> 
 /// usa solo para la clave y la firma temporales de `verificar_firma`.
 fn escribir_temporal_privado(ruta: &Path, contenido: &[u8]) -> Result<(), ErrorInstancia> {
     use std::io::Write;
+    quitar_temporal_previo(ruta)?;
     let mut fichero = std::fs::OpenOptions::new()
         .write(true)
-        .create(true)
-        .truncate(true)
+        .create_new(true)
         .mode(0o600)
         .open(ruta)
         .map_err(|e| ErrorInstancia::Io(e.to_string()))?;
@@ -412,6 +425,43 @@ mod tests {
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     use super::*;
+
+    #[tokio::test]
+    async fn el_temporal_no_sigue_un_enlace_simbolico_preexistente() {
+        let directorio = tempfile::tempdir().expect("directorio temporal");
+        let objetivo = directorio.path().join("objetivo");
+        std::fs::write(&objetivo, b"intacto").expect("escribir objetivo");
+        let temporal = directorio.path().join(".gitea.descarga.tmp");
+        std::os::unix::fs::symlink(&objetivo, &temporal).expect("enlace");
+
+        let mut fichero = crear_fichero_privado(&temporal).await.expect("crear");
+        fichero.write_all(b"nuevo").await.expect("escribir");
+        fichero.flush().await.expect("flush");
+
+        assert_eq!(std::fs::read(&objetivo).expect("leer"), b"intacto");
+        assert_eq!(std::fs::read(&temporal).expect("leer"), b"nuevo");
+        assert!(
+            !std::fs::symlink_metadata(&temporal)
+                .expect("metadata")
+                .file_type()
+                .is_symlink()
+        );
+    }
+
+    #[test]
+    fn el_temporal_sincrono_no_sigue_un_enlace_ni_reutiliza_uno_viejo() {
+        let directorio = tempfile::tempdir().expect("directorio temporal");
+        let objetivo = directorio.path().join("objetivo");
+        std::fs::write(&objetivo, b"intacto").expect("escribir objetivo");
+        let enlace = directorio.path().join("clave.tmp");
+        std::os::unix::fs::symlink(&objetivo, &enlace).expect("enlace");
+        escribir_temporal_privado(&enlace, b"x").expect("escribir");
+        assert_eq!(std::fs::read(&objetivo).expect("leer"), b"intacto");
+
+        // Un temporal viejo normal también se sustituye.
+        escribir_temporal_privado(&enlace, b"yy").expect("reescribir");
+        assert_eq!(std::fs::read(&enlace).expect("leer"), b"yy");
+    }
 
     fn sha256_hex(datos: &[u8]) -> String {
         let mut hasher = Sha256::new();

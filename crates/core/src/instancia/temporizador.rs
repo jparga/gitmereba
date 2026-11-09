@@ -10,11 +10,9 @@
 //! se toca `RestrictAddressFamilies`, que ya admite `AF_INET`/`AF_INET6`/`AF_UNIX`, ni se
 //! añade `PrivateNetwork`).
 //!
-//! Nota de implementación: [`super::servicio`] mantiene `mostrar`/`escapar_valor` y el
-//! trío `comando_systemctl`/`ejecutar_systemctl`/`TIEMPO_LIMITE_SYSTEMCTL` como privados
-//! del módulo (sin `pub(super)`), así que este módulo no puede reutilizarlos y los
-//! duplica. Bastaría con marcarlos `pub(super)` en
-//! `servicio.rs` para eliminar la duplicación.
+//! Nota de implementación: el escapado de valores de unidad vive en [`super::servicio`] y
+//! se comparte; el trío `comando_systemctl`/`ejecutar_systemctl`/`TIEMPO_LIMITE_SYSTEMCTL`
+//! sigue privado allí y se duplica aquí.
 
 use std::path::Path;
 use std::process::Stdio;
@@ -30,6 +28,7 @@ use super::error::ErrorInstancia;
 use super::fichero;
 use super::nombre_unidad;
 use super::proceso::mapear_error_spawn;
+use super::servicio::{escapar_argumento_exec, escapar_valor};
 
 const TIEMPO_LIMITE_SYSTEMCTL: Duration = Duration::from_secs(30);
 
@@ -64,16 +63,6 @@ fn mostrar(ruta: &Path) -> String {
     ruta.display().to_string()
 }
 
-/// Mismas reglas de citado de systemd que [`super::servicio::generar_unidad`] (ver
-/// `systemd.syntax`(7)): duplicado a propósito, ver la nota de módulo.
-fn escapar_valor(valor: &str) -> String {
-    if !valor.chars().any(char::is_whitespace) {
-        return valor.to_string();
-    }
-    let escapado = valor.replace('\\', "\\\\").replace('"', "\\\"");
-    format!("\"{escapado}\"")
-}
-
 /// Texto de `gitmereba-sync-<login>.service`: `Type=oneshot` que ejecuta `gitmereba sync
 /// <login>`, ordenado después de la unidad de Gitea de la cuenta (`After=`/`Wants=`), con
 /// prioridad de CPU y E/S baja (`Nice=10`, `IOSchedulingClass=idle`) y un límite de
@@ -89,7 +78,7 @@ pub fn generar_servicio_sync(parametros: &ParametrosTemporizador<'_>) -> String 
     let gitea_unit = nombre_unidad(parametros.login);
     let exec_start = format!(
         "{} sync {}",
-        escapar_valor(&mostrar(parametros.ruta_ejecutable)),
+        escapar_argumento_exec(&mostrar(parametros.ruta_ejecutable)),
         parametros.login,
     );
     let read_write_paths = format!(
@@ -342,6 +331,42 @@ mod tests {
             directorio_datos: datos,
             intervalo_minutos,
         }
+    }
+
+    #[test]
+    fn el_texto_completo_del_servicio_para_rutas_normales_no_cambia() {
+        let login = nombre("jparga");
+        let unidad = generar_servicio_sync(&parametros(
+            &login,
+            Path::new("/usr/bin/gitmereba"),
+            Path::new("/home/jparga/cuentas/jparga"),
+            Path::new("/home/jparga/.local/share/gitmereba"),
+            30,
+        ));
+        assert_eq!(
+            unidad,
+            "[Unit]\nDescription=Sincronización periódica de gitmereba (jparga)\nAfter=network.target gitmereba-gitea-jparga.service\nWants=gitmereba-gitea-jparga.service\n\n[Service]\nType=oneshot\nExecStart=/usr/bin/gitmereba sync jparga\nEnvironment=APPIMAGE_EXTRACT_AND_RUN=1\nRuntimeDirectory=gitmereba-sync-jparga\nRuntimeDirectoryMode=0700\nEnvironment=TMPDIR=%t/gitmereba-sync-jparga\nNice=10\nIOSchedulingClass=idle\nTimeoutStartSec=30min\nNoNewPrivileges=yes\nSystemCallFilter=@system-service\nSystemCallFilter=~@privileged\nSystemCallArchitectures=native\nSystemCallErrorNumber=EPERM\nProtectSystem=strict\nReadWritePaths=/home/jparga/cuentas/jparga /home/jparga/.local/share/gitmereba\nPrivateTmp=yes\nProtectHome=read-only\nRestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX\nLockPersonality=yes\nUMask=0077\nRestrictSUIDSGID=yes\nProtectKernelTunables=yes\nProtectControlGroups=yes\nRestrictNamespaces=yes\nMemoryDenyWriteExecute=yes\nRestrictRealtime=yes\nRemoveIPC=yes\nKeyringMode=private\nProtectHostname=yes\n"
+        );
+    }
+
+    #[test]
+    fn escapa_el_ejecutable_y_las_rutas_del_servicio() {
+        let login = nombre("jparga");
+        let unidad = generar_servicio_sync(&parametros(
+            &login,
+            Path::new("/c/g%$x"),
+            Path::new("/c/a%b$c"),
+            Path::new("/c/d e\"f"),
+            30,
+        ));
+        assert!(
+            unidad.contains("ExecStart=/c/g%%$$x sync jparga\n"),
+            "{unidad}"
+        );
+        assert!(
+            unidad.contains("ReadWritePaths=/c/a%%b$c \"/c/d e\\\"f\"\n"),
+            "{unidad}"
+        );
     }
 
     #[test]

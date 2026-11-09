@@ -4,7 +4,7 @@ mod cuenta;
 mod error;
 pub(crate) mod fichero;
 mod rutas;
-mod validacion;
+pub(crate) mod validacion;
 
 pub use cuenta::{
     EntradaCuenta, IndiceCuentas, escribir_cuenta, escribir_indice_cuentas, leer_cuenta,

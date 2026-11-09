@@ -21,7 +21,7 @@ mod sincronizaciones;
 
 use std::fs::OpenOptions;
 use std::io;
-use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
@@ -101,12 +101,16 @@ fn configurar(conexion: &mut Connection) -> Result<(), ErrorAlmacen> {
 fn crear_fichero_privado_si_falta(ruta: &Path) -> Result<(), ErrorAlmacen> {
     if let Some(directorio) = ruta.parent()
         && !directorio.as_os_str().is_empty()
-        && !directorio.exists()
     {
-        std::fs::DirBuilder::new()
-            .recursive(true)
-            .mode(0o700)
-            .create(directorio)?;
+        if directorio.exists() {
+            // Ya existente: se cierra a 0700; si no es del usuario falla y se propaga.
+            std::fs::set_permissions(directorio, std::fs::Permissions::from_mode(0o700))?;
+        } else {
+            std::fs::DirBuilder::new()
+                .recursive(true)
+                .mode(0o700)
+                .create(directorio)?;
+        }
     }
     match OpenOptions::new()
         .write(true)
@@ -153,6 +157,19 @@ mod tests {
 
         let permisos = std::fs::metadata(&ruta).expect("metadata").permissions();
         assert_eq!(permisos.mode() & 0o777, 0o600);
+    }
+
+    #[test]
+    fn un_directorio_preexistente_con_0755_queda_en_0700() {
+        let directorio = tempfile::tempdir().expect("directorio temporal");
+        let carpeta = directorio.path().join("datos");
+        std::fs::create_dir(&carpeta).expect("crear carpeta");
+        std::fs::set_permissions(&carpeta, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+
+        let _almacen = Almacen::abrir(&carpeta.join("gitmereba.db")).expect("abrir no falla");
+
+        let permisos = std::fs::metadata(&carpeta).expect("metadata").permissions();
+        assert_eq!(permisos.mode() & 0o777, 0o700);
     }
 
     #[test]

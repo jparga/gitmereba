@@ -5,6 +5,7 @@ use std::ffi::OsString;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Component, Path, PathBuf};
 
+use crate::config::validacion::caracter_no_permitido_en_carpeta;
 use crate::config::{IndiceCuentas, Rutas};
 use crate::idioma::TextoExterno;
 use crate::modelo::Nombre;
@@ -15,10 +16,6 @@ use super::mover_textos::MotivoDestino;
 
 /// Sufijo del directorio hermano del destino donde se copia antes de renombrar.
 pub(super) const SUFIJO_PARCIAL: &str = ".gitmereba-parcial";
-
-/// Caracteres que romperían `app.ini` (`#` y `;` empiezan un comentario) o una unidad de
-/// systemd (`%` y `$` se expanden, `"` y `\` son de citado), además de los de control.
-const CARACTERES_RESERVADOS: [char; 6] = ['%', '$', '"', '\\', '#', ';'];
 
 /// Valida `destino` para mover la cuenta `login`, cuya carpeta actual es `origen`, y
 /// devuelve la ruta normalizada (padre canónico + nombre) con la que hay que trabajar.
@@ -89,10 +86,7 @@ fn validar_destino_con(
     {
         return Err(no_valido(MotivoDestino::ComponenteConEspacios));
     }
-    if let Some(caracter) = texto
-        .chars()
-        .find(|c| c.is_control() || CARACTERES_RESERVADOS.contains(c))
-    {
+    if let Some(caracter) = caracter_no_permitido_en_carpeta(texto) {
         return Err(no_valido(MotivoDestino::CaracterNoPermitido { caracter }));
     }
 

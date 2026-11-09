@@ -7,7 +7,7 @@
 //! automática: decidir qué carpeta es la buena es cosa de la persona.
 
 use std::io::Write;
-use std::os::unix::fs::OpenOptionsExt;
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -43,7 +43,11 @@ fn io(error: &std::io::Error) -> ErrorCuentas {
 pub(super) fn escribir_marca(rutas: &Rutas, marca: &MarcaMover) -> Result<(), ErrorCuentas> {
     let texto =
         toml::to_string_pretty(marca).map_err(|error| ErrorCuentas::Interno(error.to_string()))?;
-    std::fs::create_dir_all(rutas.directorio_datos()).map_err(|e| io(&e))?;
+    std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(rutas.directorio_datos())
+        .map_err(|e| io(&e))?;
     let definitiva = ruta(rutas, &marca.login);
     let temporal = definitiva.with_extension("toml.tmp");
     let mut fichero = std::fs::OpenOptions::new()
