@@ -23,8 +23,12 @@ pub enum ReparacionUnidad {
     AlDia,
     /// Se reescribió la unidad y se aplicó.
     Reescrita,
-    /// La cuenta estaba ocupada (sincronización, movimiento...): se reintenta otra vez.
+    /// La cuenta estaba ocupada (sincronización, movimiento...) o falta el binario: se
+    /// reintenta otra vez.
     Aplazada,
+    /// La unidad instalada arranca otra versión de Gitea (o no se pudo leer cuál): no se
+    /// reescribe nunca sola, porque Gitea migraría su base de datos sin que nadie lo decida.
+    OtraVersion,
 }
 
 fn ruta_unidad(rutas: &Rutas, cuenta: &Cuenta) -> PathBuf {
@@ -51,6 +55,57 @@ fn texto_esperado(rutas: &Rutas, cuenta: &Cuenta) -> String {
 pub fn unidad_gitea_al_dia(rutas: &Rutas, cuenta: &Cuenta) -> bool {
     std::fs::read_to_string(ruta_unidad(rutas, cuenta))
         .is_ok_and(|actual| actual == texto_esperado(rutas, cuenta))
+}
+
+/// Primer token del valor de `ExecStart=`, descomillado con la convención de
+/// `escapar_argumento_exec` (comillas dobles con `\\` y `\"`, `%%` y `$$`). `None` si falta,
+/// está mal formado o no es una ruta absoluta.
+fn binario_de_la_unidad(texto: &str) -> Option<PathBuf> {
+    let valor = texto
+        .lines()
+        .find_map(|linea| linea.strip_prefix("ExecStart="))?;
+    let mut caracteres = valor.chars().peekable();
+    let mut token = String::new();
+    if caracteres.peek() == Some(&'"') {
+        caracteres.next();
+        let mut cerrado = false;
+        while let Some(c) = caracteres.next() {
+            match c {
+                '"' => {
+                    cerrado = true;
+                    break;
+                }
+                '\\' => token.push(caracteres.next().filter(|s| matches!(s, '\\' | '"'))?),
+                _ => token.push(c),
+            }
+        }
+        if !cerrado || caracteres.next().is_some_and(|c| !c.is_whitespace()) {
+            return None;
+        }
+    } else {
+        while let Some(&c) = caracteres.peek() {
+            if c.is_whitespace() {
+                break;
+            }
+            if matches!(c, '"' | '\'' | '\\') {
+                return None;
+            }
+            token.push(c);
+            caracteres.next();
+        }
+    }
+    let token = token.replace("%%", "%").replace("$$", "$");
+    let ruta = PathBuf::from(token);
+    ruta.is_absolute().then_some(ruta)
+}
+
+/// `true` si la unidad instalada arranca un binario distinto del de hoy (o no se puede
+/// saber cuál): reescribirla cambiaría la versión de Gitea de la cuenta.
+fn usa_otro_binario(rutas: &Rutas, cuenta: &Cuenta) -> bool {
+    let instalado = std::fs::read_to_string(ruta_unidad(rutas, cuenta))
+        .ok()
+        .and_then(|texto| binario_de_la_unidad(&texto));
+    instalado.as_deref() != Some(ruta_binario_cacheado(rutas).as_path())
 }
 
 /// `true` si el binario de Gitea al que apuntaría la unidad existe y es un fichero normal
@@ -118,6 +173,9 @@ where
     if !ruta_unidad(rutas, &cuenta).exists() || unidad_gitea_al_dia(rutas, &cuenta) {
         return Ok(ReparacionUnidad::AlDia);
     }
+    if usa_otro_binario(rutas, &cuenta) {
+        return Ok(ReparacionUnidad::OtraVersion);
+    }
     if !binario_disponible(rutas) {
         return Ok(ReparacionUnidad::Aplazada);
     }
@@ -139,6 +197,9 @@ where
     if !ruta_unidad(rutas, &cuenta).exists() || unidad_gitea_al_dia(rutas, &cuenta) {
         return Ok(ReparacionUnidad::AlDia);
     }
+    if usa_otro_binario(rutas, &cuenta) {
+        return Ok(ReparacionUnidad::OtraVersion);
+    }
     if !binario_disponible(rutas) {
         return Ok(ReparacionUnidad::Aplazada);
     }
@@ -155,7 +216,13 @@ mod tests {
     use crate::modelo::Alcance;
     use std::path::Path;
 
-    const UNIDAD_ANTIGUA: &str = "[Service]\nExecStart=/x web\nNoNewPrivileges=yes\n";
+    /// Unidad de una versión sin endurecer, pero con el binario de hoy.
+    fn unidad_antigua(rutas: &Rutas) -> String {
+        format!(
+            "[Service]\nExecStart={} web\nNoNewPrivileges=yes\n",
+            ruta_binario_cacheado(rutas).display()
+        )
+    }
 
     fn cuenta(carpeta: &Path) -> Cuenta {
         Cuenta {
@@ -267,7 +334,7 @@ mod tests {
         let cuenta = cuenta(&raiz.path().join("cuenta"));
         registrar(&rutas, &cuenta);
         poner_binario(&rutas);
-        escribir(&rutas, &cuenta, UNIDAD_ANTIGUA);
+        escribir(&rutas, &cuenta, &unidad_antigua(&rutas));
         let llamadas = std::cell::Cell::new(0);
 
         assert!(!unidad_gitea_al_dia(&rutas, &cuenta));
@@ -284,6 +351,96 @@ mod tests {
         assert!(unidad_gitea_al_dia(&rutas, &cuenta));
     }
 
+    /// Unidad con el endurecimiento de hoy pero con `ExecStart` apuntando a `ejecutable`.
+    fn unidad_con_ejecutable(rutas: &Rutas, cuenta: &Cuenta, ejecutable: &str) -> String {
+        let esperado = texto_esperado(rutas, cuenta);
+        let binario = ruta_binario_cacheado(rutas);
+        esperado.replace(binario.to_str().expect("utf8"), ejecutable)
+    }
+
+    async fn reparar_y_contar(rutas: &Rutas, cuenta: &Cuenta) -> (ReparacionUnidad, u32) {
+        let llamadas = std::cell::Cell::new(0);
+        let r = reparar_con(
+            rutas,
+            &cuenta.login,
+            |r, l, t| aplicar_falso(r, l, t, &llamadas),
+            || {},
+        )
+        .await;
+        (r.expect("reparar"), llamadas.get())
+    }
+
+    #[test]
+    fn el_execstart_se_descomilla_como_lo_escapa_la_unidad() {
+        let con_espacio = "[Service]\nExecStart=\"/a b/gitea\\\\x\" web\n";
+        assert_eq!(
+            binario_de_la_unidad(con_espacio),
+            Some(PathBuf::from("/a b/gitea\\x"))
+        );
+        assert_eq!(
+            binario_de_la_unidad("ExecStart=/a/gitea%% web\n"),
+            Some(PathBuf::from("/a/gitea%"))
+        );
+    }
+
+    #[tokio::test]
+    async fn una_unidad_con_otra_version_del_binario_no_se_reescribe() {
+        let raiz = tempfile::tempdir().expect("temporal");
+        let rutas = Rutas::con_raiz(raiz.path());
+        let cuenta = cuenta(&raiz.path().join("cuenta"));
+        registrar(&rutas, &cuenta);
+        poner_binario(&rutas);
+        let antigua = unidad_con_ejecutable(&rutas, &cuenta, "/x/bin/gitea-0.0.1");
+        assert!(antigua.contains("gitea-0.0.1"));
+        escribir(&rutas, &cuenta, &antigua);
+
+        let (r, llamadas) = reparar_y_contar(&rutas, &cuenta).await;
+        assert_eq!(r, ReparacionUnidad::OtraVersion);
+        assert_eq!(llamadas, 0);
+        assert_eq!(leer(&rutas, &cuenta), antigua);
+    }
+
+    #[tokio::test]
+    async fn la_misma_version_sin_endurecimiento_se_reescribe() {
+        let raiz = tempfile::tempdir().expect("temporal");
+        let rutas = Rutas::con_raiz(raiz.path());
+        let cuenta = cuenta(&raiz.path().join("cuenta"));
+        registrar(&rutas, &cuenta);
+        poner_binario(&rutas);
+        let binario = ruta_binario_cacheado(&rutas);
+        let antigua = format!(
+            "[Service]\nExecStart={} web --config /x/app.ini\nNoNewPrivileges=yes\n",
+            binario.display()
+        );
+        escribir(&rutas, &cuenta, &antigua);
+
+        let (r, llamadas) = reparar_y_contar(&rutas, &cuenta).await;
+        assert_eq!(r, ReparacionUnidad::Reescrita);
+        assert_eq!(llamadas, 1);
+        assert!(unidad_gitea_al_dia(&rutas, &cuenta));
+    }
+
+    #[tokio::test]
+    async fn un_execstart_ilegible_cuenta_como_otra_version() {
+        let raiz = tempfile::tempdir().expect("temporal");
+        let rutas = Rutas::con_raiz(raiz.path());
+        let cuenta = cuenta(&raiz.path().join("cuenta"));
+        registrar(&rutas, &cuenta);
+        poner_binario(&rutas);
+        for ilegible in [
+            "[Service]\nNoNewPrivileges=yes\n",
+            "[Service]\nExecStart=\n",
+            "[Service]\nExecStart=\"sin cerrar web\n",
+            "[Service]\nExecStart=relativo/gitea web\n",
+        ] {
+            escribir(&rutas, &cuenta, ilegible);
+            let (r, llamadas) = reparar_y_contar(&rutas, &cuenta).await;
+            assert_eq!(r, ReparacionUnidad::OtraVersion, "{ilegible:?}");
+            assert_eq!(llamadas, 0);
+            assert_eq!(leer(&rutas, &cuenta), ilegible);
+        }
+    }
+
     #[tokio::test]
     async fn con_la_cuenta_ocupada_se_aplaza_sin_tocar_el_fichero() {
         let raiz = tempfile::tempdir().expect("temporal");
@@ -291,7 +448,7 @@ mod tests {
         let cuenta = cuenta(&raiz.path().join("cuenta"));
         registrar(&rutas, &cuenta);
         poner_binario(&rutas);
-        escribir(&rutas, &cuenta, UNIDAD_ANTIGUA);
+        escribir(&rutas, &cuenta, &unidad_antigua(&rutas));
         let _otro = CerrojoCuenta::tomar(&rutas, &cuenta.login).expect("cerrojo");
         let llamadas = std::cell::Cell::new(0);
 
@@ -304,7 +461,7 @@ mod tests {
         .await;
         assert_eq!(r.expect("reparar"), ReparacionUnidad::Aplazada);
         assert_eq!(llamadas.get(), 0);
-        assert_eq!(leer(&rutas, &cuenta), UNIDAD_ANTIGUA);
+        assert_eq!(leer(&rutas, &cuenta), unidad_antigua(&rutas));
     }
 
     #[tokio::test]
@@ -314,7 +471,7 @@ mod tests {
         let cuenta = cuenta(&raiz.path().join("cuenta"));
         registrar(&rutas, &cuenta);
         poner_binario(&rutas);
-        escribir(&rutas, &cuenta, UNIDAD_ANTIGUA);
+        escribir(&rutas, &cuenta, &unidad_antigua(&rutas));
         escribir_marca(
             &rutas,
             &MarcaMover {
@@ -336,7 +493,7 @@ mod tests {
         .await;
         assert_eq!(r.expect("reparar"), ReparacionUnidad::Aplazada);
         assert_eq!(llamadas.get(), 0);
-        assert_eq!(leer(&rutas, &cuenta), UNIDAD_ANTIGUA);
+        assert_eq!(leer(&rutas, &cuenta), unidad_antigua(&rutas));
     }
 
     #[tokio::test]
@@ -345,7 +502,7 @@ mod tests {
         let rutas = Rutas::con_raiz(raiz.path());
         let cuenta = cuenta(&raiz.path().join("cuenta"));
         registrar(&rutas, &cuenta);
-        escribir(&rutas, &cuenta, UNIDAD_ANTIGUA);
+        escribir(&rutas, &cuenta, &unidad_antigua(&rutas));
         let llamadas = std::cell::Cell::new(0);
 
         let r = reparar_con(
@@ -357,7 +514,7 @@ mod tests {
         .await;
         assert_eq!(r.expect("reparar"), ReparacionUnidad::Aplazada);
         assert_eq!(llamadas.get(), 0);
-        assert_eq!(leer(&rutas, &cuenta), UNIDAD_ANTIGUA);
+        assert_eq!(leer(&rutas, &cuenta), unidad_antigua(&rutas));
     }
 
     #[tokio::test]
@@ -366,7 +523,7 @@ mod tests {
         let rutas = Rutas::con_raiz(raiz.path());
         let cuenta = cuenta(&raiz.path().join("cuenta"));
         registrar(&rutas, &cuenta);
-        escribir(&rutas, &cuenta, UNIDAD_ANTIGUA);
+        escribir(&rutas, &cuenta, &unidad_antigua(&rutas));
         let ruta = ruta_binario_cacheado(&rutas);
         std::fs::create_dir_all(ruta.parent().expect("padre")).expect("crear bin");
         std::fs::write(raiz.path().join("real"), b"x").expect("real");
@@ -409,7 +566,7 @@ mod tests {
         let cuenta = cuenta(&raiz.path().join("cuenta"));
         registrar(&rutas, &cuenta);
         poner_binario(&rutas);
-        escribir(&rutas, &cuenta, UNIDAD_ANTIGUA);
+        escribir(&rutas, &cuenta, &unidad_antigua(&rutas));
         let llamadas = std::cell::Cell::new(0);
 
         let r = reparar_con(
@@ -433,7 +590,7 @@ mod tests {
         let cuenta = cuenta(&raiz.path().join("cuenta"));
         registrar(&rutas, &cuenta);
         poner_binario(&rutas);
-        escribir(&rutas, &cuenta, UNIDAD_ANTIGUA);
+        escribir(&rutas, &cuenta, &unidad_antigua(&rutas));
         let llamadas = std::cell::Cell::new(0);
 
         let r = reparar_con(
@@ -448,7 +605,7 @@ mod tests {
         .await;
         assert_eq!(r.expect("reparar"), ReparacionUnidad::AlDia);
         assert_eq!(llamadas.get(), 0);
-        assert_eq!(leer(&rutas, &cuenta), UNIDAD_ANTIGUA);
+        assert_eq!(leer(&rutas, &cuenta), unidad_antigua(&rutas));
     }
 
     #[tokio::test]
@@ -458,7 +615,7 @@ mod tests {
         let antigua = cuenta(&raiz.path().join("antigua"));
         registrar(&rutas, &antigua);
         poner_binario(&rutas);
-        escribir(&rutas, &antigua, UNIDAD_ANTIGUA);
+        escribir(&rutas, &antigua, &unidad_antigua(&rutas));
         let nueva = cuenta(&raiz.path().join("nueva"));
         let llamadas = std::cell::Cell::new(0);
 

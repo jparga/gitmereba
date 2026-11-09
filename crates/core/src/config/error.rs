@@ -9,6 +9,8 @@ pub enum ErrorConfig {
     SinDirectorioHome,
     #[error("error de E/S: {0}")]
     Io(String),
+    #[error("demasiados enlaces simbólicos encadenados en la carpeta de destino")]
+    DemasiadosEnlaces,
     #[error("error al leer o escribir TOML: {0}")]
     Toml(String),
     #[error("la carpeta de destino debe ser una ruta absoluta")]

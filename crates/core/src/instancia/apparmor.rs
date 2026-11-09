@@ -115,9 +115,9 @@ profile gitmereba-gitea \"{binario}\" flags=(complain) {{
   \"{binario}\" mrix,
 
   # Scripts de hook de Gitea (shebang `env bash`, que llaman al binario por ruta).
+  # (con usrmerge, `/bin/sh` resuelve a `/usr/bin/dash` y AppArmor media la ruta resuelta).
   /usr/bin/env ix,
-  /usr/bin/bash ix,
-  /bin/sh ix,
+  /{{usr/,}}bin/{{sh,dash,bash}} ix,
 
   # Gitea invoca git para los repositorios; sus ayudantes viven en git-core.
   /usr/bin/git ix,
@@ -147,7 +147,7 @@ profile gitmereba-gitea \"{binario}\" flags=(complain) {{
     }
     for carpeta in &carpetas {
         perfil.push_str(&format!(
-            "\n  # Carpeta de una cuenta: lo único donde Gitea puede leer y escribir.\n  \"{carpeta}/\" r,\n  \"{carpeta}/**\" rwk,\n"
+            "\n  # Carpeta de una cuenta: lo único donde Gitea puede leer y escribir.\n  \"{carpeta}/\" r,\n  \"{carpeta}/**\" rwk,\n  # Solo los scripts de hook de sus repositorios pueden ejecutarse.\n  \"{carpeta}/**/hooks/**\" ix,\n"
         ));
     }
     perfil.push_str("}\n");
@@ -196,9 +196,22 @@ mod tests {
     fn el_binario_puede_ejecutarse_y_se_conceden_los_interpretes_de_los_hooks() {
         let p = perfil(&["/srv/ana"]);
         assert!(p.contains("\"/home/ana/.local/share/gitmereba/bin/gitea-1.27.3\" mrix,"));
-        for regla in ["/usr/bin/env ix,", "/usr/bin/bash ix,", "/bin/sh ix,"] {
+        for regla in ["/usr/bin/env ix,", "/{usr/,}bin/{sh,dash,bash} ix,"] {
             assert!(reglas(&p).contains(&regla), "falta {regla}");
         }
+        // Los scripts de hook viven dentro de cada carpeta: ejecución solo bajo `hooks/`.
+        let p = perfil(&["/srv/ana", "/srv/mi carpeta/luis"]);
+        for regla in [
+            "\"/srv/ana/**/hooks/**\" ix,",
+            "\"/srv/mi carpeta/luis/**/hooks/**\" ix,",
+        ] {
+            assert!(reglas(&p).contains(&regla), "falta {regla}");
+        }
+        assert!(
+            !reglas(&p)
+                .iter()
+                .any(|r| r.contains("/**\" ix") && !r.contains("hooks"))
+        );
         assert!(p.contains("git push"));
     }
 
@@ -324,7 +337,11 @@ mod tests {
             eprintln!("se salta: no existe apparmor_parser en {RUTAS_APPARMOR_PARSER:?}");
             return;
         };
-        for carpetas in [&["/srv/ana", "/srv/mi carpeta/luis"][..], &[][..]] {
+        for carpetas in [
+            &["/srv/ana", "/srv/mi carpeta/luis"][..],
+            &["/srv/ana"][..],
+            &[][..],
+        ] {
             let temporal = tempfile::tempdir().expect("temporal");
             let fichero = temporal.path().join("gitmereba-gitea");
             std::fs::write(&fichero, perfil(carpetas)).expect("escribir");
