@@ -11,6 +11,7 @@ pub(crate) fn nombre(n: &NombreComprobacion) -> String {
         NombreComprobacion::Auditoria => "audit".to_string(),
         NombreComprobacion::AislamientoSystemd => "systemd-isolation".to_string(),
         NombreComprobacion::Cortafuegos => "firewall".to_string(),
+        NombreComprobacion::PerfilApparmor => "apparmor-profile".to_string(),
         NombreComprobacion::Cuentas => "accounts".to_string(),
         NombreComprobacion::Idioma => "language".to_string(),
         NombreComprobacion::IdiomaTemporizador => "timer-language".to_string(),
@@ -118,6 +119,31 @@ pub(crate) fn texto(t: &TextoDoctor) -> String {
             "install ufw (or another firewall) before exposing any account to the LAN with \
              “gitmereba cuenta lan --activar”, and limit access to your trusted network"
                 .to_string()
+        }
+        TextoDoctor::ApparmorInactivo => "AppArmor is not active; not applicable".to_string(),
+        TextoDoctor::ApparmorSinCuentas => "no accounts: there is no Gitea to confine".to_string(),
+        TextoDoctor::ApparmorGiteaParado => "Gitea is stopped: it cannot be checked".to_string(),
+        TextoDoctor::ApparmorEnforce => {
+            "Gitea runs confined by the “gitmereba-gitea” profile".to_string()
+        }
+        TextoDoctor::ApparmorComplain { cuentas } => format!(
+            "the “gitmereba-gitea” profile only logs what it would deny, it blocks nothing \
+             (accounts: {cuentas})"
+        ),
+        TextoDoctor::ConsejoApparmorComplain => {
+            "check “journalctl -k | grep apparmor” and switch it to enforce with \
+             “sudo aa-enforce gitmereba-gitea”"
+                .to_string()
+        }
+        TextoDoctor::ApparmorSinPerfil { cuentas } => format!(
+            "Gitea runs without an AppArmor profile (accounts: {cuentas}); it is an optional defense"
+        ),
+        TextoDoctor::ConsejoApparmorSinPerfil => {
+            "“gitmereba apparmor” prints an optional profile; install it with sudo (see the manual)"
+                .to_string()
+        }
+        TextoDoctor::ApparmorOtroPerfil { cuentas } => {
+            format!("Gitea runs under another AppArmor profile (accounts: {cuentas})")
         }
         TextoDoctor::AuditoriaIntegra => "chain intact".to_string(),
         TextoDoctor::AuditoriaRota { id } => {

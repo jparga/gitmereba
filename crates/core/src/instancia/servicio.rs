@@ -173,6 +173,25 @@ pub async fn estado(login: &Nombre) -> Result<String, ErrorInstancia> {
     Ok(String::from_utf8_lossy(&salida.stdout).trim().to_string())
 }
 
+/// PID principal de la unidad de Gitea (`systemctl --user show -p MainPID --value`).
+/// `None` si la unidad no está activa (systemd informa `0`) o no se entiende la salida.
+pub async fn pid_principal(login: &Nombre) -> Result<Option<u32>, ErrorInstancia> {
+    let salida = ejecutar_systemctl(&[
+        "--user",
+        "show",
+        "-p",
+        "MainPID",
+        "--value",
+        &nombre_unidad(login),
+    ])
+    .await?;
+    Ok(interpretar_pid(&salida))
+}
+
+fn interpretar_pid(salida: &str) -> Option<u32> {
+    salida.trim().parse::<u32>().ok().filter(|pid| *pid != 0)
+}
+
 fn comando_systemctl(args: &[&str]) -> Command {
     let mut comando = Command::new("systemctl");
     comando.args(args);
@@ -318,6 +337,14 @@ mod tests {
             directorio_trabajo: trabajo,
             carpeta_cuenta: carpeta,
         }
+    }
+
+    #[test]
+    fn interpretar_pid_descarta_cero_y_basura() {
+        assert_eq!(interpretar_pid("4321\n"), Some(4321));
+        assert_eq!(interpretar_pid("0\n"), None);
+        assert_eq!(interpretar_pid(""), None);
+        assert_eq!(interpretar_pid("[not set]"), None);
     }
 
     #[test]

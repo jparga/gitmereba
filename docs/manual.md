@@ -189,6 +189,46 @@ gitmereba doctor                  # comprueba el sistema y cada cuenta
 - Nada se borra solo: ni huérfanos, ni carpetas al dar de baja una cuenta.
 - La auditoría es de solo añadir y está encadenada: **Actividad** te dice si está íntegra.
 
+### Confinamiento con AppArmor (opcional)
+
+En Ubuntu, AppArmor anula en silencio `ProtectSystem`, `ProtectHome`, `ReadWritePaths` y
+`PrivateTmp` en las unidades de `systemd --user`, así que las protecciones de montaje de la
+unidad de Gitea no se aplican (`gitmereba doctor` lo avisa en «aislamiento-systemd»). Un perfil
+de AppArmor propio es la forma de limitar los ficheros a los que Gitea puede acceder: solo el
+binario de Gitea, `git` y las carpetas de tus cuentas. Es opcional, y gitmereba nunca lo carga
+él mismo: cargarlo exige administrador y lo haces tú con `sudo`.
+
+1. Genera el perfil (solo lo imprime; no escribe nada ni usa `sudo`):
+
+   ```bash
+   gitmereba apparmor > gitmereba-gitea
+   ```
+
+2. Instálalo y cárgalo como administrador:
+
+   ```bash
+   sudo cp gitmereba-gitea /etc/apparmor.d/gitmereba-gitea
+   sudo apparmor_parser -r /etc/apparmor.d/gitmereba-gitea
+   ```
+
+3. Reinicia el Gitea de cada cuenta para que el perfil se aplique, por ejemplo
+   `systemctl --user restart gitmereba-gitea-<usuario>`.
+
+El perfil nace en modo `complain`: solo registra lo que denegaría y no bloquea nada. Tras usar
+la app un tiempo, revisa los registros con `journalctl -k | grep apparmor`. Si no hay accesos
+legítimos denegados, pásalo a `enforce`:
+
+```bash
+sudo aa-enforce gitmereba-gitea
+```
+
+Las carpetas de cuenta se fijan al generar el perfil: si das de alta una cuenta o mueves la
+carpeta de una, vuelve a generarlo e instalarlo (pasos 1 a 3).
+
+`gitmereba doctor` informa del estado en la comprobación «perfil-apparmor»: sin perfil o en
+`complain` es un aviso con el consejo para seguir; en `enforce`, o si AppArmor no está activo,
+o Gitea está parado, es informativo. Nunca es un fallo.
+
 ## 10. Si algo va mal
 
 | Síntoma | Prueba |

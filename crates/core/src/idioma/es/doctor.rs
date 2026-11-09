@@ -11,6 +11,7 @@ pub(crate) fn nombre(n: &NombreComprobacion) -> String {
         NombreComprobacion::Auditoria => "auditoria".to_string(),
         NombreComprobacion::AislamientoSystemd => "aislamiento-systemd".to_string(),
         NombreComprobacion::Cortafuegos => "cortafuegos".to_string(),
+        NombreComprobacion::PerfilApparmor => "perfil-apparmor".to_string(),
         NombreComprobacion::Cuentas => "cuentas".to_string(),
         NombreComprobacion::Idioma => "idioma".to_string(),
         NombreComprobacion::IdiomaTemporizador => "idioma-temporizador".to_string(),
@@ -120,6 +121,31 @@ pub(crate) fn texto(t: &TextoDoctor) -> String {
             "instala ufw (u otro cortafuegos) antes de exponer alguna cuenta a la LAN con \
              «gitmereba cuenta lan --activar», y limita el acceso a tu red de confianza"
                 .to_string()
+        }
+        TextoDoctor::ApparmorInactivo => "AppArmor no está activo; no aplica".to_string(),
+        TextoDoctor::ApparmorSinCuentas => "no hay cuentas: no hay Gitea que confinar".to_string(),
+        TextoDoctor::ApparmorGiteaParado => "Gitea parado: no se puede comprobar".to_string(),
+        TextoDoctor::ApparmorEnforce => {
+            "Gitea corre confinado por el perfil «gitmereba-gitea»".to_string()
+        }
+        TextoDoctor::ApparmorComplain { cuentas } => format!(
+            "el perfil «gitmereba-gitea» solo registra lo que denegaría, no bloquea nada \
+             (cuentas: {cuentas})"
+        ),
+        TextoDoctor::ConsejoApparmorComplain => {
+            "revisa «journalctl -k | grep apparmor» y pásalo a enforce con \
+             «sudo aa-enforce gitmereba-gitea»"
+                .to_string()
+        }
+        TextoDoctor::ApparmorSinPerfil { cuentas } => format!(
+            "Gitea corre sin perfil de AppArmor (cuentas: {cuentas}); es una defensa opcional"
+        ),
+        TextoDoctor::ConsejoApparmorSinPerfil => {
+            "«gitmereba apparmor» imprime un perfil opcional; instálalo con sudo (ver el manual)"
+                .to_string()
+        }
+        TextoDoctor::ApparmorOtroPerfil { cuentas } => {
+            format!("Gitea corre bajo otro perfil de AppArmor (cuentas: {cuentas})")
         }
         TextoDoctor::AuditoriaIntegra => "cadena íntegra".to_string(),
         TextoDoctor::AuditoriaRota { id } => {

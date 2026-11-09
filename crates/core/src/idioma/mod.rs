@@ -674,6 +674,55 @@ mod tests {
                 "install ufw (or another firewall) before exposing any account to the LAN with \
                  “gitmereba cuenta lan --activar”, and limit access to your trusted network",
             ),
+            caso_doctor(
+                T::ApparmorInactivo,
+                "AppArmor no está activo; no aplica",
+                "AppArmor is not active; not applicable",
+            ),
+            caso_doctor(
+                T::ApparmorSinCuentas,
+                "no hay cuentas: no hay Gitea que confinar",
+                "no accounts: there is no Gitea to confine",
+            ),
+            caso_doctor(
+                T::ApparmorGiteaParado,
+                "Gitea parado: no se puede comprobar",
+                "Gitea is stopped: it cannot be checked",
+            ),
+            caso_doctor(
+                T::ApparmorEnforce,
+                "Gitea corre confinado por el perfil «gitmereba-gitea»",
+                "Gitea runs confined by the “gitmereba-gitea” profile",
+            ),
+            caso_doctor(
+                T::ApparmorComplain { cuentas: s("ana") },
+                "el perfil «gitmereba-gitea» solo registra lo que denegaría, no bloquea nada \
+                 (cuentas: ana)",
+                "the “gitmereba-gitea” profile only logs what it would deny, it blocks nothing \
+                 (accounts: ana)",
+            ),
+            caso_doctor(
+                T::ConsejoApparmorComplain,
+                "revisa «journalctl -k | grep apparmor» y pásalo a enforce con \
+                 «sudo aa-enforce gitmereba-gitea»",
+                "check “journalctl -k | grep apparmor” and switch it to enforce with \
+                 “sudo aa-enforce gitmereba-gitea”",
+            ),
+            caso_doctor(
+                T::ApparmorSinPerfil { cuentas: s("ana") },
+                "Gitea corre sin perfil de AppArmor (cuentas: ana); es una defensa opcional",
+                "Gitea runs without an AppArmor profile (accounts: ana); it is an optional defense",
+            ),
+            caso_doctor(
+                T::ConsejoApparmorSinPerfil,
+                "«gitmereba apparmor» imprime un perfil opcional; instálalo con sudo (ver el manual)",
+                "“gitmereba apparmor” prints an optional profile; install it with sudo (see the manual)",
+            ),
+            caso_doctor(
+                T::ApparmorOtroPerfil { cuentas: s("ana") },
+                "Gitea corre bajo otro perfil de AppArmor (cuentas: ana)",
+                "Gitea runs under another AppArmor profile (accounts: ana)",
+            ),
             caso_doctor(T::AuditoriaIntegra, "cadena íntegra", "chain intact"),
             caso_doctor(
                 T::AuditoriaRota { id: 7 },
@@ -1092,6 +1141,7 @@ mod tests {
                 "systemd-isolation",
             ),
             (N::Cortafuegos, "cortafuegos", "firewall"),
+            (N::PerfilApparmor, "perfil-apparmor", "apparmor-profile"),
             (N::Cuentas, "cuentas", "accounts"),
             (N::Idioma, "idioma", "language"),
             (

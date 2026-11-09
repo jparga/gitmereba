@@ -194,6 +194,46 @@ gitmereba doctor                  # checks the system and each account
 - Nothing is deleted automatically: neither orphans nor folders when an account is removed.
 - The audit log is append-only and hash-chained: **Activity** tells you whether it is intact.
 
+### Confinement with AppArmor (optional)
+
+On Ubuntu, AppArmor silently overrides `ProtectSystem`, `ProtectHome`, `ReadWritePaths` and
+`PrivateTmp` in `systemd --user` units, so the mount protections of Gitea's unit are not
+applied (`gitmereba doctor` warns about it in “systemd-isolation”). A profile of your own is
+the way to limit which files Gitea can reach: only Gitea's binary, `git` and your accounts'
+folders. It is optional, and gitmereba never loads it itself: loading it needs an
+administrator, and you do it with `sudo`.
+
+1. Generate the profile (it only prints it; it writes nothing and does not use `sudo`):
+
+   ```bash
+   gitmereba apparmor > gitmereba-gitea
+   ```
+
+2. Install and load it as an administrator:
+
+   ```bash
+   sudo cp gitmereba-gitea /etc/apparmor.d/gitmereba-gitea
+   sudo apparmor_parser -r /etc/apparmor.d/gitmereba-gitea
+   ```
+
+3. Restart each account's Gitea so the profile applies, for example
+   `systemctl --user restart gitmereba-gitea-<username>`.
+
+The profile starts in `complain` mode: it only logs what it would deny and blocks nothing.
+After using the app for a while, check the logs with `journalctl -k | grep apparmor`. If no
+legitimate access was denied, switch it to `enforce`:
+
+```bash
+sudo aa-enforce gitmereba-gitea
+```
+
+The account folders are fixed when the profile is generated: if you add an account or move an
+account's folder, generate and install it again (steps 1 to 3).
+
+`gitmereba doctor` reports the state in the “apparmor-profile” check: no profile or `complain`
+is a warning with advice on what to do next; `enforce`, AppArmor not active, or Gitea stopped
+is informational. It is never a failure.
+
 ## 10. If something goes wrong
 
 | Symptom | Try |
