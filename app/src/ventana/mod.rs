@@ -105,7 +105,7 @@ fn reparar_temporizadores_en_segundo_plano(rutas: Rutas) {
                         tracing::warn!(cuenta = %cuenta.login, %error, "no se pudo actualizar el temporizador");
                     }
                 }
-                match cuentas::reparar_unidad_gitea(&rutas, &cuenta).await {
+                match cuentas::reparar_unidad_gitea(&rutas, &cuenta.login).await {
                     Ok(cuentas::ReparacionUnidad::Reescrita) => {
                         tracing::info!(cuenta = %cuenta.login, "unidad de Gitea actualizada");
                     }

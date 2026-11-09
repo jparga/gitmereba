@@ -35,6 +35,12 @@ pub fn validar_ref(referencia: &str) -> Result<(), ErrorGit> {
             "la referencia no puede contener caracteres de control".to_string(),
         ));
     }
+    // U+2028 y U+2029 parten líneas en logs, auditoría y CLI; NBSP y U+3000 no.
+    if referencia.contains(['\u{2028}', '\u{2029}']) {
+        return Err(ErrorGit::EntradaInvalida(
+            "la referencia no puede contener separadores de línea".to_string(),
+        ));
+    }
     if referencia.contains(' ') {
         return Err(ErrorGit::EntradaInvalida(
             "la referencia no puede contener espacios".to_string(),
@@ -90,6 +96,14 @@ mod tests {
         assert!(validar_ref("a\u{a0}b").is_ok());
         assert!(validar_ref("a\u{3000}b").is_ok());
         assert!(validar_ref("a b").is_err());
+    }
+
+    #[test]
+    fn rechaza_separadores_de_linea_y_parrafo_unicode() {
+        assert!(validar_ref("a\u{2028}b").is_err());
+        assert!(validar_ref("a\u{2029}b").is_err());
+        assert!(validar_ref("a\u{a0}b").is_ok());
+        assert!(validar_ref("a\u{3000}b").is_ok());
     }
 
     #[test]

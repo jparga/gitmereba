@@ -90,7 +90,8 @@ pub fn generar_perfil(parametros: &ParametrosPerfil<'_>) -> Result<String, Error
 # Nace en modo complain: solo registra lo que denegaría, no bloquea nada. Tras usar la
 # app un tiempo, revisa los avisos con:
 #   journalctl -k | grep apparmor
-# y, si no hay accesos legítimos registrados, pásalo a enforce:
+# Prueba un `git push` al Gitea local mientras está en complain, antes de pasar a enforce.
+# Si no hay accesos legítimos registrados, pásalo a enforce:
 #   sudo aa-enforce gitmereba-gitea
 # Las carpetas de cuenta se fijan al generar el perfil: si das de alta o mueves una
 # cuenta, vuelve a generarlo e instalarlo.
@@ -110,8 +111,13 @@ profile gitmereba-gitea \"{binario}\" flags=(complain) {{
   network inet6 stream,
   network unix stream,
 
-  # El propio binario de Gitea: lectura y mapeo en memoria.
-  \"{binario}\" mr,
+  # El propio binario de Gitea: lectura, mapeo en memoria y ejecución de sí mismo.
+  \"{binario}\" mrix,
+
+  # Scripts de hook de Gitea (shebang `env bash`, que llaman al binario por ruta).
+  /usr/bin/env ix,
+  /usr/bin/bash ix,
+  /bin/sh ix,
 
   # Gitea invoca git para los repositorios; sus ayudantes viven en git-core.
   /usr/bin/git ix,
@@ -153,7 +159,7 @@ mod tests {
     use super::*;
     use std::process::Command;
 
-    const APPARMOR_PARSER: &str = "/usr/sbin/apparmor_parser";
+    const RUTAS_APPARMOR_PARSER: [&str; 2] = ["/usr/sbin/apparmor_parser", "/sbin/apparmor_parser"];
 
     fn perfil(carpetas: &[&str]) -> String {
         let carpetas: Vec<PathBuf> = carpetas.iter().map(PathBuf::from).collect();
@@ -184,6 +190,16 @@ mod tests {
         assert!(p.contains("abi <abi/4.0>,"));
         assert!(p.contains("deny ptrace,"));
         assert!(p.contains("deny mount,"));
+    }
+
+    #[test]
+    fn el_binario_puede_ejecutarse_y_se_conceden_los_interpretes_de_los_hooks() {
+        let p = perfil(&["/srv/ana"]);
+        assert!(p.contains("\"/home/ana/.local/share/gitmereba/bin/gitea-1.27.3\" mrix,"));
+        for regla in ["/usr/bin/env ix,", "/usr/bin/bash ix,", "/bin/sh ix,"] {
+            assert!(reglas(&p).contains(&regla), "falta {regla}");
+        }
+        assert!(p.contains("git push"));
     }
 
     #[test]
@@ -295,15 +311,24 @@ mod tests {
 
     #[test]
     fn apparmor_parser_acepta_el_perfil() {
-        if !Path::new(APPARMOR_PARSER).exists() {
-            eprintln!("se salta: no existe {APPARMOR_PARSER}");
+        let Some(apparmor_parser) = RUTAS_APPARMOR_PARSER
+            .iter()
+            .find(|ruta| Path::new(ruta).exists())
+        else {
+            let exigido = std::env::var_os("GITMEREBA_EXIGE_APPARMOR_PARSER")
+                .is_some_and(|valor| !valor.is_empty());
+            assert!(
+                !exigido,
+                "GITMEREBA_EXIGE_APPARMOR_PARSER está definida pero no existe apparmor_parser en {RUTAS_APPARMOR_PARSER:?}: instala el paquete apparmor"
+            );
+            eprintln!("se salta: no existe apparmor_parser en {RUTAS_APPARMOR_PARSER:?}");
             return;
-        }
+        };
         for carpetas in [&["/srv/ana", "/srv/mi carpeta/luis"][..], &[][..]] {
             let temporal = tempfile::tempdir().expect("temporal");
             let fichero = temporal.path().join("gitmereba-gitea");
             std::fs::write(&fichero, perfil(carpetas)).expect("escribir");
-            let salida = Command::new(APPARMOR_PARSER)
+            let salida = Command::new(apparmor_parser)
                 .arg("-QK")
                 .arg(&fichero)
                 .output()

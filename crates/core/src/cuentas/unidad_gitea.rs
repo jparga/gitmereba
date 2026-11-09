@@ -12,7 +12,7 @@ use crate::instancia::{self, ParametrosUnidad};
 use crate::modelo::{Cuenta, Nombre};
 
 use super::cerrojo::CerrojoCuenta;
-use super::comun::ruta_binario_cacheado;
+use super::comun::{cargar_cuenta, ruta_binario_cacheado};
 use super::error::ErrorCuentas;
 use super::marca_mover::leer_marca;
 
@@ -53,13 +53,29 @@ pub fn unidad_gitea_al_dia(rutas: &Rutas, cuenta: &Cuenta) -> bool {
         .is_ok_and(|actual| actual == texto_esperado(rutas, cuenta))
 }
 
-/// Reescribe la unidad de Gitea de `cuenta` si no está al día y reinicia el servicio solo
-/// si estaba activo. Ver [`ReparacionUnidad`] para los resultados.
+/// `true` si el binario de Gitea al que apuntaría la unidad existe y es un fichero normal
+/// (no un enlace). Sin él, reescribir la unidad dejaría la cuenta sin servicio.
+fn binario_disponible(rutas: &Rutas) -> bool {
+    let binario = ruta_binario_cacheado(rutas);
+    let disponible = std::fs::symlink_metadata(&binario).is_ok_and(|m| m.file_type().is_file());
+    if !disponible {
+        tracing::warn!(
+            binario = %binario.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+            "el binario de Gitea de esta versión no está descargado: no se reescribe la unidad"
+        );
+    }
+    disponible
+}
+
+/// Reescribe la unidad de Gitea de la cuenta `login` si no está al día y reinicia el
+/// servicio solo si estaba activo. Lee la cuenta del disco, también tras tomar el cerrojo,
+/// para no actuar con datos de antes de un `mover` o una `baja`. Ver [`ReparacionUnidad`]
+/// para los resultados.
 pub async fn reparar_unidad_gitea(
     rutas: &Rutas,
-    cuenta: &Cuenta,
+    login: &Nombre,
 ) -> Result<ReparacionUnidad, ErrorCuentas> {
-    reparar_con(rutas, cuenta, aplicar_con_systemctl).await
+    reparar_con(rutas, login, aplicar_con_systemctl, || {}).await
 }
 
 /// Reescribe con `daemon-reload` y reinicia solo si estaba activa. Es la única parte que
@@ -74,30 +90,59 @@ async fn aplicar_con_systemctl(
     Ok(())
 }
 
-async fn reparar_con<F, Fut>(
+/// Lee la cuenta; `None` si ya no existe.
+fn cuenta_actual(rutas: &Rutas, login: &Nombre) -> Result<Option<Cuenta>, ErrorCuentas> {
+    match cargar_cuenta(rutas, login) {
+        Ok(cuenta) => Ok(Some(cuenta)),
+        Err(ErrorCuentas::CuentaNoExiste(_)) => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
+/// `entre_pasos` se ejecuta con el cerrojo ya tomado y antes de releer la cuenta: en las
+/// pruebas simula lo que otra operación pudo cambiar entre la primera lectura y el cerrojo.
+async fn reparar_con<F, Fut, G>(
     rutas: &Rutas,
-    cuenta: &Cuenta,
+    login: &Nombre,
     aplicar: F,
+    entre_pasos: G,
 ) -> Result<ReparacionUnidad, ErrorCuentas>
 where
     F: FnOnce(Rutas, Nombre, String) -> Fut,
     Fut: Future<Output = Result<(), ErrorCuentas>>,
+    G: FnOnce(),
 {
-    let ruta = ruta_unidad(rutas, cuenta);
-    if !ruta.exists() || unidad_gitea_al_dia(rutas, cuenta) {
+    let Some(cuenta) = cuenta_actual(rutas, login)? else {
+        return Ok(ReparacionUnidad::AlDia);
+    };
+    if !ruta_unidad(rutas, &cuenta).exists() || unidad_gitea_al_dia(rutas, &cuenta) {
         return Ok(ReparacionUnidad::AlDia);
     }
-    let _cerrojo = match CerrojoCuenta::tomar(rutas, &cuenta.login) {
+    if !binario_disponible(rutas) {
+        return Ok(ReparacionUnidad::Aplazada);
+    }
+    let _cerrojo = match CerrojoCuenta::tomar(rutas, login) {
         Ok(cerrojo) => cerrojo,
         Err(ErrorCuentas::CuentaOcupada(_)) => return Ok(ReparacionUnidad::Aplazada),
         Err(error) => return Err(error),
     };
     // Un movimiento interrumpido (o ilegible) deja la carpeta en un estado que decide la
     // persona: no se toca la unidad hasta entonces.
-    if !matches!(leer_marca(rutas, &cuenta.login), Ok(None)) {
+    if !matches!(leer_marca(rutas, login), Ok(None)) {
         return Ok(ReparacionUnidad::Aplazada);
     }
-    let texto = texto_esperado(rutas, cuenta);
+    entre_pasos();
+    // Con el cerrojo, la cuenta ya no puede cambiar: se relee y se decide con lo de ahora.
+    let Some(cuenta) = cuenta_actual(rutas, login)? else {
+        return Ok(ReparacionUnidad::AlDia);
+    };
+    if !ruta_unidad(rutas, &cuenta).exists() || unidad_gitea_al_dia(rutas, &cuenta) {
+        return Ok(ReparacionUnidad::AlDia);
+    }
+    if !binario_disponible(rutas) {
+        return Ok(ReparacionUnidad::Aplazada);
+    }
+    let texto = texto_esperado(rutas, &cuenta);
     aplicar(rutas.clone(), cuenta.login.clone(), texto).await?;
     Ok(ReparacionUnidad::Reescrita)
 }
@@ -105,6 +150,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::{self, EntradaCuenta};
     use crate::cuentas::marca_mover::{MarcaMover, escribir_marca};
     use crate::modelo::Alcance;
     use std::path::Path;
@@ -124,6 +170,28 @@ mod tests {
             },
             lan: None,
         }
+    }
+
+    /// Da de alta la cuenta en el índice y en su carpeta, como lo deja el alta.
+    fn registrar(rutas: &Rutas, cuenta: &Cuenta) {
+        std::fs::create_dir_all(&cuenta.carpeta).expect("crear carpeta");
+        config::escribir_cuenta(&RutasCuenta::nueva(&cuenta.carpeta), cuenta)
+            .expect("escribir cuenta");
+        let mut indice = config::leer_indice_cuentas(rutas).expect("índice");
+        indice.cuentas.insert(
+            cuenta.login.to_string(),
+            EntradaCuenta {
+                carpeta: cuenta.carpeta.clone(),
+                puerto: cuenta.puerto,
+            },
+        );
+        config::escribir_indice_cuentas(rutas, &indice).expect("escribir índice");
+    }
+
+    fn poner_binario(rutas: &Rutas) {
+        let ruta = ruta_binario_cacheado(rutas);
+        std::fs::create_dir_all(ruta.parent().expect("padre")).expect("crear bin");
+        std::fs::write(ruta, b"#!/bin/sh\n").expect("escribir binario");
     }
 
     fn escribir(rutas: &Rutas, cuenta: &Cuenta, texto: &str) {
@@ -153,10 +221,18 @@ mod tests {
         let raiz = tempfile::tempdir().expect("temporal");
         let rutas = Rutas::con_raiz(raiz.path());
         let cuenta = cuenta(&raiz.path().join("cuenta"));
+        registrar(&rutas, &cuenta);
+        poner_binario(&rutas);
         let llamadas = std::cell::Cell::new(0);
 
         assert!(!unidad_gitea_al_dia(&rutas, &cuenta));
-        let r = reparar_con(&rutas, &cuenta, |r, l, t| aplicar_falso(r, l, t, &llamadas)).await;
+        let r = reparar_con(
+            &rutas,
+            &cuenta.login,
+            |r, l, t| aplicar_falso(r, l, t, &llamadas),
+            || {},
+        )
+        .await;
         assert_eq!(r.expect("reparar"), ReparacionUnidad::AlDia);
         assert_eq!(llamadas.get(), 0);
         assert!(!ruta_unidad(&rutas, &cuenta).exists());
@@ -167,11 +243,19 @@ mod tests {
         let raiz = tempfile::tempdir().expect("temporal");
         let rutas = Rutas::con_raiz(raiz.path());
         let cuenta = cuenta(&raiz.path().join("cuenta"));
+        registrar(&rutas, &cuenta);
+        poner_binario(&rutas);
         escribir(&rutas, &cuenta, &texto_esperado(&rutas, &cuenta));
         let llamadas = std::cell::Cell::new(0);
 
         assert!(unidad_gitea_al_dia(&rutas, &cuenta));
-        let r = reparar_con(&rutas, &cuenta, |r, l, t| aplicar_falso(r, l, t, &llamadas)).await;
+        let r = reparar_con(
+            &rutas,
+            &cuenta.login,
+            |r, l, t| aplicar_falso(r, l, t, &llamadas),
+            || {},
+        )
+        .await;
         assert_eq!(r.expect("reparar"), ReparacionUnidad::AlDia);
         assert_eq!(llamadas.get(), 0);
     }
@@ -181,11 +265,19 @@ mod tests {
         let raiz = tempfile::tempdir().expect("temporal");
         let rutas = Rutas::con_raiz(raiz.path());
         let cuenta = cuenta(&raiz.path().join("cuenta"));
+        registrar(&rutas, &cuenta);
+        poner_binario(&rutas);
         escribir(&rutas, &cuenta, UNIDAD_ANTIGUA);
         let llamadas = std::cell::Cell::new(0);
 
         assert!(!unidad_gitea_al_dia(&rutas, &cuenta));
-        let r = reparar_con(&rutas, &cuenta, |r, l, t| aplicar_falso(r, l, t, &llamadas)).await;
+        let r = reparar_con(
+            &rutas,
+            &cuenta.login,
+            |r, l, t| aplicar_falso(r, l, t, &llamadas),
+            || {},
+        )
+        .await;
         assert_eq!(r.expect("reparar"), ReparacionUnidad::Reescrita);
         assert_eq!(llamadas.get(), 1);
         assert!(leer(&rutas, &cuenta).contains("KeyringMode=private"));
@@ -197,11 +289,19 @@ mod tests {
         let raiz = tempfile::tempdir().expect("temporal");
         let rutas = Rutas::con_raiz(raiz.path());
         let cuenta = cuenta(&raiz.path().join("cuenta"));
+        registrar(&rutas, &cuenta);
+        poner_binario(&rutas);
         escribir(&rutas, &cuenta, UNIDAD_ANTIGUA);
         let _otro = CerrojoCuenta::tomar(&rutas, &cuenta.login).expect("cerrojo");
         let llamadas = std::cell::Cell::new(0);
 
-        let r = reparar_con(&rutas, &cuenta, |r, l, t| aplicar_falso(r, l, t, &llamadas)).await;
+        let r = reparar_con(
+            &rutas,
+            &cuenta.login,
+            |r, l, t| aplicar_falso(r, l, t, &llamadas),
+            || {},
+        )
+        .await;
         assert_eq!(r.expect("reparar"), ReparacionUnidad::Aplazada);
         assert_eq!(llamadas.get(), 0);
         assert_eq!(leer(&rutas, &cuenta), UNIDAD_ANTIGUA);
@@ -212,6 +312,8 @@ mod tests {
         let raiz = tempfile::tempdir().expect("temporal");
         let rutas = Rutas::con_raiz(raiz.path());
         let cuenta = cuenta(&raiz.path().join("cuenta"));
+        registrar(&rutas, &cuenta);
+        poner_binario(&rutas);
         escribir(&rutas, &cuenta, UNIDAD_ANTIGUA);
         escribir_marca(
             &rutas,
@@ -225,9 +327,152 @@ mod tests {
         .expect("marca");
         let llamadas = std::cell::Cell::new(0);
 
-        let r = reparar_con(&rutas, &cuenta, |r, l, t| aplicar_falso(r, l, t, &llamadas)).await;
+        let r = reparar_con(
+            &rutas,
+            &cuenta.login,
+            |r, l, t| aplicar_falso(r, l, t, &llamadas),
+            || {},
+        )
+        .await;
         assert_eq!(r.expect("reparar"), ReparacionUnidad::Aplazada);
         assert_eq!(llamadas.get(), 0);
         assert_eq!(leer(&rutas, &cuenta), UNIDAD_ANTIGUA);
+    }
+
+    #[tokio::test]
+    async fn sin_el_binario_de_gitea_se_aplaza_sin_tocar_la_unidad() {
+        let raiz = tempfile::tempdir().expect("temporal");
+        let rutas = Rutas::con_raiz(raiz.path());
+        let cuenta = cuenta(&raiz.path().join("cuenta"));
+        registrar(&rutas, &cuenta);
+        escribir(&rutas, &cuenta, UNIDAD_ANTIGUA);
+        let llamadas = std::cell::Cell::new(0);
+
+        let r = reparar_con(
+            &rutas,
+            &cuenta.login,
+            |r, l, t| aplicar_falso(r, l, t, &llamadas),
+            || {},
+        )
+        .await;
+        assert_eq!(r.expect("reparar"), ReparacionUnidad::Aplazada);
+        assert_eq!(llamadas.get(), 0);
+        assert_eq!(leer(&rutas, &cuenta), UNIDAD_ANTIGUA);
+    }
+
+    #[tokio::test]
+    async fn un_enlace_en_lugar_del_binario_tampoco_vale() {
+        let raiz = tempfile::tempdir().expect("temporal");
+        let rutas = Rutas::con_raiz(raiz.path());
+        let cuenta = cuenta(&raiz.path().join("cuenta"));
+        registrar(&rutas, &cuenta);
+        escribir(&rutas, &cuenta, UNIDAD_ANTIGUA);
+        let ruta = ruta_binario_cacheado(&rutas);
+        std::fs::create_dir_all(ruta.parent().expect("padre")).expect("crear bin");
+        std::fs::write(raiz.path().join("real"), b"x").expect("real");
+        std::os::unix::fs::symlink(raiz.path().join("real"), &ruta).expect("enlace");
+        let llamadas = std::cell::Cell::new(0);
+
+        let r = reparar_con(
+            &rutas,
+            &cuenta.login,
+            |r, l, t| aplicar_falso(r, l, t, &llamadas),
+            || {},
+        )
+        .await;
+        assert_eq!(r.expect("reparar"), ReparacionUnidad::Aplazada);
+        assert_eq!(llamadas.get(), 0);
+    }
+
+    #[tokio::test]
+    async fn una_cuenta_que_ya_no_existe_esta_al_dia() {
+        let raiz = tempfile::tempdir().expect("temporal");
+        let rutas = Rutas::con_raiz(raiz.path());
+        let cuenta = cuenta(&raiz.path().join("cuenta"));
+        let llamadas = std::cell::Cell::new(0);
+
+        let r = reparar_con(
+            &rutas,
+            &cuenta.login,
+            |r, l, t| aplicar_falso(r, l, t, &llamadas),
+            || {},
+        )
+        .await;
+        assert_eq!(r.expect("reparar"), ReparacionUnidad::AlDia);
+        assert_eq!(llamadas.get(), 0);
+    }
+
+    #[tokio::test]
+    async fn una_unidad_borrada_tras_la_comprobacion_inicial_no_se_recrea() {
+        let raiz = tempfile::tempdir().expect("temporal");
+        let rutas = Rutas::con_raiz(raiz.path());
+        let cuenta = cuenta(&raiz.path().join("cuenta"));
+        registrar(&rutas, &cuenta);
+        poner_binario(&rutas);
+        escribir(&rutas, &cuenta, UNIDAD_ANTIGUA);
+        let llamadas = std::cell::Cell::new(0);
+
+        let r = reparar_con(
+            &rutas,
+            &cuenta.login,
+            |r, l, t| aplicar_falso(r, l, t, &llamadas),
+            || {
+                std::fs::remove_file(ruta_unidad(&rutas, &cuenta)).expect("borrar unidad");
+            },
+        )
+        .await;
+        assert_eq!(r.expect("reparar"), ReparacionUnidad::AlDia);
+        assert_eq!(llamadas.get(), 0);
+        assert!(!ruta_unidad(&rutas, &cuenta).exists());
+    }
+
+    #[tokio::test]
+    async fn una_cuenta_dada_de_baja_tras_la_comprobacion_inicial_no_se_recrea() {
+        let raiz = tempfile::tempdir().expect("temporal");
+        let rutas = Rutas::con_raiz(raiz.path());
+        let cuenta = cuenta(&raiz.path().join("cuenta"));
+        registrar(&rutas, &cuenta);
+        poner_binario(&rutas);
+        escribir(&rutas, &cuenta, UNIDAD_ANTIGUA);
+        let llamadas = std::cell::Cell::new(0);
+
+        let r = reparar_con(
+            &rutas,
+            &cuenta.login,
+            |r, l, t| aplicar_falso(r, l, t, &llamadas),
+            || {
+                config::escribir_indice_cuentas(&rutas, &config::IndiceCuentas::default())
+                    .expect("vaciar índice");
+            },
+        )
+        .await;
+        assert_eq!(r.expect("reparar"), ReparacionUnidad::AlDia);
+        assert_eq!(llamadas.get(), 0);
+        assert_eq!(leer(&rutas, &cuenta), UNIDAD_ANTIGUA);
+    }
+
+    #[tokio::test]
+    async fn una_carpeta_movida_tras_la_comprobacion_inicial_se_escribe_con_la_nueva() {
+        let raiz = tempfile::tempdir().expect("temporal");
+        let rutas = Rutas::con_raiz(raiz.path());
+        let antigua = cuenta(&raiz.path().join("antigua"));
+        registrar(&rutas, &antigua);
+        poner_binario(&rutas);
+        escribir(&rutas, &antigua, UNIDAD_ANTIGUA);
+        let nueva = cuenta(&raiz.path().join("nueva"));
+        let llamadas = std::cell::Cell::new(0);
+
+        let r = reparar_con(
+            &rutas,
+            &antigua.login,
+            |r, l, t| aplicar_falso(r, l, t, &llamadas),
+            || registrar(&rutas, &nueva),
+        )
+        .await;
+        assert_eq!(r.expect("reparar"), ReparacionUnidad::Reescrita);
+        assert_eq!(llamadas.get(), 1);
+        let escrito = leer(&rutas, &nueva);
+        assert_eq!(escrito, texto_esperado(&rutas, &nueva));
+        assert!(!escrito.contains(antigua.carpeta.to_str().expect("utf8")));
     }
 }

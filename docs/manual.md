@@ -216,7 +216,8 @@ binario de Gitea, `git` y las carpetas de tus cuentas. Es opcional, y gitmereba 
 
 El perfil nace en modo `complain`: solo registra lo que denegaría y no bloquea nada. Tras usar
 la app un tiempo, revisa los registros con `journalctl -k | grep apparmor`. Si no hay accesos
-legítimos denegados, pásalo a `enforce`:
+legítimos denegados, pásalo a `enforce`. Antes de hacerlo, prueba un `git push` al Gitea local
+mientras sigue en `complain`:
 
 ```bash
 sudo aa-enforce gitmereba-gitea
