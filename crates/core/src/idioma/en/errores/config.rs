@@ -6,6 +6,9 @@ pub(crate) fn texto(e: &ErrorConfig) -> String {
     match e {
         ErrorConfig::SinDirectorioHome => "the user's home directory was not found".to_string(),
         ErrorConfig::Io(detalle) => format!("I/O error: {detalle}"),
+        ErrorConfig::DemasiadosEnlaces => {
+            "too many chained symbolic links in the destination folder".to_string()
+        }
         ErrorConfig::Toml(detalle) => format!("error reading or writing TOML: {detalle}"),
         ErrorConfig::CarpetaNoAbsoluta => {
             "the destination folder must be an absolute path".to_string()

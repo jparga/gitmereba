@@ -67,32 +67,23 @@ pub(crate) fn caracter_no_permitido_en_carpeta(texto: &str) -> Option<char> {
 /// Máximo de enlaces simbólicos colgantes que se siguen al resolver una ruta.
 const MAX_SALTOS_ENLACE: u32 = 40;
 
-/// Normaliza léxicamente `ruta` (quita `.` y resuelve `..`) sin tocar el disco.
-fn normalizar_lexicamente(ruta: &Path) -> std::path::PathBuf {
-    let mut resultado = std::path::PathBuf::new();
-    for componente in ruta.components() {
-        match componente {
-            std::path::Component::CurDir => {}
-            std::path::Component::ParentDir => {
-                resultado.pop();
-            }
-            otro => resultado.push(otro.as_os_str()),
-        }
-    }
-    resultado
-}
-
 /// Canonicaliza la parte existente de `ruta` (resolviendo enlaces simbólicos, también los
 /// colgantes) y le añade el resto, que aún no existe, tal cual. La ruta no debe contener
 /// `..`.
 ///
 /// # Errors
 ///
-/// `Io` si se encadenan más de 40 enlaces simbólicos (p. ej. un bucle).
+/// `DemasiadosEnlaces` si se encadenan más de 40 enlaces simbólicos (p. ej. un bucle).
 pub(crate) fn canonica_hasta_donde_existe(ruta: &Path) -> Result<std::path::PathBuf, ErrorConfig> {
+    let mut saltos = 0;
+    canonica_con_saltos(ruta, &mut saltos)
+}
+
+/// Como [`canonica_hasta_donde_existe`], con un contador de enlaces compartido entre las
+/// resoluciones anidadas para que un bucle no recurra sin fin.
+fn canonica_con_saltos(ruta: &Path, saltos: &mut u32) -> Result<std::path::PathBuf, ErrorConfig> {
     let mut resto = Vec::new();
     let mut actual = ruta.to_path_buf();
-    let mut saltos = 0;
     loop {
         if let Ok(canonica) = actual.canonicalize() {
             let mut resultado = canonica;
@@ -104,18 +95,32 @@ pub(crate) fn canonica_hasta_donde_existe(ruta: &Path) -> Result<std::path::Path
         if fs::symlink_metadata(&actual).is_ok_and(|m| m.file_type().is_symlink())
             && let Ok(destino) = fs::read_link(&actual)
         {
-            saltos += 1;
-            if saltos > MAX_SALTOS_ENLACE {
-                return Err(ErrorConfig::Io(
-                    "demasiados enlaces simbólicos encadenados en la carpeta de destino"
-                        .to_string(),
-                ));
+            *saltos += 1;
+            if *saltos > MAX_SALTOS_ENLACE {
+                return Err(ErrorConfig::DemasiadosEnlaces);
             }
-            let absoluto = match actual.parent() {
-                Some(padre) if destino.is_relative() => padre.join(destino),
-                _ => destino,
+            // El destino relativo cuelga del padre REAL del enlace: si el padre contiene
+            // enlaces, un `..` posterior sube por el directorio al que apuntan, no por el
+            // nombre léxico. Por eso el padre se canonicaliza antes y cada `..` se resuelve
+            // sobre lo ya resuelto.
+            let mut acumulado = match actual.parent() {
+                Some(padre) if destino.is_relative() => padre
+                    .canonicalize()
+                    .map_err(|error| ErrorConfig::Io(error.to_string()))?,
+                _ => std::path::PathBuf::from("/"),
             };
-            actual = normalizar_lexicamente(&absoluto);
+            for componente in destino.components() {
+                match componente {
+                    std::path::Component::RootDir => acumulado = std::path::PathBuf::from("/"),
+                    std::path::Component::ParentDir => {
+                        acumulado = canonica_con_saltos(&acumulado, saltos)?;
+                        acumulado.pop();
+                    }
+                    std::path::Component::CurDir => {}
+                    otro => acumulado.push(otro.as_os_str()),
+                }
+            }
+            actual = acumulado;
             continue;
         }
         match (actual.parent(), actual.file_name()) {
@@ -327,6 +332,40 @@ mod tests {
         std::os::unix::fs::symlink(temporal.path().join("otro-sitio"), &enlace).expect("enlace");
         let indice = IndiceCuentas::default();
         assert!(validar_alta(&rutas, &indice, "nueva", &enlace.join("cuenta"), 3002, 30).is_ok());
+    }
+
+    #[test]
+    fn un_enlace_colgante_relativo_tras_un_componente_enlazado_no_esquiva_el_filtro() {
+        let temporal = tempfile::tempdir().expect("directorio temporal");
+        let base = temporal.path().canonicalize().expect("canónica");
+        // datos = <base>/gitmereba/datos; foo/l -> ../gitmereba/datos/nueva (colgante) y
+        // s -> foo: la carpeta s/l/cuenta cae dentro de datos, pero la ruta léxica
+        // resultante (<base>/gitmereba/datos/nueva) solo coincide si se resuelve s antes.
+        let rutas = Rutas::con_raiz(base.join("raiz"));
+        let datos = rutas.directorio_datos().to_path_buf();
+        std::fs::create_dir_all(&datos).expect("crear datos");
+        let hondo = base.join("a").join("b");
+        std::fs::create_dir_all(&hondo).expect("crear hondo");
+        // `hondo/l` sube dos niveles: solo lleva a `base` si `hondo` se resuelve de verdad.
+        let destino_rel = datos
+            .strip_prefix(&base)
+            .expect("dentro de la base")
+            .join("nueva");
+        std::os::unix::fs::symlink(Path::new("../..").join(&destino_rel), hondo.join("l"))
+            .expect("enlace colgante");
+        // `s` apunta a `hondo`; léxicamente s/l/.. resolvería distinto que en el kernel.
+        let s = base.join("s");
+        std::os::unix::fs::symlink(&hondo, &s).expect("enlace al padre");
+        let indice = IndiceCuentas::default();
+        let resultado = validar_alta(
+            &rutas,
+            &indice,
+            "nueva",
+            &s.join("l").join("cuenta"),
+            3002,
+            30,
+        );
+        assert!(matches!(resultado, Err(ErrorConfig::CarpetaDentroDeDatos)));
     }
 
     #[test]

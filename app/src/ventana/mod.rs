@@ -110,7 +110,10 @@ fn reparar_temporizadores_en_segundo_plano(rutas: Rutas) {
                         tracing::info!(cuenta = %cuenta.login, "unidad de Gitea actualizada");
                     }
                     Ok(cuentas::ReparacionUnidad::Aplazada) => {
-                        tracing::debug!(cuenta = %cuenta.login, "unidad de Gitea aplazada: cuenta ocupada");
+                        tracing::debug!(cuenta = %cuenta.login, "reescritura de la unidad aplazada");
+                    }
+                    Ok(cuentas::ReparacionUnidad::OtraVersion) => {
+                        tracing::info!(cuenta = %cuenta.login, "la unidad de Gitea usa otra versión del binario: no se reescribe sola");
                     }
                     Ok(cuentas::ReparacionUnidad::AlDia) => {}
                     Err(error) => {

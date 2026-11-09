@@ -226,6 +226,10 @@ mod tests {
                 "the user's home directory was not found",
             ),
             (
+                ErrorConfig::DemasiadosEnlaces,
+                "too many chained symbolic links in the destination folder",
+            ),
+            (
                 ErrorConfig::Toml("t".into()),
                 "error reading or writing TOML: t",
             ),
@@ -395,6 +399,7 @@ mod tests {
         let todos: Vec<Box<dyn Ambos>> = vec![
             Box::new(ErrorConfig::CarpetaNoVacia),
             Box::new(ErrorConfig::Io("i".into())),
+            Box::new(ErrorConfig::DemasiadosEnlaces),
             Box::new(ErrorSnapshots::SinCapturas),
             Box::new(ErrorSnapshots::Json("j".into())),
             Box::new(ErrorInstancia::Timeout),
