@@ -281,6 +281,10 @@ mod tests {
                 "gitea exited with code 1: e",
             ),
             (
+                ErrorInstancia::RutaPerfilApparmorInvalida("\"/a\\nb\"".into()),
+                "path not valid for an AppArmor profile: \"/a\\nb\"",
+            ),
+            (
                 ErrorInstancia::UsuarioGiteaYaExiste(nombre("ana")),
                 "the user “ana” already exists on Gitea",
             ),

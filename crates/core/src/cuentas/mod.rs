@@ -41,7 +41,7 @@ pub use alta::alta;
 pub use aprovisionador::{Aprovisionador, AprovisionadorReal};
 pub use baja::baja;
 pub use cerrojo::CerrojoCuenta;
-pub use comun::cliente_gitea_de_cuenta;
+pub use comun::{cliente_gitea_de_cuenta, ruta_binario_cacheado};
 pub use contexto::Contexto;
 pub use doctor::{Comprobacion, InformeDoctor, NivelComprobacion, comprobar_idioma, doctor};
 pub use doctor_textos::{MotivoAppIni, NombreComprobacion, ParteCuenta, TextoDoctor, TextoExterno};

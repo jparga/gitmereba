@@ -1,5 +1,6 @@
 //! Despacho de subcomandos. Sin lógica de negocio: todo vive en `gitmereba_core`.
 
+pub mod apparmor;
 pub mod cuenta;
 pub mod doctor;
 pub mod status;
@@ -61,6 +62,7 @@ pub async fn ejecutar(cli: Cli, rutas: &Rutas, idioma: Idioma) -> u8 {
         Comando::Sync(args) => sync::ejecutar(args, rutas).await,
         Comando::Status(args) => status::ejecutar(args, rutas).await,
         Comando::Doctor => doctor::ejecutar(rutas).await,
+        Comando::Apparmor => apparmor::ejecutar(rutas),
     }
 }
 
