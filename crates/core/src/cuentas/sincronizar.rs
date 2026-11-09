@@ -706,17 +706,20 @@ fn clonado_inicial_fallido(
     Ok(en_fallo)
 }
 
-/// Igual que [`sincronizar_repo_con`], pero construye el cliente real de Gitea con el
-/// token guardado en el llavero de `cuenta`.
+/// Igual que [`sincronizar_repo_con`], pero relee la cuenta de `login` tras tomar el
+/// cerrojo (una cuenta leída antes podría haberse movido de carpeta o cambiado de alcance
+/// mientras esperaba) y construye el cliente real de Gitea con el token guardado en el
+/// llavero.
 pub async fn sincronizar_repo<L: Llavero>(
     contexto: &Contexto<'_, L>,
-    cuenta: &Cuenta,
+    login: &Nombre,
     id: &IdRepo,
 ) -> Result<SincronizacionDeRepo, ErrorCuentas> {
-    let _cerrojo = CerrojoCuenta::tomar(contexto.rutas, &cuenta.login)?;
-    let token_gitea = leer_secreto(contexto.llavero, &cuenta.login, ClaveSecreto::TokenGitea)?;
-    let gitea = super::comun::cliente_gitea_de_cuenta(cuenta, token_gitea)?;
-    sincronizar_repo_con(contexto.almacen, cuenta, &gitea, id).await
+    let _cerrojo = CerrojoCuenta::tomar(contexto.rutas, login)?;
+    let cuenta = cargar_cuenta(contexto.rutas, login)?;
+    let token_gitea = leer_secreto(contexto.llavero, login, ClaveSecreto::TokenGitea)?;
+    let gitea = super::comun::cliente_gitea_de_cuenta(&cuenta, token_gitea)?;
+    sincronizar_repo_con(contexto.almacen, &cuenta, &gitea, id).await
 }
 
 #[cfg(test)]
@@ -752,6 +755,19 @@ mod tests {
             },
             lan: None,
         }
+    }
+
+    #[tokio::test]
+    async fn sincronizar_repo_relee_la_cuenta_y_falla_si_ya_no_existe() {
+        let temporal = tempfile::tempdir().expect("directorio temporal");
+        let rutas = crate::config::Rutas::con_raiz(temporal.path());
+        let llavero = crate::secretos::LlaveroEnMemoria::nuevo();
+        let almacen = Almacen::en_memoria().expect("almacén en memoria");
+        let contexto = Contexto::nuevo(&rutas, &llavero, &almacen);
+
+        let resultado = sincronizar_repo(&contexto, &nombre("jparga"), &id("jparga", "app")).await;
+
+        assert!(matches!(resultado, Err(ErrorCuentas::CuentaNoExiste(_))));
     }
 
     #[tokio::test]

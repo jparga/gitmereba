@@ -33,7 +33,6 @@ pub enum TextoCli {
     NombreUsuarioInvalido(String),
     HostInvalido(String),
     NoSerializaEstado(String),
-    NoLeeCuenta(String),
     NoLeeIndice(String),
     // Cabeceras de tabla y celdas.
     ColLogin,
@@ -100,7 +99,6 @@ pub enum TextoCli {
     IndicaLoginOTodas,
     LoginYTodas,
     RepoForma,
-    CuentaNoExiste(String),
     RepoSincronizacionPedida(String),
     RepoReclonar(String),
     SincronizacionOmitida(String),
@@ -146,7 +144,6 @@ fn es(t: &TextoCli) -> String {
         T::NombreUsuarioInvalido(e) => format!("nombre de usuario inválido: {e}"),
         T::HostInvalido(e) => format!("host inválido: {e}"),
         T::NoSerializaEstado(e) => format!("no se pudo serializar el estado: {e}"),
-        T::NoLeeCuenta(e) => format!("no se pudo leer la cuenta: {e}"),
         T::NoLeeIndice(e) => format!("no se pudo leer el índice de cuentas: {e}"),
         T::ColLogin => "login".to_string(),
         T::ColGitea => "gitea".to_string(),
@@ -221,7 +218,6 @@ fn es(t: &TextoCli) -> String {
         T::IndicaLoginOTodas => "indica un login o usa --todas".to_string(),
         T::LoginYTodas => "indica un login o --todas, no las dos cosas".to_string(),
         T::RepoForma => "--repo debe tener la forma dueño/nombre".to_string(),
-        T::CuentaNoExiste(login) => format!("no existe la cuenta «{login}»"),
         T::RepoSincronizacionPedida(id) => format!("«{id}»: sincronización pedida."),
         T::RepoReclonar(id) => {
             format!("«{id}»: el clonado inicial había fallado; se vuelve a clonar.")
@@ -262,7 +258,6 @@ fn en(t: &TextoCli) -> String {
         T::NombreUsuarioInvalido(e) => format!("invalid user name: {e}"),
         T::HostInvalido(e) => format!("invalid host: {e}"),
         T::NoSerializaEstado(e) => format!("could not serialize the state: {e}"),
-        T::NoLeeCuenta(e) => format!("could not read the account: {e}"),
         T::NoLeeIndice(e) => format!("could not read the account index: {e}"),
         T::ColLogin => "login".to_string(),
         T::ColGitea => "gitea".to_string(),
@@ -338,7 +333,6 @@ fn en(t: &TextoCli) -> String {
         T::IndicaLoginOTodas => "give a login or use --todas".to_string(),
         T::LoginYTodas => "give a login or --todas, not both".to_string(),
         T::RepoForma => "--repo must have the form owner/name".to_string(),
-        T::CuentaNoExiste(login) => format!("account “{login}” does not exist"),
         T::RepoSincronizacionPedida(id) => format!("“{id}”: sync requested."),
         T::RepoReclonar(id) => {
             format!("“{id}”: the initial clone had failed; cloning it again.")
@@ -378,7 +372,6 @@ mod tests {
             T::NombreUsuarioInvalido(cadena("x")),
             T::HostInvalido(cadena("x")),
             T::NoSerializaEstado(cadena("x")),
-            T::NoLeeCuenta(cadena("x")),
             T::NoLeeIndice(cadena("x")),
             T::ColLogin,
             T::ColGitea,
@@ -438,7 +431,6 @@ mod tests {
             T::IndicaLoginOTodas,
             T::LoginYTodas,
             T::RepoForma,
-            T::CuentaNoExiste(cadena("x")),
             T::RepoSincronizacionPedida(cadena("x")),
             T::RepoReclonar(cadena("x")),
         ]
