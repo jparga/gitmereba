@@ -30,6 +30,7 @@ mod rotar_token;
 mod sincronizar;
 mod solicitud;
 mod temporizador;
+mod unidad_gitea;
 mod usuarios_lan;
 
 #[cfg(test)]
@@ -70,6 +71,7 @@ pub use solicitud::{
     Descubrimiento, Previsualizacion, SolicitudAlta, descubrir_repos, previsualizar_alta,
 };
 pub use temporizador::{reparar_temporizador, temporizador_al_dia};
+pub use unidad_gitea::{ReparacionUnidad, reparar_unidad_gitea, unidad_gitea_al_dia};
 pub use usuarios_lan::{
     EQUIPO_ESCRITURA, EQUIPO_LECTURA, UsuarioLan, UsuarioLanCreado, crear_usuario_lan,
     eliminar_usuario_lan, listar_usuarios_lan, reconciliar_permisos_lan,

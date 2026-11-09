@@ -72,7 +72,8 @@ pub fn abrir(rutas: Rutas) -> Result<(), tauri::Error> {
         .run(tauri::generate_context!())
 }
 
-/// Al abrir la ventana, deja el temporizador de cada cuenta apuntando a este ejecutable.
+/// Al abrir la ventana, deja el temporizador de cada cuenta apuntando a este ejecutable y
+/// su unidad de Gitea con el texto de la versión actual.
 ///
 /// Tras instalar la app como paquete, las cuentas dadas de alta con otro binario (p. ej.
 /// `target/debug`) seguirían sincronizando con el antiguo. No bloquea el arranque y un
@@ -102,6 +103,18 @@ fn reparar_temporizadores_en_segundo_plano(rutas: Rutas) {
                     Ok(false) => {}
                     Err(error) => {
                         tracing::warn!(cuenta = %cuenta.login, %error, "no se pudo actualizar el temporizador");
+                    }
+                }
+                match cuentas::reparar_unidad_gitea(&rutas, &cuenta).await {
+                    Ok(cuentas::ReparacionUnidad::Reescrita) => {
+                        tracing::info!(cuenta = %cuenta.login, "unidad de Gitea actualizada");
+                    }
+                    Ok(cuentas::ReparacionUnidad::Aplazada) => {
+                        tracing::debug!(cuenta = %cuenta.login, "unidad de Gitea aplazada: cuenta ocupada");
+                    }
+                    Ok(cuentas::ReparacionUnidad::AlDia) => {}
+                    Err(error) => {
+                        tracing::warn!(cuenta = %cuenta.login, %error, "no se pudo actualizar la unidad de Gitea");
                     }
                 }
             }
