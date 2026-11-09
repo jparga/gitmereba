@@ -31,7 +31,7 @@ pub use provision::{NOMBRE_ADMIN_GITEA, ParametrosProvision, ResultadoProvision,
 pub use puerto::puerto_libre;
 pub use servicio::{
     ParametrosUnidad, ProcesoGitea, arrancar, escribir_unidad, esperar_salud, estado,
-    generar_unidad, instalar_unidad, nombre_unidad, parar, reiniciar_si_activa,
+    generar_unidad, instalar_unidad, nombre_unidad, parar, pid_principal, reiniciar_si_activa,
 };
 pub use temporizador::{
     ParametrosTemporizador, borrar_unidades, deshabilitar_temporizador, entorno_gestor_systemd,

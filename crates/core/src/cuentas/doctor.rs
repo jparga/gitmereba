@@ -26,6 +26,10 @@ use super::doctor_textos::{
 use super::listar::listar;
 use super::marca_mover::marcas_pendientes;
 
+/// Directorio de securityfs que solo existe si AppArmor está realmente activo en el
+/// kernel. Se prefiere a `/sys/module/apparmor`, que existe también cuando el módulo está
+/// compilado pero desactivado en el arranque (`apparmor=0`).
+const RUTA_APPARMOR_ACTIVO: &str = "/sys/kernel/security/apparmor";
 const RUTA_GPGV: &str = "/usr/bin/gpgv";
 /// Fichero de AppArmor que, a `1`, indica que los servicios `systemd --user` no pueden
 /// aislar el sistema de ficheros (comprobación «aislamiento-systemd»).
@@ -134,6 +138,7 @@ pub async fn doctor<L: Llavero>(contexto: &Contexto<'_, L>) -> InformeDoctor {
     comprobaciones.extend(comprobar_movimientos_interrumpidos(contexto.rutas));
 
     let directorio_bin = contexto.rutas.directorio_bin();
+    let mut pids_gitea: Vec<(String, Option<u32>)> = Vec::new();
     match listar(contexto) {
         Ok(cuentas) => {
             for cuenta in cuentas {
@@ -143,7 +148,19 @@ pub async fn doctor<L: Llavero>(contexto: &Contexto<'_, L>) -> InformeDoctor {
                     contexto.rutas.directorio_systemd_usuario(),
                     &cuenta.login,
                 ));
+                pids_gitea.push((
+                    cuenta.login.to_string(),
+                    crate::instancia::pid_principal(&cuenta.login)
+                        .await
+                        .ok()
+                        .flatten(),
+                ));
             }
+            comprobaciones.push(comprobar_perfil_apparmor(
+                apparmor_activo,
+                &pids_gitea,
+                leer_confinamiento_proc,
+            ));
         }
         Err(error) => comprobaciones.push(Comprobacion::fallo(
             NombreComprobacion::Cuentas,
@@ -372,6 +389,97 @@ fn comprobar_aislamiento_systemd(leer: impl Fn() -> Option<String>) -> Comprobac
             TextoDoctor::ConsejoAislamiento,
         ),
         _ => Comprobacion::ok(nombre, TextoDoctor::AislamientoOk),
+    }
+}
+
+fn apparmor_activo() -> bool {
+    Path::new(RUTA_APPARMOR_ACTIVO).exists()
+}
+
+/// Contenido de `/proc/<pid>/attr/current`; `None` si no se puede leer.
+fn leer_confinamiento_proc(pid: u32) -> Option<String> {
+    std::fs::read_to_string(format!("/proc/{pid}/attr/current")).ok()
+}
+
+/// Cómo está confinado un proceso según `/proc/<pid>/attr/current`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Confinamiento {
+    SinPerfil,
+    Complain,
+    Enforce,
+    Otro,
+}
+
+/// Interpreta `attr/current`: `unconfined`, `gitmereba-gitea (complain)` o
+/// `gitmereba-gitea (enforce)`. Cualquier otra cosa (otro perfil, contenido vacío o
+/// ilegible, fichero que no se pudo leer) es «otro perfil»: nunca falla.
+fn interpretar_confinamiento(contenido: Option<&str>) -> Confinamiento {
+    // El kernel puede terminar la cadena con `\n` y, en algunos casos, con un NUL.
+    match contenido.map(|c| c.trim_matches(|c: char| c.is_whitespace() || c == '\0')) {
+        Some("unconfined") => Confinamiento::SinPerfil,
+        Some("gitmereba-gitea (complain)") => Confinamiento::Complain,
+        Some("gitmereba-gitea (enforce)") => Confinamiento::Enforce,
+        _ => Confinamiento::Otro,
+    }
+}
+
+/// Comprobación informativa del perfil opcional de AppArmor para Gitea: resume todas las
+/// cuentas con su PID principal (`None` = Gitea parado). Nunca es un `Fallo` (es una
+/// defensa opcional) y no ejecuta nada: `activo` y `leer` (contenido de `attr/current`
+/// de un PID) son parámetros para probarla sin depender de la máquina.
+fn comprobar_perfil_apparmor(
+    activo: impl Fn() -> bool,
+    cuentas: &[(String, Option<u32>)],
+    leer: impl Fn(u32) -> Option<String>,
+) -> Comprobacion {
+    let nombre = NombreComprobacion::PerfilApparmor;
+    if !activo() {
+        return Comprobacion::ok(nombre, TextoDoctor::ApparmorInactivo);
+    }
+    if cuentas.is_empty() {
+        return Comprobacion::ok(nombre, TextoDoctor::ApparmorSinCuentas);
+    }
+    let mut sin_perfil = Vec::new();
+    let mut complain = Vec::new();
+    let mut otro = Vec::new();
+    let mut enforce = 0;
+    for (login, pid) in cuentas {
+        let Some(pid) = pid else { continue };
+        match interpretar_confinamiento(leer(*pid).as_deref()) {
+            Confinamiento::SinPerfil => sin_perfil.push(login.as_str()),
+            Confinamiento::Complain => complain.push(login.as_str()),
+            Confinamiento::Otro => otro.push(login.as_str()),
+            Confinamiento::Enforce => enforce += 1,
+        }
+    }
+    // Gana lo menos protegido: sin perfil, luego complain, luego otro perfil, luego enforce.
+    if !sin_perfil.is_empty() {
+        Comprobacion::aviso(
+            nombre,
+            TextoDoctor::ApparmorSinPerfil {
+                cuentas: sin_perfil.join(", "),
+            },
+            TextoDoctor::ConsejoApparmorSinPerfil,
+        )
+    } else if !complain.is_empty() {
+        Comprobacion::aviso(
+            nombre,
+            TextoDoctor::ApparmorComplain {
+                cuentas: complain.join(", "),
+            },
+            TextoDoctor::ConsejoApparmorComplain,
+        )
+    } else if !otro.is_empty() {
+        Comprobacion::ok(
+            nombre,
+            TextoDoctor::ApparmorOtroPerfil {
+                cuentas: otro.join(", "),
+            },
+        )
+    } else if enforce > 0 {
+        Comprobacion::ok(nombre, TextoDoctor::ApparmorEnforce)
+    } else {
+        Comprobacion::ok(nombre, TextoDoctor::ApparmorGiteaParado)
     }
 }
 
@@ -968,6 +1076,123 @@ mod tests {
                 .iter()
                 .any(|c| c.nombre == NombreComprobacion::Cortafuegos)
         );
+    }
+
+    // --- perfil de AppArmor ---------------------------------------------
+
+    #[test]
+    fn interpretar_confinamiento_tabla() {
+        let casos = [
+            (Some("unconfined\n"), Confinamiento::SinPerfil),
+            (
+                Some("gitmereba-gitea (complain)\n"),
+                Confinamiento::Complain,
+            ),
+            (Some("gitmereba-gitea (enforce)\n"), Confinamiento::Enforce),
+            (Some("gitmereba-gitea (enforce)\0"), Confinamiento::Enforce),
+            (Some("snap.firefox (enforce)"), Confinamiento::Otro),
+            (Some(""), Confinamiento::Otro),
+            (Some("\u{1}\u{2}basura"), Confinamiento::Otro),
+            (None, Confinamiento::Otro),
+        ];
+        for (contenido, esperado) in casos {
+            assert_eq!(
+                interpretar_confinamiento(contenido),
+                esperado,
+                "{contenido:?}"
+            );
+        }
+    }
+
+    fn apparmor_con(
+        activo: bool,
+        cuentas: &[(&str, Option<u32>)],
+        attr: &'static str,
+    ) -> Comprobacion {
+        let cuentas: Vec<(String, Option<u32>)> =
+            cuentas.iter().map(|(l, p)| (l.to_string(), *p)).collect();
+        comprobar_perfil_apparmor(|| activo, &cuentas, |_| Some(attr.to_string()))
+    }
+
+    #[test]
+    fn apparmor_inactivo_es_informativo() {
+        let c = apparmor_con(false, &[("ana", Some(10))], "unconfined\n");
+        assert_eq!(c.nivel, NivelComprobacion::Ok);
+        assert_eq!(c.mensaje, TextoDoctor::ApparmorInactivo);
+    }
+
+    #[test]
+    fn apparmor_con_gitea_parado_es_ok() {
+        let c = apparmor_con(true, &[("ana", None)], "unconfined\n");
+        assert_eq!(c.nivel, NivelComprobacion::Ok);
+        assert_eq!(c.mensaje, TextoDoctor::ApparmorGiteaParado);
+    }
+
+    #[test]
+    fn apparmor_sin_perfil_avisa_con_consejo() {
+        let c = apparmor_con(true, &[("ana", Some(10))], "unconfined\n");
+        assert_eq!(c.nivel, NivelComprobacion::Aviso);
+        assert_eq!(
+            c.mensaje,
+            TextoDoctor::ApparmorSinPerfil {
+                cuentas: "ana".to_string()
+            }
+        );
+        assert_eq!(c.consejo, Some(TextoDoctor::ConsejoApparmorSinPerfil));
+    }
+
+    #[test]
+    fn apparmor_complain_avisa() {
+        let c = apparmor_con(true, &[("ana", Some(10))], "gitmereba-gitea (complain)\n");
+        assert_eq!(c.nivel, NivelComprobacion::Aviso);
+        assert_eq!(c.consejo, Some(TextoDoctor::ConsejoApparmorComplain));
+    }
+
+    #[test]
+    fn apparmor_enforce_es_ok() {
+        let c = apparmor_con(
+            true,
+            &[("ana", Some(10)), ("bea", None)],
+            "gitmereba-gitea (enforce)\n",
+        );
+        assert_eq!(c.nivel, NivelComprobacion::Ok);
+        assert_eq!(c.mensaje, TextoDoctor::ApparmorEnforce);
+    }
+
+    #[test]
+    fn apparmor_resume_la_cuenta_menos_protegida() {
+        let cuentas = vec![("ana".to_string(), Some(1)), ("bea".to_string(), Some(2))];
+        let c = comprobar_perfil_apparmor(
+            || true,
+            &cuentas,
+            |pid| {
+                Some(if pid == 1 {
+                    "gitmereba-gitea (enforce)".to_string()
+                } else {
+                    "unconfined".to_string()
+                })
+            },
+        );
+        assert_eq!(
+            c.mensaje,
+            TextoDoctor::ApparmorSinPerfil {
+                cuentas: "bea".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn apparmor_nunca_devuelve_fallo() {
+        for activo in [true, false] {
+            for attr in ["unconfined", "gitmereba-gitea (complain)", "x", ""] {
+                for pid in [None, Some(5)] {
+                    let c = apparmor_con(activo, &[("ana", pid)], attr);
+                    assert_ne!(c.nivel, NivelComprobacion::Fallo);
+                }
+            }
+        }
+        let vacio = comprobar_perfil_apparmor(|| true, &[], |_| None);
+        assert_eq!(vacio.nivel, NivelComprobacion::Ok);
     }
 
     // --- acceso LAN ---------------------------------------------------

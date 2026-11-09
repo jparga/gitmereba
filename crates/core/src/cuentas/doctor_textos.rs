@@ -31,6 +31,7 @@ pub enum NombreComprobacion {
     Auditoria,
     AislamientoSystemd,
     Cortafuegos,
+    PerfilApparmor,
     Cuentas,
     Idioma,
     IdiomaTemporizador,
@@ -98,6 +99,22 @@ pub enum TextoDoctor {
     ConsejoActivarUfw,
     UfwNoEncontrado,
     ConsejoInstalarUfw,
+    // --- perfil opcional de AppArmor ---
+    ApparmorInactivo,
+    ApparmorSinCuentas,
+    ApparmorGiteaParado,
+    ApparmorEnforce,
+    ApparmorComplain {
+        cuentas: String,
+    },
+    ConsejoApparmorComplain,
+    ApparmorSinPerfil {
+        cuentas: String,
+    },
+    ConsejoApparmorSinPerfil,
+    ApparmorOtroPerfil {
+        cuentas: String,
+    },
     // --- auditoría e índice de cuentas ---
     AuditoriaIntegra,
     AuditoriaRota {
